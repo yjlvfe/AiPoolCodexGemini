@@ -82,6 +82,21 @@ class DashboardManualSwitch(unittest.TestCase):
         self.assertIn("fetch(resolveApiUrl('/api/settings/uninstall')", server_py)
         self.assertIn("fetch(resolveApiUrl('/api/accounts/switch')", server_py)
 
+    def test_mobile_responsive_ui_contract(self):
+        server_py = (ROOT / 'dashboard/server.py').read_text()
+        # Verify responsive CSS @media rules exist
+        self.assertIn('@media (max-width: 640px)', server_py)
+        # Verify badge has white-space: nowrap !important to prevent breaking into 2 lines
+        self.assertIn('.badge {', server_py)
+        self.assertIn('white-space: nowrap !important;', server_py)
+        # Verify recheck-btn has white-space: nowrap to prevent broken wrapping
+        self.assertIn('.recheck-btn {', server_py)
+        # Verify header sub row stacks neatly on mobile
+        self.assertIn('.header-sub-row {', server_py)
+        self.assertIn('flex-direction: column;', server_py)
+        # Verify cli-tool-item stacks on mobile
+        self.assertIn('.cli-tool-item {', server_py)
+
 
 if __name__ == '__main__':
     unittest.main()

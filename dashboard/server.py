@@ -851,6 +851,162 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
         .refresh-btn svg { width: 14px; height: 14px; transition: transform 0.4s ease; }
         .refresh-btn.rotating svg { transform: rotate(360deg); }
         .refresh-btn:hover svg { transform: rotate(180deg); }
+
+        /* Unified Badges */
+        .badge {
+            white-space: nowrap !important;
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 8px;
+            letter-spacing: 0.2px;
+            background: rgba(255, 255, 255, 0.06);
+            color: #94a3b8;
+        }
+
+        /* Settings Card Structure */
+        .settings-card {
+            padding: 16px;
+        }
+        .settings-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 12px;
+            gap: 10px;
+        }
+        .settings-card-title-group {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            min-width: 0;
+        }
+        .settings-card-icon {
+            font-size: 26px;
+            flex-shrink: 0;
+        }
+        .settings-card-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #fff;
+        }
+        .settings-card-sub {
+            font-size: 12px;
+            color: var(--text-secondary);
+            margin-top: 2px;
+            line-height: 1.4;
+        }
+        .settings-info-box {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 12px;
+            color: #cbd5e1;
+            margin-bottom: 12px;
+            line-height: 1.6;
+            overflow-wrap: anywhere;
+        }
+        .recheck-btn {
+            white-space: nowrap !important;
+            flex-shrink: 0;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #cbd5e1;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .recheck-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            color: #fff;
+        }
+        .cli-tool-item {
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+        .agent-config-detail-box {
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            overflow-wrap: anywhere;
+            color: #94a3b8;
+            margin-top: 10px;
+            padding: 8px 10px;
+            background: rgba(0, 0, 0, 0.28);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            line-height: 1.5;
+        }
+
+        /* Responsive Mobile Styles */
+        @media (max-width: 640px) {
+            .app-container {
+                padding: 12px 10px 40px 10px;
+                gap: 12px;
+            }
+            .glass-card {
+                padding: 16px 14px !important;
+                border-radius: 14px;
+            }
+            .top-navbar {
+                padding: 14px 14px 10px 14px;
+            }
+            .header-sub-row {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 6px;
+            }
+            .brand-subtitle {
+                white-space: normal;
+                overflow: visible;
+                text-overflow: unset;
+                font-size: 11px;
+                line-height: 1.4;
+            }
+            .device-badge {
+                align-self: flex-start;
+            }
+            .provider-tab-btn {
+                font-size: 13px;
+                padding: 8px 10px;
+            }
+            .settings-card-header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 8px;
+            }
+            .settings-card-header .badge {
+                align-self: flex-start;
+            }
+            .cli-tool-item {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+            }
+            .cli-tool-item button {
+                width: 100%;
+            }
+            .account-item-pill {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+            }
+            .account-actions {
+                justify-content: space-between;
+                width: 100%;
+            }
+        }
     </style>
 </head>
 <body>
@@ -987,18 +1143,18 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
         <!-- Settings View Section -->
         <section id="settings-view-section" style="display: none; flex-direction: column; gap: 14px;">
             <!-- Hermes Agent Integration Card -->
-            <div class="glass-card" style="padding: 16px;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                    <div style="display: flex; gap: 12px; align-items: center;">
-                        <span style="font-size: 26px;">🤖</span>
+            <div class="glass-card settings-card">
+                <div class="settings-card-header">
+                    <div class="settings-card-title-group">
+                        <span class="settings-card-icon">🤖</span>
                         <div>
-                            <div style="font-size: 15px; font-weight: 700; color: #fff;">Hermes Agent Integration</div>
-                            <div style="font-size: 12px; color: var(--text-secondary);">Auto-link pool gateways in ~/.hermes/config.yaml</div>
+                            <div class="settings-card-title">Hermes Agent Integration</div>
+                            <div class="settings-card-sub">Auto-link pool gateways in ~/.hermes/config.yaml</div>
                         </div>
                     </div>
-                    <span id="hermes-badge" class="badge" style="background: rgba(255,255,255,0.06); color: #94a3b8; font-size: 11px; padding: 4px 8px; border-radius: 6px;">Checking...</span>
+                    <span id="hermes-badge" class="badge">Checking...</span>
                 </div>
-                <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #cbd5e1; margin-bottom: 12px; line-height: 1.6;">
+                <div class="settings-info-box">
                     Config Path: <code style="color: var(--accent-cyan);">~/.hermes/config.yaml</code><br>
                     Models: <span style="color: var(--accent-emerald);">gemini-3.8-flash-tiered</span>, <span style="color: var(--accent-purple);">gpt-6-astra</span>
                 </div>
@@ -1011,18 +1167,18 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             </div>
 
             <!-- OpenClaw Integration Card -->
-            <div class="glass-card" style="padding: 16px;">
-                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
-                    <div style="display: flex; gap: 12px; align-items: center;">
-                        <span style="font-size: 26px;">🦅</span>
+            <div class="glass-card settings-card">
+                <div class="settings-card-header">
+                    <div class="settings-card-title-group">
+                        <span class="settings-card-icon">🦅</span>
                         <div>
-                            <div style="font-size: 15px; font-weight: 700; color: #fff;">OpenClaw Integration</div>
-                            <div style="font-size: 12px; color: var(--text-secondary);">Auto-link gemini_pool & codex_pool in ~/.openclaw/openclaw.json</div>
+                            <div class="settings-card-title">OpenClaw Integration</div>
+                            <div class="settings-card-sub">Auto-link gemini_pool & codex_pool in ~/.openclaw/openclaw.json</div>
                         </div>
                     </div>
-                    <span id="openclaw-badge" class="badge" style="background: rgba(255,255,255,0.06); color: #94a3b8; font-size: 11px; padding: 4px 8px; border-radius: 6px;">Checking...</span>
+                    <span id="openclaw-badge" class="badge">Checking...</span>
                 </div>
-                <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #cbd5e1; margin-bottom: 12px; line-height: 1.6;">
+                <div class="settings-info-box">
                     Config Path: <code style="color: var(--accent-cyan);">~/.openclaw/openclaw.json</code><br>
                     Providers: <span style="color: var(--accent-emerald);">gemini_pool</span>, <span style="color: var(--accent-purple);">codex_pool</span>
                 </div>
@@ -1035,45 +1191,45 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             </div>
 
             <!-- CLI Tools Prerequisites Card -->
-            <div class="glass-card" style="padding: 16px;">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
-                    <div style="display: flex; gap: 12px; align-items: center;">
-                        <span style="font-size: 26px;">🛠️</span>
+            <div class="glass-card settings-card">
+                <div class="settings-card-header" style="align-items: center;">
+                    <div class="settings-card-title-group">
+                        <span class="settings-card-icon">🛠️</span>
                         <div>
-                            <div style="font-size: 15px; font-weight: 700; color: #fff;">CLI Tools Status</div>
-                            <div style="font-size: 12px; color: var(--text-secondary);">Detects and configures CLI tools required for enrolling accounts.</div>
+                            <div class="settings-card-title">CLI Tools Status</div>
+                            <div class="settings-card-sub">Detects and configures CLI tools required for enrolling accounts.</div>
                         </div>
                     </div>
-                    <button class="action-btn" onclick="fetchCliToolsStatus()" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; padding: 6px 12px; border-radius: 6px; font-size: 11px; cursor: pointer;">
+                    <button class="recheck-btn" onclick="fetchCliToolsStatus()">
                         🔄 Re-check
                     </button>
                 </div>
 
                 <div style="display: flex; flex-direction: column; gap: 10px;">
                     <!-- Codex CLI item -->
-                    <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center;">
+                    <div class="cli-tool-item">
                         <div>
-                            <div style="display: flex; align-items: center; gap: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                 <span style="font-weight: 700; color: #fff; font-size: 13px;">OpenAI Codex CLI</span>
-                                <span id="codex-cli-badge" class="badge" style="background: rgba(255,255,255,0.08); color: #94a3b8; font-size: 11px; padding: 2px 8px; border-radius: 12px;">Checking...</span>
+                                <span id="codex-cli-badge" class="badge">Checking...</span>
                             </div>
                             <div id="codex-cli-desc" style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Required for 'c add' interactive login session.</div>
                         </div>
-                        <button id="btn-install-codex" class="action-btn" onclick="installCliTool('codex')" style="display: none; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: #fff; border: none; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer;">
+                        <button id="btn-install-codex" class="action-btn" onclick="installCliTool('codex')" style="display: none; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: #fff; border: none; padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;">
                             ⚡ Install CLI
                         </button>
                     </div>
 
                     <!-- Antigravity CLI item -->
-                    <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center;">
+                    <div class="cli-tool-item">
                         <div>
-                            <div style="display: flex; align-items: center; gap: 8px;">
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
                                 <span style="font-weight: 700; color: #fff; font-size: 13px;">Gemini Antigravity CLI</span>
-                                <span id="antigravity-cli-badge" class="badge" style="background: rgba(255,255,255,0.08); color: #94a3b8; font-size: 11px; padding: 2px 8px; border-radius: 12px;">Checking...</span>
+                                <span id="antigravity-cli-badge" class="badge">Checking...</span>
                             </div>
                             <div id="antigravity-cli-desc" style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Required for 'ag add' interactive login session.</div>
                         </div>
-                        <button id="btn-install-antigravity" class="action-btn" onclick="installCliTool('antigravity')" style="display: none; background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer;">
+                        <button id="btn-install-antigravity" class="action-btn" onclick="installCliTool('antigravity')" style="display: none; background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;">
                             ⚡ Setup CLI
                         </button>
                     </div>
@@ -1262,10 +1418,10 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                     const badge = document.getElementById(agent + '-badge');
                     let detail = document.getElementById(agent + '-config-detail');
                     if (!detail) {
-                        detail = document.createElement('p');
+                        detail = document.createElement('div');
                         detail.id = agent + '-config-detail';
-                        detail.style.cssText = 'font-size:11px;overflow-wrap:anywhere;color:#94a3b8;margin-top:8px';
-                        badge.parentElement.parentElement.appendChild(detail);
+                        detail.className = 'agent-config-detail-box';
+                        badge.closest('.settings-card').appendChild(detail);
                     }
                     detail.textContent = (data[agent]?.config_path || '') + ' — ' + (data[agent]?.message || 'Status unavailable');
                 }
