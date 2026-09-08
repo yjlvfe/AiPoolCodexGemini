@@ -8,6 +8,7 @@ import datetime
 import secrets
 import sqlite3
 import subprocess
+import shutil
 import threading
 import re
 from typing import Dict, Any, Optional, List
@@ -293,8 +294,18 @@ class PoolManager:
                     open(cfg_dst, "w").write('cli_auth_credentials_store = "file"\n')
                     env = os.environ.copy()
                     env["CODEX_HOME"] = td
+                    query_bin = os.environ.get("CODEX_ACCOUNT_QUERY_BIN")
+                    if not query_bin or not os.path.exists(query_bin):
+                        candidates = [
+                            os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "cli", "codex-account-query"),
+                            os.path.expanduser("~/.local/libexec/codex-account-query"),
+                            "/usr/local/libexec/codex-account-query",
+                            shutil.which("codex-account-query") or ""
+                        ]
+                        query_bin = next((c for c in candidates if c and os.path.exists(c)), "/usr/local/libexec/codex-account-query")
+
                     try:
-                        p = subprocess.run(["/usr/local/libexec/codex-account-query", "usage"], env=env, capture_output=True, text=True, timeout=5)
+                        p = subprocess.run([query_bin, "usage"], env=env, capture_output=True, text=True, timeout=5)
                         if p.returncode == 0:
                             data = json.loads(p.stdout)
                             h5 = next((w for w in data.get("windows", []) if w.get("windowDurationMins") == 300), {})

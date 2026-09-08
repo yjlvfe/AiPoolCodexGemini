@@ -5,8 +5,26 @@ umask 077
 ACCOUNT_STORE=${CODEX_ACCOUNT_STORE:-$HOME/.codex-accounts}
 SHARED_HOME=${CODEX_SHARED_HOME:-${CODEX_HOME:-$HOME/.codex}}
 CODEX_BIN=${CODEX_BIN:-$(command -v codex 2>/dev/null || true)}
-QUERY_BIN=${CODEX_ACCOUNT_QUERY_BIN:-/usr/local/libexec/codex-account-query}
-WRAPPER_DIR=${CODEX_WRAPPER_DIR:-/usr/local/bin}
+# Resolve query binary intelligently (respect user-mode or system-mode install)
+_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -n "${CODEX_ACCOUNT_QUERY_BIN:-}" ] && [ -x "$CODEX_ACCOUNT_QUERY_BIN" ]; then
+  QUERY_BIN="$CODEX_ACCOUNT_QUERY_BIN"
+elif [ -x "$_SCRIPT_DIR/codex-account-query" ]; then
+  QUERY_BIN="$_SCRIPT_DIR/codex-account-query"
+elif [ -x "$HOME/.local/libexec/codex-account-query" ]; then
+  QUERY_BIN="$HOME/.local/libexec/codex-account-query"
+elif [ -x "/usr/local/libexec/codex-account-query" ]; then
+  QUERY_BIN="/usr/local/libexec/codex-account-query"
+else
+  QUERY_BIN="$(command -v codex-account-query 2>/dev/null || echo "$_SCRIPT_DIR/codex-account-query")"
+fi
+
+if [ -w "/usr/local/bin" ] 2>/dev/null; then
+  DEFAULT_WRAPPER_DIR="/usr/local/bin"
+else
+  DEFAULT_WRAPPER_DIR="$HOME/.local/bin"
+fi
+WRAPPER_DIR=${CODEX_WRAPPER_DIR:-$DEFAULT_WRAPPER_DIR}
 AUTH_FILE=$SHARED_HOME/auth.json
 ACTIVE_FILE=$ACCOUNT_STORE/active
 LOCK_FILE=$ACCOUNT_STORE/switch.lock
