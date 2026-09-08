@@ -72,14 +72,9 @@ if [ "$cmd" = "switch" ]; then
     exec "$SWITCH_BIN" "$target_num"
 fi
 
-# Add Account
+# Add Account (or interactive login)
 if [ "$cmd" = "add" ]; then
     input_file="${2:-}"
-    if [ -z "$input_file" ] || [ ! -f "$input_file" ]; then
-        echo "Error: Please provide a valid JSON credential file."
-        echo "Usage: ag add /path/to/credentials.json"
-        exit 1
-    fi
     highest=0
     for f in "$STORE_DIR"/*; do
         b=$(basename "$f")
@@ -88,13 +83,22 @@ if [ "$cmd" = "add" ]; then
         fi
     done
     next=$((highest + 1))
-    target_dir="$STORE_DIR/$next"
-    mkdir -p "$target_dir"
-    cp "$input_file" "$target_dir/antigravity-oauth-token"
-    chmod 600 "$target_dir/antigravity-oauth-token"
-    echo "✓ Added new Gemini account as Account #$next"
-    echo "Activating..."
-    exec "$SWITCH_BIN" "$next"
+    
+    if [ -n "$input_file" ] && [ -f "$input_file" ]; then
+        target_dir="$STORE_DIR/$next"
+        mkdir -p "$target_dir"
+        cp "$input_file" "$target_dir/antigravity-oauth-token"
+        chmod 600 "$target_dir/antigravity-oauth-token"
+        echo "✓ تم استيراد بيانات الحساب كـ Account #$next"
+        echo "جاري التنشيط..."
+        exec "$SWITCH_BIN" "$next"
+    else
+        echo "=========================================================="
+        echo " ➕ إضافة حساب Gemini / Antigravity جديد (Account #$next)"
+        echo "=========================================================="
+        echo "جاري بدء جلسة التسجيل للحساب..."
+        exec "$SWITCH_BIN" "$next"
+    fi
 fi
 
 exec "$SWITCH_BIN" "$@"

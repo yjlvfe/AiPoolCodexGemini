@@ -73,14 +73,9 @@ if [ "$cmd" = "switch" ]; then
     exec "$SWITCH_BIN" "$target_num"
 fi
 
-# Add Account
+# Add Account (or interactive login)
 if [ "$cmd" = "add" ]; then
     input_file="${2:-}"
-    if [ -z "$input_file" ] || [ ! -f "$input_file" ]; then
-        echo "Error: Please provide a valid auth.json file."
-        echo "Usage: cx add /path/to/auth.json"
-        exit 1
-    fi
     highest=0
     for f in "$STORE_DIR"/*; do
         b=$(basename "$f")
@@ -89,12 +84,21 @@ if [ "$cmd" = "add" ]; then
         fi
     done
     next=$((highest + 1))
-    target="$STORE_DIR/$next"
-    cp "$input_file" "$target"
-    chmod 600 "$target"
-    echo "✓ Added new Codex account as Account #$next"
-    echo "Activating..."
-    exec "$SWITCH_BIN" "$next"
+    
+    if [ -n "$input_file" ] && [ -f "$input_file" ]; then
+        target="$STORE_DIR/$next"
+        cp "$input_file" "$target"
+        chmod 600 "$target"
+        echo "✓ تم استيراد بيانات الحساب كـ Account #$next"
+        echo "جاري التنشيط..."
+        exec "$SWITCH_BIN" "$next"
+    else
+        echo "=========================================================="
+        echo " ➕ إضافة حساب Codex / ChatGPT جديد (Account #$next)"
+        echo "=========================================================="
+        echo "جاري بدء جلسة تسجيل الدخول الرسمية برمز الجهاز..."
+        exec "$SWITCH_BIN" "$next"
+    fi
 fi
 
 exec "$SWITCH_BIN" "$@"
