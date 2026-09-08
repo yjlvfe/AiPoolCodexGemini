@@ -2195,20 +2195,11 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             const listContainer = document.getElementById('activity-stream-list');
             listContainer.innerHTML = '';
 
-            const allRequests = recentRequests || [];
-            // Filter by active tab (Codex / ChatGPT vs Antigravity / Gemini) so each tab shows its relevant requests clearly
-            const targetProvider = currentProvider.toLowerCase();
-            const requests = allRequests.filter(req => {
-                const p = (req.provider || req.pool || '').toLowerCase();
-                if (targetProvider === 'codex') {
-                    return p === 'codex' || p === 'chatgpt';
-                } else {
-                    return p === 'antigravity' || p === 'gemini';
-                }
-            });
+            // Combined activity stream showing both Gemini and Codex / ChatGPT in one unified chronological feed
+            const requests = recentRequests || [];
 
             if (requests.length === 0) {
-                listContainer.innerHTML = `<div style="text-align:center; padding: 20px; color: var(--text-tertiary);">No ${escapeHtml(currentProvider === 'Codex' ? 'ChatGPT' : 'Gemini')} activity records yet</div>`;
+                listContainer.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-tertiary);">No activity records yet</div>';
                 return;
             }
 
