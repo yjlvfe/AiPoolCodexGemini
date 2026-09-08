@@ -1274,7 +1274,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             if (accountsVisible) {
                 container.classList.remove('collapsed');
                 if (textEl) textEl.innerText = 'Hide Accounts';
-                if (iconEl) iconEl.innerText = '🙈';
+                if (iconEl) iconEl.innerText = '🔒';
                 if (chevronEl) chevronEl.style.transform = 'rotate(0deg)';
             } else {
                 container.classList.add('collapsed');
