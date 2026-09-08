@@ -223,35 +223,40 @@ class PoolManager:
         while self._running:
             try:
                 self._update_all_background()
+            except RuntimeError:
+                pass
             except Exception as e:
                 print(f"[pool-worker] Polling error: {e}")
             # Poll every 10 seconds asynchronously
             time.sleep(10)
 
     def _update_all_background(self):
-        import sys
-        cli_dir = os.path.join(os.path.dirname(_CURRENT_DIR), 'cli')
-        if cli_dir not in sys.path:
-            sys.path.insert(0, cli_dir)
-        from account_reports import pool_report
-        from concurrent.futures import ThreadPoolExecutor
-        with ThreadPoolExecutor(max_workers=2) as executor:
-            ag_future = executor.submit(pool_report, 'antigravity')
-            cdx_future = executor.submit(pool_report, 'codex')
-            ag_data, cdx_data = ag_future.result(), cdx_future.result()
+        try:
+            import sys
+            cli_dir = os.path.join(os.path.dirname(_CURRENT_DIR), 'cli')
+            if cli_dir not in sys.path:
+                sys.path.insert(0, cli_dir)
+            from account_reports import pool_report
+            from concurrent.futures import ThreadPoolExecutor
+            with ThreadPoolExecutor(max_workers=2) as executor:
+                ag_future = executor.submit(pool_report, 'antigravity')
+                cdx_future = executor.submit(pool_report, 'codex')
+                ag_data, cdx_data = ag_future.result(), cdx_future.result()
 
-        # 3. Logs & Analytics
-        logs_data = self._build_logs_report()
+            # 3. Logs & Analytics
+            logs_data = self._build_logs_report()
 
-        with self._lock:
-            self._cached_ag = ag_data
-            self._cached_cdx = cdx_data
-            if logs_data:
-                logs_data["status"] = {
-                    "antigravity": ag_data,
-                    "codex": cdx_data
-                }
-            self._cached_logs = logs_data
+            with self._lock:
+                self._cached_ag = ag_data
+                self._cached_cdx = cdx_data
+                if logs_data:
+                    logs_data["status"] = {
+                        "antigravity": ag_data,
+                        "codex": cdx_data
+                    }
+                self._cached_logs = logs_data
+        except RuntimeError:
+            pass
 
     def _build_logs_report(self):
         import sys
