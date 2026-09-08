@@ -112,9 +112,27 @@ chmod +x install.sh
 
 ---
 
-## 🔗 ربط المنظومة مع هيرمس (Hermes Agent):
+## 🔗 الربط التلقائي بنقرة واحدة (Hermes & OpenClaw):
 
-في ملف إعدادات هيرمس (`/root/.hermes/config.yaml`)، أضف:
+بدلاً من نسخ ولصق الإعدادات يدوياً، وفرنا أمرين مستقلين للربط التلقائي الفوري:
+
+### 1. ربط المزودات في هيرمس (Hermes Agent):
+```bash
+./setup-hermes.sh
+```
+*(يقوم تلقائياً بتحديث `~/.hermes/config.yaml` وإضافة مزودي `gemini` و `codex` مع كافة الموديلات).*
+
+### 2. ربط المزودات في أوبن كلاو (OpenClaw):
+```bash
+./setup-openclaw.sh
+```
+*(يقوم تلقائياً بتحديث `~/.openclaw/openclaw.json` وإضافة مزودي `gemini_pool` و `codex_pool`).*
+
+---
+
+### أو الربط اليدوي إذا رغبت:
+
+#### في هيرمس (`~/.hermes/config.yaml`):
 
 ```yaml
 custom_providers:
