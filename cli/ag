@@ -6,7 +6,7 @@ set -euo pipefail
 
 STORE_DIR="${AG_ACCOUNT_STORE:-$HOME/.antigravity-accounts}"
 ACTIVE_FILE="$STORE_DIR/active"
-SWITCH_BIN="/usr/local/bin/antigravity-account-switch"
+SWITCH_BIN="${SWITCH_BIN:-/usr/local/bin/antigravity-account-switch}"
 
 list_accounts() {
     echo "=========================================================="

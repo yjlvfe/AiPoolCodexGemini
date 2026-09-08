@@ -6,7 +6,7 @@ set -euo pipefail
 
 STORE_DIR="${CODEX_ACCOUNT_STORE:-$HOME/.codex-accounts}"
 ACTIVE_FILE="$STORE_DIR/active"
-SWITCH_BIN="/usr/local/bin/codex-account-switch"
+SWITCH_BIN="${SWITCH_BIN:-/usr/local/bin/codex-account-switch}"
 
 list_accounts() {
     echo "=========================================================="
@@ -60,7 +60,7 @@ fi
 
 # Number switch (e.g. 'cx 3')
 if [[ "$cmd" =~ ^[0-9]+$ ]]; then
-    exec "$SWITCH_BIN" "$cmd"
+    exec "$SWITCH_BIN" switch "$cmd"
 fi
 
 # Switch subcommand
@@ -70,7 +70,7 @@ if [ "$cmd" = "switch" ]; then
         echo "Error: Specify account number. Example: cx switch 3"
         exit 1
     fi
-    exec "$SWITCH_BIN" "$target_num"
+    exec "$SWITCH_BIN" switch "$target_num"
 fi
 
 # Add Account (or interactive login)
@@ -91,13 +91,13 @@ if [ "$cmd" = "add" ]; then
         chmod 600 "$target"
         echo "✓ تم استيراد بيانات الحساب كـ Account #$next"
         echo "جاري التنشيط..."
-        exec "$SWITCH_BIN" "$next"
+        exec "$SWITCH_BIN" switch "$next"
     else
         echo "=========================================================="
         echo " ➕ إضافة حساب Codex / ChatGPT جديد (Account #$next)"
         echo "=========================================================="
         echo "جاري بدء جلسة تسجيل الدخول الرسمية برمز الجهاز..."
-        exec "$SWITCH_BIN" "$next"
+        exec "$SWITCH_BIN" switch "$next"
     fi
 fi
 
