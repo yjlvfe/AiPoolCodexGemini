@@ -1049,6 +1049,73 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             cursor: wait;
             transform: none;
         }
+        /* Creative Animated Bouncing Dots & Loaders */
+        .bouncing-dots {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .bouncing-dots span {
+            width: 5px;
+            height: 5px;
+            background-color: currentColor;
+            border-radius: 50%;
+            display: inline-block;
+            animation: dotBounce 1.4s infinite ease-in-out both;
+        }
+        .bouncing-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .bouncing-dots span:nth-child(2) { animation-delay: -0.16s; }
+        .bouncing-dots span:nth-child(3) { animation-delay: 0s; }
+        @keyframes dotBounce {
+            0%, 80%, 100% { transform: scale(0.2); opacity: 0.3; }
+            40% { transform: scale(1.1); opacity: 1; }
+        }
+        .spin-icon {
+            display: inline-block;
+            animation: spinAnim 1s linear infinite;
+        }
+        @keyframes spinAnim {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        /* Secondary Check Updates Action Button */
+        .check-update-btn {
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            color: #38bdf8;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.25s ease;
+        }
+        .check-update-btn:hover {
+            background: rgba(56, 189, 248, 0.2);
+            border-color: rgba(56, 189, 248, 0.5);
+            transform: translateY(-1px);
+        }
+        .check-update-btn:disabled {
+            opacity: 0.6;
+            cursor: wait;
+            transform: none;
+        }
+        .update-action-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-top: 4px;
+        }
+        @media (max-width: 640px) {
+            .update-action-row {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+        }
         .cli-tool-item {
             background: rgba(0, 0, 0, 0.25);
             border: 1px solid rgba(255, 255, 255, 0.06);
@@ -1547,14 +1614,25 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 </div>
 
                 <div id="update-result-box" hidden style="border:1px solid #38bdf8;border-radius:8px;padding:12px;margin-bottom:12px;background:rgba(0,0,0,0.4);">
-                    <strong id="update-result-title"></strong>
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong id="update-result-title"></strong>
+                        <span id="update-loading-dots" class="bouncing-dots" style="color: #38bdf8; display: none;">
+                            <span></span><span></span><span></span>
+                        </span>
+                    </div>
                     <pre id="update-result-detail" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;max-height:260px;overflow:auto;margin-top:6px;"></pre>
                 </div>
 
-                <button class="update-cta-btn" id="btn-update-suite" onclick="triggerUpdate()">
-                    <span>⚡</span>
-                    <span>Update Suite from GitHub</span>
-                </button>
+                <div class="update-action-row">
+                    <button class="check-update-btn" id="btn-check-update" onclick="checkRemoteUpdates()">
+                        <span id="check-icon">🔍</span>
+                        <span id="check-btn-text">Check for Updates</span>
+                    </button>
+                    <button class="update-cta-btn" id="btn-update-suite" onclick="triggerUpdate()">
+                        <span id="update-btn-icon">⚡</span>
+                        <span id="update-btn-text">Update from GitHub</span>
+                    </button>
+                </div>
             </div>
 
             <!-- Danger Zone (Uninstall) -->
@@ -1721,6 +1799,11 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
         }
 
         async function fetchCliToolsStatus() {
+            const recheckBtn = document.querySelector('.recheck-btn[onclick="fetchCliToolsStatus()"]');
+            if (recheckBtn) {
+                recheckBtn.innerHTML = '<span class="spin-icon">🔄</span> Checking <span class="bouncing-dots" style="color: currentColor;"><span></span><span></span><span></span></span>';
+                recheckBtn.disabled = true;
+            }
             try {
                 const res = await fetch(resolveApiUrl('/api/settings/check_cli'), {
                     headers: apiHeaders(),
@@ -1765,6 +1848,12 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                     agBtn.style.display = 'inline-block';
                 }
             } catch(e) { console.error(e); }
+            finally {
+                if (recheckBtn) {
+                    recheckBtn.innerHTML = '🔄 Re-check';
+                    recheckBtn.disabled = false;
+                }
+            }
         }
 
         async function installCliTool(tool) {
@@ -2424,6 +2513,11 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
         # API: system version
         if path in ("/aipool/api/settings/version", "/api/settings/version"):
             self.send_json_response(get_system_version())
+            return
+
+        # API: check for updates from remote GitHub
+        if path in ("/aipool/api/settings/check_update", "/api/settings/check_update"):
+            self.send_json_response(update_suite.check_updates())
             return
 
         # API: check CLI tools status

@@ -25,6 +25,34 @@ def git(*args):
     return result.stdout.strip()
 
 
+def check_updates():
+    """Check if remote origin/main has newer commits without modifying working tree."""
+    data = {'has_update': False, 'behind_count': 0, 'remote_commit': None, 'local_commit': None, 'error': None}
+    try:
+        current = git('rev-parse', 'HEAD')
+        data['local_commit'] = current
+        # Fetch remote origin main quietly
+        git('fetch', 'origin', 'main')
+        target = git('rev-parse', 'origin/main')
+        data['remote_commit'] = target
+        # Count commits behind
+        out = git('rev-list', '--count', f'{current}..{target}')
+        behind = int(out) if out.isdigit() else 0
+        data['behind_count'] = behind
+        data['has_update'] = (behind > 0)
+        if data['has_update']:
+            data['remote_version'] = None
+            try:
+                remote_v = git('show', 'origin/main:version.json')
+                data['remote_version'] = json.loads(remote_v).get('version')
+            except Exception:
+                pass
+            data['commits_preview'] = git('log', f'{current}..{target}', '--oneline', '-n', '5')
+    except Exception as exc:
+        data['error'] = str(exc)
+    return data
+
+
 def version():
     data = {'version':'unknown', 'commit':None, 'commit_date':None, 'commit_msg':None, 'dirty':False}
     try:

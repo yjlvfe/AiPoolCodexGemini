@@ -9,6 +9,7 @@ from unittest.mock import patch, MagicMock
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'dashboard'))
 sys.path.insert(0, str(ROOT / 'cli'))
+sys.path.insert(0, str(ROOT / 'scripts'))
 
 from app import PoolManager
 
@@ -157,6 +158,8 @@ class DashboardManualSwitch(unittest.TestCase):
         self.assertIn('.bento-update-cell {', server_py)
         self.assertIn('.commit-log-box {', server_py)
         self.assertIn('.update-cta-btn {', server_py)
+        self.assertIn('.bouncing-dots {', server_py)
+        self.assertIn('.check-update-btn {', server_py)
         # Verify System Updates header has sleek recheck button in top-row
         self.assertIn('<span class="settings-card-title">System Updates</span>', server_py)
         self.assertIn('<button class="recheck-btn" onclick="loadBuildInfo()"', server_py)
@@ -168,6 +171,16 @@ class DashboardManualSwitch(unittest.TestCase):
         self.assertIn('id="settings-last-update"', server_py)
         self.assertIn('id="update-result-box"', server_py)
         self.assertIn('id="btn-update-suite"', server_py)
+        self.assertIn('id="btn-check-update"', server_py)
+        self.assertIn('id="update-loading-dots"', server_py)
+
+    def test_check_remote_updates_endpoint(self):
+        # Verify check_updates function in update_suite
+        import update_suite
+        res = update_suite.check_updates()
+        self.assertIn('has_update', res)
+        self.assertIn('behind_count', res)
+        self.assertIn('local_commit', res)
 
 
 if __name__ == '__main__':

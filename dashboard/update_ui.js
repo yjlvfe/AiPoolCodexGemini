@@ -4,14 +4,70 @@ function buildLabel(data, running = false) {
     const commit = running ? data.running_commit : data.commit;
     return `v${version || 'unknown'} · ${commit ? commit.slice(0, 8) : 'unknown'}`;
 }
-function updateMessage(title, detail = '', state = 'info') {
+
+function updateMessage(title, detail = '', state = 'info', showDots = false) {
     const box = document.getElementById('update-result-box');
     box.hidden = false;
     box.dataset.state = state;
     box.style.borderColor = state === 'success' ? '#10b981' : state === 'error' ? '#ef4444' : '#38bdf8';
     document.getElementById('update-result-title').textContent = title;
     document.getElementById('update-result-detail').textContent = detail;
+    const dots = document.getElementById('update-loading-dots');
+    if (dots) {
+        dots.style.display = showDots ? 'inline-flex' : 'none';
+        dots.style.color = state === 'success' ? '#10b981' : state === 'error' ? '#ef4444' : '#38bdf8';
+    }
 }
+
+async function checkRemoteUpdates() {
+    const btn = document.getElementById('btn-check-update');
+    const icon = document.getElementById('check-icon');
+    const text = document.getElementById('check-btn-text');
+    const originalText = text.textContent;
+    btn.disabled = true;
+    if (icon) icon.className = 'spin-icon';
+    text.innerHTML = 'Checking <span class="bouncing-dots" style="color: currentColor;"><span></span><span></span><span></span></span>';
+    updateMessage('Checking GitHub origin/main for new releases…', 'Fetching latest git refs from remote repository without modifying local working tree.', 'info', true);
+
+    try {
+        const res = await fetch('/aipool/api/settings/check_update', { cache: 'no-store', credentials: 'same-origin' });
+        if (!res.ok) throw new Error(`Check returned HTTP ${res.status}`);
+        const data = await res.json();
+
+        if (data.error) {
+            updateMessage('Update check encountered an error', data.error, 'error', false);
+            return;
+        }
+
+        if (data.has_update) {
+            const verStr = data.remote_version ? `v${data.remote_version}` : 'Newer build';
+            updateMessage(
+                `🎉 New Update Available: ${verStr} (${data.behind_count} commit${data.behind_count > 1 ? 's' : ''} behind)`,
+                `Remote commit: ${data.remote_commit ? data.remote_commit.slice(0, 8) : 'unknown'}\n\nRecent commits on origin/main:\n${data.commits_preview || 'No preview available'}\n\nReady to install! Click 'Update from GitHub' below.`,
+                'info',
+                false
+            );
+            const updateBtn = document.getElementById('btn-update-suite');
+            if (updateBtn) {
+                updateBtn.style.animation = 'pulse 2s infinite';
+            }
+        } else {
+            updateMessage(
+                '✨ System is Up to Date!',
+                `Running revision: ${data.local_commit ? data.local_commit.slice(0, 8) : 'unknown'}\nRemote revision: ${data.remote_commit ? data.remote_commit.slice(0, 8) : 'unknown'}\nYour suite is running the absolute latest verified code from origin/main.`,
+                'success',
+                false
+            );
+        }
+    } catch (err) {
+        updateMessage('Failed to check for updates', err.message || 'Network error', 'error', false);
+    } finally {
+        btn.disabled = false;
+        if (icon) icon.className = '';
+        text.textContent = originalText;
+    }
+}
+
 async function readBuild() {
     const response = await fetch('/aipool/api/settings/version', {cache:'no-store', credentials:'same-origin'});
     if (!response.ok) throw new Error(`Version check returned HTTP ${response.status}`);
@@ -55,29 +111,33 @@ async function verifyRunningBuild(target) {
 async function triggerUpdate() {
     if (!confirm('Fetch origin/main, install the new build and verify the running dashboard? Local edits will never be discarded.')) return;
     const button = document.getElementById('btn-update-suite');
+    const updateText = document.getElementById('update-btn-text');
+    const updateIcon = document.getElementById('update-btn-icon');
     button.disabled = true;
-    button.textContent = 'Updating…';
-    updateMessage('Fetching and installing…', 'The result will include the exact before/after builds.');
+    if (updateIcon) updateIcon.className = 'spin-icon';
+    if (updateText) updateText.innerHTML = 'Updating <span class="bouncing-dots" style="color: currentColor;"><span></span><span></span><span></span></span>';
+    updateMessage('Fetching and installing build…', 'Pulling changes and rebuilding services; live telemetry will confirm active execution.', 'info', true);
     try {
         const response = await fetch('/aipool/api/settings/update', {method:'POST', credentials:'same-origin'});
         if (!response.ok) throw new Error(`Update request returned HTTP ${response.status}`);
         const result = await response.json();
         if (!result.success) {
-            updateMessage('Update failed — not completed', result.message || 'Unknown error', 'error');
+            updateMessage('Update failed — not completed', result.message || 'Unknown error', 'error', false);
             return;
         }
         const before = buildLabel(result.version_before);
         const after = buildLabel(result.version_after);
-        updateMessage('Files installed; verifying the running build…', `${before} → ${after}\n${result.message || ''}`);
+        updateMessage('Files installed; verifying the running build…', `${before} → ${after}\n${result.message || ''}`, 'info', true);
         await verifyRunningBuild(result.version_after.commit);
-        updateMessage(result.updated ? 'Update completed and running build verified' : 'Already up to date — no new version was installed', `${before} → ${after}\n${result.message || ''}`, 'success');
-        button.textContent = result.updated ? 'Update verified' : 'Already up to date';
+        updateMessage(result.updated ? 'Update completed and running build verified' : 'Already up to date — no new version was installed', `${before} → ${after}\n${result.message || ''}`, 'success', false);
+        if (updateText) updateText.textContent = result.updated ? 'Update verified' : 'Already up to date';
         await loadBuildInfo();
     } catch (error) {
-        updateMessage('Update result not confirmed', `${error.message}\nConnection loss is not evidence of success. Use Re-check version to inspect the running build and last update status.`, 'error');
+        updateMessage('Update result not confirmed', `${error.message}\nConnection loss is not evidence of success. Use Re-check version to inspect the running build and last update status.`, 'error', false);
     } finally {
         button.disabled = false;
-        if (button.textContent === 'Updating…') button.textContent = 'Update Suite from GitHub';
+        if (updateIcon) updateIcon.className = '';
+        if (updateText && updateText.innerHTML.includes('Updating')) updateText.textContent = 'Update from GitHub';
     }
 }
 loadBuildInfo();
