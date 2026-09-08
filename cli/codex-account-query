@@ -95,7 +95,7 @@ def safe_email(value: Any) -> str | None:
 class AppServer:
     def __init__(self, codex_bin: str) -> None:
         self.process = subprocess.Popen(
-            [codex_bin, "app-server", "--stdio"],
+            [codex_bin, "app-server"],
             stdin=subprocess.PIPE,
             stdout=subprocess.PIPE,
             stderr=subprocess.DEVNULL,
@@ -205,13 +205,8 @@ def main() -> int:
         print(json.dumps({"status": "INVALID AUTH"}, separators=(",", ":")))
         return 0
 
-    codex_bin = os.environ.get("CODEX_BIN")
-    if not codex_bin:
-        codex_bin = shutil.which("codex") or (
-            "/usr/local/bin/codex" if os.path.isfile("/usr/local/bin/codex") else
-            os.path.expanduser("~/.local/bin/codex") if os.path.isfile(os.path.expanduser("~/.local/bin/codex")) else
-            "/usr/bin/codex"
-        )
+    from account_manager import find_codex
+    codex_bin = find_codex()
     server = AppServer(codex_bin)
     try:
         server.request(

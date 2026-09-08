@@ -9,9 +9,9 @@ import urllib.request
 import urllib.parse
 from server import auth_manager
 
-BOT_TOKEN = "8923178439:AAGU-4SkIYKBHRWlfjnIY1BeCpX3NAy4Re4"
+BOT_TOKEN = os.environ.get("TG_BOT_TOKEN", "")
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
-DASHBOARD_BASE_URL = os.environ.get("POOL_DASHBOARD_URL", "https://64.112.42.39.sslip.io/aipool")
+DASHBOARD_BASE_URL = os.environ.get("POOL_DASHBOARD_URL", "http://127.0.0.1:8444")
 
 def call_tg(method: str, payload: dict = None):
     url = f"{API_URL}/{method}"

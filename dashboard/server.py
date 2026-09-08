@@ -12,7 +12,7 @@ from http import cookies
 import subprocess
 from app import PoolManager, TokenAuthManager
 
-PORT = 8444
+PORT = int(os.environ.get('DASHBOARD_PORT', '8444'))
 auth_manager = TokenAuthManager()
 HTML_LOGIN_TEMPLATE = """<!DOCTYPE html>
 <html lang="en" dir="ltr">
@@ -840,6 +840,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 <div class="device-badge" title="Authenticated Device Session">
                     <span>🔒</span>
                     <span>24h Verified</span>
+                    <span id="system-version-pill" style="font-family:monospace;color:#a5b4fc">Loading version…</span>
                 </div>
             </div>
         </header>
@@ -964,7 +965,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 <div style="display: flex; gap: 8px;">
                     <button class="action-btn" id="btn-sync-hermes" onclick="triggerIntegration('hermes')" style="flex: 1; background: linear-gradient(135deg, #0ea5e9, #0284c7); color: #fff; border: none; padding: 10px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
                         <span>⚡</span>
-                        <span>Auto-Link Hermes Agent</span>
+                        <span>Configure Hermes Agent</span>
                     </button>
                 </div>
             </div>
@@ -988,7 +989,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 <div style="display: flex; gap: 8px;">
                     <button class="action-btn" id="btn-sync-openclaw" onclick="triggerIntegration('openclaw')" style="flex: 1; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: #fff; border: none; padding: 10px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
                         <span>⚡</span>
-                        <span>Auto-Link OpenClaw</span>
+                        <span>Configure OpenClaw</span>
                     </button>
                 </div>
             </div>
@@ -1049,8 +1050,18 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                     </div>
                 </div>
                 <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #cbd5e1; margin-bottom: 12px; line-height: 1.6;">
-                    Source: <code style="color: var(--accent-cyan);">https://github.com/yjlvfe/AiPoolCodexGemini</code><br>
-                    Safety: <span style="color: var(--accent-emerald);">Preserves all auth tokens, sessions, and databases</span>
+                    Running build: <strong id="settings-installed-version">Loading…</strong><br>
+                    Source build: <code id="settings-source-version">Loading…</code><br>
+                    Commit time: <span id="settings-commit-date">—</span><br>
+                    <span id="settings-commit-message"></span><br>
+                    Last update: <span id="settings-last-update">No recorded update</span><br>
+                    Source: <code style="overflow-wrap:anywhere">github.com/yjlvfe/AiPoolCodexGemini</code><br>
+                    Accounts, sessions and local configuration are preserved.
+                </div>
+                <button class="action-btn" onclick="loadBuildInfo()" style="margin-bottom:10px">Re-check version</button>
+                <div id="update-result-box" hidden style="border:1px solid #38bdf8;border-radius:8px;padding:12px;margin-bottom:12px">
+                    <strong id="update-result-title"></strong>
+                    <pre id="update-result-detail" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;max-height:260px;overflow:auto"></pre>
                 </div>
                 <button class="action-btn" id="btn-update-suite" onclick="triggerUpdate()" style="width: 100%; background: linear-gradient(135deg, #0284c7, #0369a1); color: #fff; border: none; padding: 11px 14px; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
                     <span>🔄</span>
@@ -1091,7 +1102,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
         // Close dropdown when clicking outside
         document.addEventListener('click', (e) => {
             const wrapper = document.getElementById('custom-model-select');
-            if (!wrapper.contains(e.target)) {
+            if (wrapper && !wrapper.contains(e.target)) {
                 wrapper.classList.remove('open');
             }
         });
@@ -1163,7 +1174,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 
                 const hermesBadge = document.getElementById('hermes-badge');
                 if (data.hermes && data.hermes.connected) {
-                    hermesBadge.innerText = '🟢 Connected';
+                    hermesBadge.innerText = '🟢 Config verified';
                     hermesBadge.style.background = 'rgba(16, 185, 129, 0.15)';
                     hermesBadge.style.color = '#34d399';
                 } else {
@@ -1174,13 +1185,24 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
 
                 const openclawBadge = document.getElementById('openclaw-badge');
                 if (data.openclaw && data.openclaw.connected) {
-                    openclawBadge.innerText = '🟢 Connected';
+                    openclawBadge.innerText = '🟢 Config verified';
                     openclawBadge.style.background = 'rgba(16, 185, 129, 0.15)';
                     openclawBadge.style.color = '#34d399';
                 } else {
                     openclawBadge.innerText = '⚪ Disconnected';
                     openclawBadge.style.background = 'rgba(255, 255, 255, 0.08)';
                     openclawBadge.style.color = '#94a3b8';
+                }
+                for (const agent of ['hermes','openclaw']) {
+                    const badge = document.getElementById(agent + '-badge');
+                    let detail = document.getElementById(agent + '-config-detail');
+                    if (!detail) {
+                        detail = document.createElement('p');
+                        detail.id = agent + '-config-detail';
+                        detail.style.cssText = 'font-size:11px;overflow-wrap:anywhere;color:#94a3b8;margin-top:8px';
+                        badge.parentElement.parentElement.appendChild(detail);
+                    }
+                    detail.textContent = (data[agent]?.config_path || '') + ' — ' + (data[agent]?.message || 'Status unavailable');
                 }
             } catch(e) { console.error(e); }
         }
@@ -1281,35 +1303,6 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             } finally {
                 btn.disabled = false;
                 setTimeout(() => { btn.innerHTML = originalHtml; }, 3000);
-            }
-        }
-
-        async function triggerUpdate() {
-            if (!confirm('Do you want to update AiPoolCodexGemini suite from GitHub now?\\n\\nThis will pull the latest version and safely restart services.')) {
-                return;
-            }
-            const btn = document.getElementById('btn-update-suite');
-            const originalHtml = btn.innerHTML;
-            btn.innerHTML = '<span>⏳</span><span>Updating Suite...</span>';
-            btn.disabled = true;
-
-            try {
-                const res = await fetch('/api/settings/update', { method: 'POST' });
-                const data = await res.json();
-                if (data.success) {
-                    btn.innerHTML = '<span>✅</span><span>Updated & Restarted!</span>';
-                    alert('✓ Update completed successfully!\\n\\n' + (data.message || ''));
-                    setTimeout(() => window.location.reload(), 1500);
-                } else {
-                    alert('Update failed: ' + (data.message || 'Unknown error'));
-                    btn.innerHTML = originalHtml;
-                }
-            } catch(e) {
-                btn.innerHTML = '<span>✅</span><span>Update Executed</span>';
-                alert('Update request sent. Services are restarting.');
-                setTimeout(() => window.location.reload(), 2500);
-            } finally {
-                btn.disabled = false;
             }
         }
 
@@ -1464,6 +1457,11 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             }, 2200);
         }
 
+        function escapeHtml(value) {
+            const span = document.createElement('span');
+            span.textContent = String(value ?? '');
+            return span.innerHTML;
+        }
         function renderGeneralActivityStream(recentRequests) {
             const listContainer = document.getElementById('activity-stream-list');
             listContainer.innerHTML = '';
@@ -1480,7 +1478,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 item.className = 'stream-card-item';
                 const p = (req.provider || req.pool || '').toLowerCase();
                 const m = (req.model || '').toLowerCase();
-                const isCodex = p.includes('codex') || p.includes('chatgpt') || m.includes('astra') || m.includes('luna') || m.includes('sol');
+                const isCodex = p === 'codex' || p === 'chatgpt';
                 const badgeClass = isCodex ? 'codex' : 'antigravity';
                 const provIcon = isCodex ? '🟣' : '🟢';
 
@@ -1500,23 +1498,24 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                     <div class="stream-card-top">
                         <div class="stream-model-name">
                             <span>${provIcon}</span>
-                            <span style="color:#f8fafc; font-weight:700;">${req.model}</span>
-                            ${req.call_num ? `<span style="font-size:10px; color:var(--text-tertiary); font-weight:600;">#${req.call_num}</span>` : ''}
+                            <span style="color:#f8fafc; font-weight:700;">${escapeHtml(req.model)}</span>
+                            ${req.call_num ? `<span style="font-size:10px; color:var(--text-tertiary); font-weight:600;">#${escapeHtml(req.call_num)}</span>` : ''}
                         </div>
                         <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#94a3b8; font-weight:600;">
-                            ${timeStr}
+                            ${escapeHtml(timeStr)}
                         </div>
                     </div>
                     <!-- Bottom Tier: IN & OUT on Left | Total on Right -->
+                    <div style="font-size:10px;color:#94a3b8">${isCodex ? 'Codex' : 'Antigravity'} · ${escapeHtml(req.status || 'Recorded')} ${req.account ? '· Account ' + escapeHtml(req.account) : ''}</div>
                     <div class="stream-card-bottom">
                         <div style="display:flex; align-items:center; gap:8px;">
-                            <span style="color:#38bdf8; font-weight:700;">📥 ${(req.prompt||0).toLocaleString()}</span>
+                            <span style="color:#38bdf8; font-weight:700;">📥 ${req.prompt == null ? "—" : req.prompt.toLocaleString()}</span>
                             <span style="color:rgba(255,255,255,0.15);">|</span>
-                            <span style="color:#c084fc; font-weight:700;">📤 ${(req.completion||0).toLocaleString()}</span>
+                            <span style="color:#c084fc; font-weight:700;">📤 ${req.completion == null ? "—" : req.completion.toLocaleString()}</span>
                         </div>
                         <div class="stream-tok-badge ${badgeClass}">
                             <span>⚡</span>
-                            <span>+${(req.tokens || 0).toLocaleString()} tok</span>
+                            <span>+${req.tokens == null ? "unknown" : req.tokens.toLocaleString()} tok</span>
                         </div>
                     </div>
                 `;
@@ -1589,54 +1588,45 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
 GLOBAL_POOL_MANAGER = PoolManager()
 
 def get_settings_status():
-    hermes_cfg = os.path.expanduser("~/.hermes/config.yaml")
-    hermes_connected = False
-    hermes_installed = os.path.exists(hermes_cfg)
-    if hermes_installed:
-        try:
-            import yaml
-            with open(hermes_cfg, "r", encoding="utf-8") as f:
-                y = yaml.safe_load(f) or {}
-            cp = y.get("custom_providers", {})
-            hermes_connected = bool("gemini" in cp or "codex" in cp)
-        except Exception:
-            pass
+    import integrations
+    return {agent: integrations.status(agent) for agent in ('hermes','openclaw')}
 
-    openclaw_cfg = os.path.expanduser("~/.openclaw/openclaw.json")
-    openclaw_connected = False
-    openclaw_installed = os.path.exists(openclaw_cfg)
-    if openclaw_installed:
-        try:
-            with open(openclaw_cfg, "r", encoding="utf-8") as f:
-                j = json.load(f) or {}
-            provs = j.get("models", {}).get("providers", {})
-            openclaw_connected = bool("gemini_pool" in provs or "codex_pool" in provs)
-        except Exception:
-            pass
 
-    return {
-        "hermes": {"installed": hermes_installed, "connected": hermes_connected},
-        "openclaw": {"installed": openclaw_installed, "connected": openclaw_connected}
-    }
+def integrate_agent(agent):
+    import integrations
+    try:
+        return integrations.integrate(agent)
+    except (OSError, ValueError, TypeError) as exc:
+        return {'success':False, 'verified':False, 'message':str(exc)}
+
 
 def get_cli_tools_status():
-    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    script_path = os.path.join(base_dir, "scripts", "install-cli-tools.sh")
-    if not os.path.exists(script_path):
-        return {
-            "codex": {"installed": False, "path": "", "version": ""},
-            "antigravity": {"installed": False, "path": "", "version": ""}
-        }
+    from account_manager import find_codex
+    codex={'installed':False,'path':'','version':''}
     try:
-        res = subprocess.run(["bash", script_path, "check"], capture_output=True, text=True, timeout=10)
-        if res.returncode == 0:
-            return json.loads(res.stdout.strip())
-    except Exception:
+        binary=find_codex()
+        result=subprocess.run([binary,'--version'],capture_output=True,text=True,timeout=10)
+        codex={'installed':result.returncode==0,'path':binary,'version':result.stdout.strip()}
+    except (OSError,ValueError,subprocess.SubprocessError):
         pass
-    return {
-        "codex": {"installed": False, "path": "", "version": ""},
-        "antigravity": {"installed": False, "path": "", "version": ""}
-    }
+    return {'codex':codex,'antigravity':{'installed':True,'path':'Built-in OAuth','version':'No external CLI required'}}
+
+
+import sys
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'scripts'))
+import update_suite
+RUNNING_BUILD = update_suite.version()
+
+
+def get_system_version():
+    result = update_suite.version()
+    result['running_commit'] = RUNNING_BUILD.get('commit')
+    result['running_version'] = RUNNING_BUILD.get('version')
+    try:
+        result['last_update'] = json.loads(update_suite.result_path().read_text())
+    except (OSError, ValueError):
+        result['last_update'] = None
+    return result
 
 def execute_integration_script(script_name, *extra_args):
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -1645,7 +1635,7 @@ def execute_integration_script(script_name, *extra_args):
         return False, f"Script not found: {script_path}"
     try:
         cmd = ["bash", script_path] + list(extra_args)
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=300 if script_name == "update.sh" else 30)
         if res.returncode == 0:
             return True, res.stdout.strip()
         return False, res.stderr.strip() or res.stdout.strip()
@@ -1671,7 +1661,10 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
         path = parsed.path
         qs = urllib.parse.parse_qs(parsed.query)
 
-        client_ip = self.headers.get("X-Forwarded-For") or self.headers.get("X-Real-IP") or self.client_address[0]
+        client_ip = self.client_address[0]
+        # Forwarded requests never qualify for the direct-local maintenance bypass.
+        if self.headers.get("X-Forwarded-For") or self.headers.get("X-Real-IP"):
+            client_ip = "proxied"
         if "," in client_ip:
             client_ip = client_ip.split(",")[0].strip()
         user_agent = self.headers.get("User-Agent", "")
@@ -1696,7 +1689,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
         new_session_id = None
 
         # Allow localhost / loopback internally
-        if client_ip in ("127.0.0.1", "::1"):
+        if self.client_address[0] in ('127.0.0.1','::1') and not self.headers.get('X-Forwarded-For') and not self.headers.get('X-Real-IP'):
             is_auth = True
 
         # Check URL query token (e.g. ?token=...)
@@ -1722,6 +1715,17 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
 
         pm = GLOBAL_POOL_MANAGER
 
+        if path in ('/aipool/assets/update.js', '/assets/update.js'):
+            with open(os.path.join(os.path.dirname(__file__), 'update_ui.js'), 'rb') as handle:
+                body = handle.read()
+            self.send_response(200)
+            self.send_header('Content-Type', 'application/javascript; charset=utf-8')
+            self.send_header('Cache-Control', 'no-store')
+            self.send_header('Content-Length', str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+            return
+
         # API: logs data
         if path in ("/aipool/api/logs_data", "/api/logs_data"):
             self.send_json_response(pm.get_usage_logs_report())
@@ -1743,6 +1747,11 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             self.send_json_response(get_settings_status())
             return
 
+        # API: system version
+        if path in ("/aipool/api/settings/version", "/api/settings/version"):
+            self.send_json_response(get_system_version())
+            return
+
         # API: check CLI tools status
         if path in ("/aipool/api/settings/check_cli", "/api/settings/check_cli"):
             self.send_json_response(get_cli_tools_status())
@@ -1758,6 +1767,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             if ("{sess_val}") {{ try {{ localStorage.setItem('yj_aipool_session', "{sess_val}"); }} catch(e){{}} }}
         </script>"""
         html_to_serve = HTML_LOGS_TEMPLATE.replace("</head>", f"{injected_script}\n</head>")
+        html_to_serve = html_to_serve.replace("</body>", '<script src="/aipool/assets/update.js"></script></body>')
         body = html_to_serve.encode("utf-8")
 
         self.send_response(200)
@@ -1770,10 +1780,17 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(body)
 
     def do_POST(self):
+        origin = self.headers.get('Origin')
+        if origin and urllib.parse.urlsplit(origin).netloc != self.headers.get('Host'):
+            self.send_json_response({'success': False, 'message': 'Cross-origin writes are not allowed'},403)
+            return
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
 
-        client_ip = self.headers.get("X-Forwarded-For") or self.headers.get("X-Real-IP") or self.client_address[0]
+        client_ip = self.client_address[0]
+        # Forwarded requests never qualify for the direct-local maintenance bypass.
+        if self.headers.get("X-Forwarded-For") or self.headers.get("X-Real-IP"):
+            client_ip = "proxied"
         if "," in client_ip:
             client_ip = client_ip.split(",")[0].strip()
 
@@ -1794,7 +1811,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
 
         auth_mgr = TokenAuthManager()
         is_auth = False
-        if client_ip in ("127.0.0.1", "::1", "localhost"):
+        if self.client_address[0] in ('127.0.0.1','::1') and not self.headers.get('X-Forwarded-For') and not self.headers.get('X-Real-IP'):
             is_auth = True
         elif effective_session and auth_mgr.validate_device(effective_session, client_ip):
             is_auth = True
@@ -1804,23 +1821,25 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             return
 
         if path in ("/aipool/api/settings/integrate_hermes", "/api/settings/integrate_hermes"):
-            ok, msg = execute_integration_script("setup-hermes.sh")
-            self.send_json_response({"success": ok, "message": msg})
+            self.send_json_response(integrate_agent("hermes"))
             return
 
         if path in ("/aipool/api/settings/integrate_openclaw", "/api/settings/integrate_openclaw"):
-            ok, msg = execute_integration_script("setup-openclaw.sh")
-            self.send_json_response({"success": ok, "message": msg})
+            self.send_json_response(integrate_agent("openclaw"))
             return
 
         if path in ("/aipool/api/settings/update", "/api/settings/update"):
-            ok, msg = execute_integration_script("update.sh", "--no-dashboard")
-            self.send_json_response({"success": ok, "message": msg})
-            if ok:
-                threading.Thread(
-                    target=lambda: (time.sleep(1.5), subprocess.run(["systemctl", "--user", "restart", "ai-dashboard.service"])),
-                    daemon=True
-                ).start()
+            before = get_system_version()
+            ok, message = execute_integration_script('update.sh', '--no-dashboard')
+            after = get_system_version()
+            response = {'success':ok, 'message':message, 'version_before':before, 'version_after':after,
+                        'updated':ok and before.get('commit') != after.get('commit'),
+                        'restart_pending':ok}
+            try:
+                self.send_json_response(response)
+            finally:
+                if ok:
+                    threading.Thread(target=lambda: (time.sleep(2), subprocess.run(['systemctl', '--user', 'restart', 'ai-dashboard.service'])), daemon=True).start()
             return
 
         if path in ("/aipool/api/settings/install_cli", "/api/settings/install_cli"):

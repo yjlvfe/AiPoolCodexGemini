@@ -8,6 +8,11 @@ to use Gemini subscriptions inside Hermes without manual API keys.
 
 import json
 import os
+import sys
+from pathlib import Path
+sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"cli"))
+from config_env import load
+load()
 import time
 import datetime
 import urllib.request
@@ -55,12 +60,38 @@ _lock = threading.Lock()
 _token_cache = {"access": None, "expires_at": 0}
 
 
-def _load_refresh_from_session():
-    candidates = [
-        os.environ.get("AG_SESSION_TOKEN_FILE") or "",
-        os.path.expanduser("~/.gemini/antigravity-cli/antigravity-oauth-token"),
-        os.path.expanduser("~/.hermes/.antigravity_oauth.json"),
+def _session_paths():
+    store = os.environ.get('AG_ACCOUNT_STORE', os.path.expanduser('~/.antigravity-accounts'))
+    active_path = os.path.join(store, 'active')
+    active = ''
+    try:
+        with open(active_path) as handle:
+            active = handle.read().strip()
+    except OSError:
+        pass
+    return [
+        os.path.join(store, active, 'antigravity-oauth-token') if active.isdigit() else '',
+        os.environ.get('AG_SESSION_TOKEN_FILE') or '',
+        os.path.expanduser('~/.gemini/antigravity-cli/antigravity-oauth-token'),
+        os.path.expanduser('~/.hermes/.antigravity_oauth.json'),
     ]
+
+
+def _current_project():
+    for path in _session_paths():
+        try:
+            with open(path) as handle:
+                data = json.load(handle)
+            project = data.get('project_id') or data.get('projectId')
+            if project:
+                return project
+        except (OSError, ValueError):
+            continue
+    return DEFAULT_PROJECT
+
+
+def _load_refresh_from_session():
+    candidates = _session_paths()
     for path in candidates:
         if not path or not os.path.exists(path):
             continue
@@ -107,6 +138,10 @@ def _refresh_tokens():
 def get_access_token():
     with _lock:
         now = time.time()
+        source = os.environ.get('AG_REFRESH_TOKEN') or _load_refresh_from_session()
+        if _token_cache.get('source') != source:
+            _token_cache['access'] = None
+            _token_cache['source'] = source
         if _token_cache["access"] and _token_cache["expires_at"] > now + 60:
             return _token_cache["access"]
         data = _refresh_tokens()
@@ -184,10 +219,9 @@ _probe_running = False
 
 
 def _send_model(model):
-    m = str(model or "").strip()
-    if m.startswith("google-antigravity/"):
-        m = m[len("google-antigravity/"):]
-    return MODEL_SEND_MAP.get(m, m or "gemini-3-flash")
+    if not isinstance(model,str) or not model or model != model.strip():
+        raise ValueError('An exact model ID is required')
+    return model
 
 
 def list_available_models():
@@ -429,7 +463,7 @@ def to_antigravity_body(payload):
             "contents": contents,
             "generationConfig": gen_cfg,
         },
-        "project": payload.get("project") or os.environ.get("AG_PROJECT") or DEFAULT_PROJECT,
+        "project": payload.get("project") or os.environ.get("AG_PROJECT") or _current_project(),
     }
 
     if system_parts:
@@ -501,17 +535,19 @@ def to_openai_response(ag_response, request_model=None):
         })
 
     usage = resp.get("usageMetadata") or {}
+    translated_usage = {}
+    if 'promptTokenCount' in usage and 'candidatesTokenCount' in usage:
+        output = usage['candidatesTokenCount'] + usage.get('thoughtsTokenCount', 0)
+        translated_usage = {'prompt_tokens': usage['promptTokenCount'], 'completion_tokens': output,
+            'total_tokens': usage.get('totalTokenCount', usage['promptTokenCount'] + output),
+            'completion_tokens_details': {'reasoning_tokens': usage.get('thoughtsTokenCount', 0)}}
     return {
         "id": "chatcmpl-" + (resp.get("responseId") or str(int(time.time() * 1000))),
         "object": "chat.completion",
         "created": int(time.time()),
         "model": request_model or resp.get("modelVersion") or "gemini-3.8-flash",
         "choices": choices,
-        "usage": {
-            "prompt_tokens": usage.get("promptTokenCount", 0),
-            "completion_tokens": usage.get("candidatesTokenCount", 0),
-            "total_tokens": usage.get("totalTokenCount", 0),
-        },
+        **( {"usage": translated_usage} if translated_usage else {} ),
     }
 
 
@@ -525,28 +561,33 @@ def _antigravity_headers(access):
     }
 
 
-def call_antigravity(ag_body):
-    access = get_access_token()
-    errors = []
-    for endpoint in ANTIGRAVITY_ENDPOINTS:
-        url = endpoint + ANTIGRAVITY_PATH
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(ag_body).encode(),
-            headers=_antigravity_headers(access),
-        )
+from pool_runtime import AccountPool, PoolError, record, retry_seconds
+AG_POOL = AccountPool('antigravity')
+
+
+def call_antigravity(ag_body, access=None):
+    access = access or get_access_token()
+    endpoints = [os.environ['AG_UPSTREAM_URL']] if os.environ.get('AG_UPSTREAM_URL') else [e + ANTIGRAVITY_PATH for e in ANTIGRAVITY_ENDPOINTS]
+    last_status = 503
+    for url in endpoints:
+        req = urllib.request.Request(url, data=json.dumps(ag_body).encode(), headers=_antigravity_headers(access))
         try:
             with urllib.request.urlopen(req, timeout=120) as resp:
                 return json.loads(resp.read().decode())
-        except urllib.error.HTTPError as e:
-            code = e.code
-            msg = e.read()[:300].decode("utf-8", "replace")
-            errors.append(f"{endpoint}: {code} {msg}")
-            if code in (401, 403):
-                break
-        except Exception as e:
-            errors.append(f"{endpoint}: {type(e).__name__} {e}")
-    raise RuntimeError("All antigravity endpoints failed: " + " | ".join(errors))
+        except urllib.error.HTTPError as exc:
+            status = exc.code
+            last_status = status
+            delay = retry_seconds(exc.headers)
+            exc.close()
+            if status == 404:
+                continue # Deployment endpoint unavailable; try next, same account/model.
+            if status in (401,403,429) or status < 500:
+                error = PoolError(f'Antigravity upstream HTTP {status}',status)
+                error.retry_after = delay
+                raise error from None
+        except OSError:
+            continue
+    raise PoolError('Antigravity endpoints are unavailable',last_status)
 
 
 # ---------------------------------------------------------------------------
@@ -579,30 +620,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _send_error(self, message, status=500):
         self._send_json({"error": {"message": str(message), "type": "antigravity_bridge"}}, status)
 
-    def _record_bridge_request(self, out_resp, req_model, pool_name="Antigravity"):
-        try:
-            usage = out_resp.get("usage") or {}
-            p_tok = int(usage.get("prompt_tokens") or 0)
-            c_tok = int(usage.get("completion_tokens") or 0)
-            t_tok = int(usage.get("total_tokens") or (p_tok + c_tok))
-            model_name = req_model or out_resp.get("model") or "gemini-3.8-flash"
-            
-            _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-            auth_db = os.environ.get("AUTH_DB_PATH", os.path.join(_BASE_DIR, "dashboard", "auth.db"))
-            if os.path.exists(auth_db):
-                import sqlite3
-                now = time.time()
-                dt_str = datetime.datetime.fromtimestamp(now).strftime("%m/%d %H:%M")
-                with sqlite3.connect(auth_db, timeout=5) as conn:
-                    conn.execute(
-                        """INSERT INTO request_events 
-                           (model, pool, prompt_tokens, completion_tokens, total_tokens, timestamp, time_formatted)
-                           VALUES (?, ?, ?, ?, ?, ?, ?)""",
-                        (model_name, pool_name, p_tok, c_tok, t_tok, now, dt_str)
-                    )
-                    conn.commit()
-        except Exception as e:
-            print(f"[bridge] error recording request event: {e}", file=sys.stderr)
+    def _record_bridge_request(self, out_resp, req_model, pool_name='Antigravity'):
+        record(pool_name,req_model,out_resp.get('usage'),getattr(self,'_account_used',None))
 
     def do_GET(self):
         path = urllib.parse.urlparse(self.path).path
@@ -622,8 +641,13 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path not in ("/v1/chat/completions", "/chat/completions", "/v1/completions"):
             self._send_json({"error": {"message": "Not found", "type": "not_found"}}, 404)
             return
+        payload = {}
+        self._account_used = None
         try:
             payload = self._read_body()
+            if not isinstance(payload, dict) or not isinstance(payload.get('model'), str) or not payload['model']:
+                payload = {}
+                raise PoolError('A literal model ID is required',400)
             m = payload.get("model")
             n_msgs = len(payload.get("messages", []))
             n_tools = len(payload.get("tools", []))
@@ -641,9 +665,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send_json(out, 200)
         except Exception as e:
             print(f"[bridge] POST ERROR: {e}", file=sys.stderr)
-            self._send_error(e)
+            record('Antigravity',payload.get('model'),None,getattr(self,'_account_used',None),'FAILED')
+            self._send_error(e,getattr(e,'status',500))
 
     def _handle_stream(self, ag_body, requested_model=None):
+        ag_resp = self._call_with_retry(ag_body)
         try:
             self.send_response(200)
             self.send_header("Content-Type", "text/event-stream")
@@ -656,7 +682,6 @@ class Handler(http.server.BaseHTTPRequestHandler):
             return
 
         try:
-            ag_resp = self._call_with_retry(ag_body)
             out = to_openai_response(ag_resp, request_model=requested_model)
             choice = (out.get("choices") or [{}])[0]
             msg = choice.get("message") or {}
@@ -740,47 +765,28 @@ class Handler(http.server.BaseHTTPRequestHandler):
             except Exception:
                 pass
 
-    def _call_with_retry(self, ag_body, attempts=4):
-        last_err = None
-        for i in range(attempts):
+    def _call_with_retry(self, ag_body, attempts=None):
+        model = ag_body['model']
+        candidates = AG_POOL.candidates(model)
+        last_status = 429
+        for number in candidates:
             try:
-                ag_resp = call_antigravity(ag_body)
-                return ag_resp
-            except Exception as e:
-                last_err = e
-                msg = str(e)
-                print(f"[bridge] attempt {i+1} failed: {msg}", file=sys.stderr)
-                if "429" in msg or "503" in msg or "exhausted" in msg or "RESOURCE_EXHAUSTED" in msg:
-                    # Automatic account rotation in antigravity pool!
-                    try:
-                        import glob
-                        ag_store = os.environ.get("AG_ACCOUNT_STORE", os.path.expanduser("~/.antigravity-accounts"))
-                        active_f = os.path.join(ag_store, "active")
-                        curr = 1
-                        if os.path.exists(active_f):
-                            try:
-                                with open(active_f) as f: curr = int(f.read().strip())
-                            except Exception:
-                                curr = 1
-                        
-                        acc_dirs = [int(os.path.basename(p)) for p in glob.glob(os.path.join(ag_store, "[0-9]*")) if os.path.isfile(os.path.join(p, "antigravity-oauth-token"))]
-                        acc_dirs = sorted(acc_dirs) or [1]
-                        idx = acc_dirs.index(curr) if curr in acc_dirs else 0
-                        nxt = acc_dirs[(idx + 1) % len(acc_dirs)]
-
-                        import subprocess
-                        switch_bin = os.environ.get("AG_SWITCH_BIN") or shutil.which("antigravity-account-switch") or "/usr/local/bin/antigravity-account-switch"
-                        subprocess.run([switch_bin, str(nxt)], capture_output=True, text=True, timeout=15)
-                        print(f"[bridge] 429 encountered! Auto-switched AG Account from {curr} to {nxt}", file=sys.stderr)
-                        # clear in-memory token cache to reload fresh token
-                        _token_cache["access"] = None
-                        _token_cache["expires_at"] = 0
-                    except Exception as sw_err:
-                        print(f"[bridge] Auto-switch error: {sw_err}", file=sys.stderr)
-                    time.sleep(0.5)
-                else:
+                credentials = AG_POOL.credentials(number)
+                body = deepcopy(ag_body)
+                body['project'] = credentials.get('project_id') or body.get('project')
+                result = call_antigravity(body, credentials['token']['access_token'])
+                self._account_used = number
+                try:
+                    AG_POOL.promote(number)
+                except Exception:
+                    print('[gemini-bridge] Active-account synchronization failed after upstream success',file=sys.stderr)
+                return result
+            except (PoolError,ValueError,OSError) as exc:
+                last_status = getattr(exc,'status',401)
+                if last_status not in (401,403,429,503):
                     raise
-        raise RuntimeError(f"Gateway error after retries: {last_err}")
+                AG_POOL.exhausted(number,model,getattr(exc,'retry_after',60))
+        raise PoolError('No usable Antigravity account for this exact model; pool quota/authentication exhausted',last_status)
 
 
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
