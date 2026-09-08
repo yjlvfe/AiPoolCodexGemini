@@ -993,6 +993,52 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 </div>
             </div>
 
+            <!-- CLI Tools Prerequisites Card -->
+            <div class="glass-card" style="padding: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <span style="font-size: 26px;">🛠️</span>
+                        <div>
+                            <div style="font-size: 15px; font-weight: 700; color: #fff;">CLI Tools Status</div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">Detects and configures CLI tools required for enrolling accounts.</div>
+                        </div>
+                    </div>
+                    <button class="action-btn" onclick="fetchCliToolsStatus()" style="background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.12); color: #cbd5e1; padding: 6px 12px; border-radius: 6px; font-size: 11px; cursor: pointer;">
+                        🔄 Re-check
+                    </button>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <!-- Codex CLI item -->
+                    <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-weight: 700; color: #fff; font-size: 13px;">OpenAI Codex CLI</span>
+                                <span id="codex-cli-badge" class="badge" style="background: rgba(255,255,255,0.08); color: #94a3b8; font-size: 11px; padding: 2px 8px; border-radius: 12px;">Checking...</span>
+                            </div>
+                            <div id="codex-cli-desc" style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Required for 'c add' interactive login session.</div>
+                        </div>
+                        <button id="btn-install-codex" class="action-btn" onclick="installCliTool('codex')" style="display: none; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: #fff; border: none; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer;">
+                            ⚡ Install CLI
+                        </button>
+                    </div>
+
+                    <!-- Antigravity CLI item -->
+                    <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 12px; display: flex; justify-content: space-between; align-items: center;">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span style="font-weight: 700; color: #fff; font-size: 13px;">Gemini Antigravity CLI</span>
+                                <span id="antigravity-cli-badge" class="badge" style="background: rgba(255,255,255,0.08); color: #94a3b8; font-size: 11px; padding: 2px 8px; border-radius: 12px;">Checking...</span>
+                            </div>
+                            <div id="antigravity-cli-desc" style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Required for 'ag add' interactive login session.</div>
+                        </div>
+                        <button id="btn-install-antigravity" class="action-btn" onclick="installCliTool('antigravity')" style="display: none; background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; padding: 6px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer;">
+                            ⚡ Setup CLI
+                        </button>
+                    </div>
+                </div>
+            </div>
+
             <!-- System Updates Card -->
             <div class="glass-card" style="padding: 16px;">
                 <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
@@ -1071,6 +1117,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 streamSec.style.display = 'none';
                 settingsSec.style.display = 'flex';
                 fetchSettingsStatus();
+                fetchCliToolsStatus();
             } else {
                 btn.classList.remove('active');
                 btnIcon.innerText = '⚙️';
@@ -1136,6 +1183,79 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                     openclawBadge.style.color = '#94a3b8';
                 }
             } catch(e) { console.error(e); }
+        }
+
+        async function fetchCliToolsStatus() {
+            try {
+                const res = await fetch('/api/settings/check_cli');
+                if (!res.ok) return;
+                const data = await res.json();
+
+                // Codex
+                const codexBadge = document.getElementById('codex-cli-badge');
+                const codexDesc = document.getElementById('codex-cli-desc');
+                const codexBtn = document.getElementById('btn-install-codex');
+                if (data.codex && data.codex.installed) {
+                    codexBadge.innerText = '🟢 Installed';
+                    codexBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+                    codexBadge.style.color = '#34d399';
+                    codexDesc.innerText = `Path: ${data.codex.path || 'Detected in PATH'} ${data.codex.version ? '(' + data.codex.version + ')' : ''}`;
+                    codexBtn.style.display = 'none';
+                } else {
+                    codexBadge.innerText = '🔴 Not Installed';
+                    codexBadge.style.background = 'rgba(239, 68, 68, 0.15)';
+                    codexBadge.style.color = '#f87171';
+                    codexDesc.innerText = "Required for 'c add' interactive login. Click Install to configure.";
+                    codexBtn.style.display = 'inline-block';
+                }
+
+                // Antigravity
+                const agBadge = document.getElementById('antigravity-cli-badge');
+                const agDesc = document.getElementById('antigravity-cli-desc');
+                const agBtn = document.getElementById('btn-install-antigravity');
+                if (data.antigravity && data.antigravity.installed) {
+                    agBadge.innerText = '🟢 Installed';
+                    agBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+                    agBadge.style.color = '#34d399';
+                    agDesc.innerText = `Path: ${data.antigravity.path || 'Detected in PATH'}`;
+                    agBtn.style.display = 'none';
+                } else {
+                    agBadge.innerText = '🔴 Not Installed';
+                    agBadge.style.background = 'rgba(239, 68, 68, 0.15)';
+                    agBadge.style.color = '#f87171';
+                    agDesc.innerText = "Required for 'ag add' interactive login. Click Setup to configure.";
+                    agBtn.style.display = 'inline-block';
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        async function installCliTool(tool) {
+            const btn = tool === 'codex' ? document.getElementById('btn-install-codex') : document.getElementById('btn-install-antigravity');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span>⏳</span><span>Configuring...</span>';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/settings/install_cli', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ tool: tool })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    btn.innerHTML = '<span>✅</span><span>Done!</span>';
+                    fetchCliToolsStatus();
+                } else {
+                    alert('Installation message: ' + (data.message || 'Failed'));
+                    btn.innerHTML = originalText;
+                }
+            } catch(e) {
+                alert('Connection error: ' + e);
+                btn.innerHTML = originalText;
+            } finally {
+                btn.disabled = false;
+                setTimeout(() => { fetchCliToolsStatus(); }, 1500);
+            }
         }
 
         async function triggerIntegration(target) {
@@ -1499,6 +1619,25 @@ def get_settings_status():
         "openclaw": {"installed": openclaw_installed, "connected": openclaw_connected}
     }
 
+def get_cli_tools_status():
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    script_path = os.path.join(base_dir, "scripts", "install-cli-tools.sh")
+    if not os.path.exists(script_path):
+        return {
+            "codex": {"installed": False, "path": "", "version": ""},
+            "antigravity": {"installed": False, "path": "", "version": ""}
+        }
+    try:
+        res = subprocess.run(["bash", script_path, "check"], capture_output=True, text=True, timeout=10)
+        if res.returncode == 0:
+            return json.loads(res.stdout.strip())
+    except Exception:
+        pass
+    return {
+        "codex": {"installed": False, "path": "", "version": ""},
+        "antigravity": {"installed": False, "path": "", "version": ""}
+    }
+
 def execute_integration_script(script_name, *extra_args):
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     script_path = os.path.join(base_dir, script_name)
@@ -1604,6 +1743,11 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             self.send_json_response(get_settings_status())
             return
 
+        # API: check CLI tools status
+        if path in ("/aipool/api/settings/check_cli", "/api/settings/check_cli"):
+            self.send_json_response(get_cli_tools_status())
+            return
+
         # Main view - inject initial data server-side so it renders 100% populated immediately with 0ms delay!
         initial_data = pm.get_usage_logs_report()
         initial_json = json.dumps(initial_data, ensure_ascii=False).replace("</script>", "<\\\\/script>")
@@ -1677,6 +1821,28 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                     target=lambda: (time.sleep(1.5), subprocess.run(["systemctl", "--user", "restart", "ai-dashboard.service"])),
                     daemon=True
                 ).start()
+            return
+
+        if path in ("/aipool/api/settings/install_cli", "/api/settings/install_cli"):
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length).decode("utf-8") if content_length > 0 else "{}"
+            try:
+                payload = json.loads(body)
+            except Exception:
+                payload = {}
+            tool = payload.get("tool", "")
+            if tool not in ("codex", "antigravity"):
+                self.send_json_response({"success": False, "message": "Invalid tool specified."}, status_code=400)
+                return
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            script_path = os.path.join(base_dir, "scripts", "install-cli-tools.sh")
+            try:
+                res = subprocess.run(["bash", script_path, "install", tool], capture_output=True, text=True, timeout=120)
+                ok = (res.returncode == 0)
+                msg = res.stdout.strip() if ok else (res.stderr.strip() or res.stdout.strip())
+                self.send_json_response({"success": ok, "message": msg, "status": get_cli_tools_status()})
+            except Exception as e:
+                self.send_json_response({"success": False, "message": str(e)}, status_code=500)
             return
 
         if path in ("/aipool/api/settings/uninstall", "/api/settings/uninstall"):

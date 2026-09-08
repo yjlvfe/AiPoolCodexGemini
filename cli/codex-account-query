@@ -205,7 +205,13 @@ def main() -> int:
         print(json.dumps({"status": "INVALID AUTH"}, separators=(",", ":")))
         return 0
 
-    codex_bin = os.environ.get("CODEX_BIN", "/usr/local/bin/codex")
+    codex_bin = os.environ.get("CODEX_BIN")
+    if not codex_bin:
+        codex_bin = shutil.which("codex") or (
+            "/usr/local/bin/codex" if os.path.isfile("/usr/local/bin/codex") else
+            os.path.expanduser("~/.local/bin/codex") if os.path.isfile(os.path.expanduser("~/.local/bin/codex")) else
+            "/usr/bin/codex"
+        )
     server = AppServer(codex_bin)
     try:
         server.request(

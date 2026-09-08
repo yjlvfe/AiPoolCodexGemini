@@ -3,10 +3,31 @@ import contextlib, datetime, fcntl, importlib.util, io, json, os, shutil, signal
 import urllib.parse, urllib.request
 from pathlib import Path
 
+def find_antigravity_bin():
+    if os.environ.get("AGY_BIN"):
+        return os.environ["AGY_BIN"]
+    candidates = [
+        shutil.which("antigravity"),
+        shutil.which("agy"),
+        str(Path.home() / ".gemini/bin/agy"),
+        str(Path.home() / ".gemini/antigravity"),
+        str(Path.home() / ".gemini/antigravity-cli/bin/agy"),
+        str(Path.home() / ".local/bin/antigravity"),
+        str(Path.home() / ".local/bin/agy"),
+        "/usr/local/bin/antigravity",
+        "/usr/local/bin/agy",
+        "/usr/bin/antigravity",
+        "/usr/bin/agy",
+    ]
+    for c in candidates:
+        if c and os.path.isfile(c) and os.access(c, os.X_OK):
+            return c
+    return shutil.which("agy") or shutil.which("antigravity") or str(Path.home() / ".local/bin/agy")
+
 STORE = Path(os.environ.get("AG_ACCOUNT_STORE", Path.home() / ".antigravity-accounts"))
 CLI_AUTH = Path(os.environ.get("AG_CLI_AUTH", Path.home() / ".gemini/antigravity-cli/antigravity-oauth-token"))
 HERMES_AUTH = Path(os.environ.get("AG_HERMES_AUTH", Path.home() / ".hermes/.antigravity_oauth.json"))
-AGY = os.environ.get("AGY_BIN", str(Path.home() / ".local/bin/agy"))
+AGY = find_antigravity_bin()
 SYSTEMCTL = os.environ.get("AG_SYSTEMCTL", "systemctl")
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USERINFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo?alt=json"
