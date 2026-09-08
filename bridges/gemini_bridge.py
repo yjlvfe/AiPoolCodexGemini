@@ -153,62 +153,64 @@ def get_access_token():
 # ---------------------------------------------------------------------------
 # Model Mapping & Discovery
 # ---------------------------------------------------------------------------
+# Map clean public model names to the exact upstream wire IDs required by Antigravity
 MODEL_SEND_MAP = {
-    # Gemini 3.8 Flash
+    # Gemini Flash 3.8 / gemini-3.8-flash
     "gemini-3.8-flash": "gemini-3.8-flash-tiered",
-    "gemini-3.8-flash-high": "gemini-3.8-flash-tiered",
-    "gemini-3.8-flash-medium": "gemini-3.8-flash-tiered",
-    "gemini-3.8-flash-low": "gemini-3.8-flash-tiered",
+    "Gemini Flash 3.8": "gemini-3.8-flash-tiered",
+    "Flash 3.8": "gemini-3.8-flash-tiered",
     "gemini-3.8": "gemini-3.8-flash-tiered",
+    "gemini-3.8-flash-tiered": "gemini-3.8-flash-tiered",
 
-    # Gemini 3.7 Flash
+    # Gemini Flash 3.7 / gemini-3.7-flash
     "gemini-3.7-flash": "gemini-3.7-flash-tiered",
-    "gemini-3.7-flash-high": "gemini-3.7-flash-tiered",
-    "gemini-3.7-flash-medium": "gemini-3.7-flash-tiered",
-    "gemini-3.7-flash-low": "gemini-3.7-flash-tiered",
+    "Gemini Flash 3.7": "gemini-3.7-flash-tiered",
+    "Flash 3.7": "gemini-3.7-flash-tiered",
     "gemini-3.7": "gemini-3.7-flash-tiered",
+    "gemini-3.7-flash-tiered": "gemini-3.7-flash-tiered",
 
-    # Gemini 3.6 Flash
+    # Gemini Flash 3.6 / gemini-3.6-flash
     "gemini-3.6-flash": "gemini-3.6-flash-tiered",
+    "Gemini Flash 3.6": "gemini-3.6-flash-tiered",
+    "Flash 3.6": "gemini-3.6-flash-tiered",
+    "gemini-3.6": "gemini-3.6-flash-tiered",
+    "gemini-3.6-flash-tiered": "gemini-3.6-flash-tiered",
     "gemini-3.6-flash-high": "gemini-3.6-flash-high",
     "gemini-3.6-flash-medium": "gemini-3.6-flash-medium",
     "gemini-3.6-flash-low": "gemini-3.6-flash-low",
-    "gemini-3.6": "gemini-3.6-flash-tiered",
 
-    # Gemini 3.1 Pro
+    # Gemini 3.1 Pro / gemini-3.1-pro
     "gemini-3.1-pro": "gemini-3.1-pro-low",
-    "gemini-3.1-pro-medium": "gemini-3.1-pro-low",
+    "Gemini 3.1 Pro": "gemini-3.1-pro-low",
     "gemini-3.1-pro-low": "gemini-3.1-pro-low",
 
-    # Gemini fallback
+    # Gemini legacy fallbacks
     "gemini-3-flash": "gemini-3-flash",
-    "gemini-3-pro": "gemini-3.1-pro-low",
-    "gemini-3": "gemini-3-flash",
+    "gemini-pro-agent": "gemini-pro-agent",
 
     # Claude models
     "claude-opus-4-6": "claude-opus-4-6-thinking",
-    "claude-opus": "claude-opus-4-6-thinking",
+    "claude-opus-4-6-thinking": "claude-opus-4-6-thinking",
     "claude-sonnet-4-6": "claude-sonnet-4-6",
-    "claude-sonnet": "claude-sonnet-4-6",
 
     # GPT models
     "gpt-oss-120b": "gpt-oss-120b-medium",
-    "gpt-oss": "gpt-oss-120b-medium",
+    "gpt-oss-120b-medium": "gpt-oss-120b-medium",
 }
 
+# Clean list of public model IDs exposed via /v1/models (no ugly tiered suffixes)
 _CANDIDATE_MODELS = [
-    # Exact IDs returned by Antigravity and verified through this bridge.
-    "gemini-3.8-flash-tiered",
-    "gemini-3.7-flash-tiered",
-    "gemini-3.6-flash-tiered",
+    "gemini-3.8-flash",
+    "gemini-3.7-flash",
+    "gemini-3.6-flash",
     "gemini-3.6-flash-high",
     "gemini-3.6-flash-medium",
     "gemini-3.6-flash-low",
-    "gemini-3.1-pro-low",
+    "gemini-3.1-pro",
     "gemini-pro-agent",
-    "claude-opus-4-6-thinking",
+    "claude-opus-4-6",
     "claude-sonnet-4-6",
-    "gpt-oss-120b-medium",
+    "gpt-oss-120b",
 ]
 
 _available = set(_CANDIDATE_MODELS)
@@ -219,9 +221,9 @@ _probe_running = False
 
 
 def _send_model(model):
-    if not isinstance(model,str) or not model or model != model.strip():
+    if not isinstance(model, str) or not model or model != model.strip():
         raise ValueError('An exact model ID is required')
-    return model
+    return MODEL_SEND_MAP.get(model, model)
 
 
 def list_available_models():
@@ -545,7 +547,7 @@ def to_openai_response(ag_response, request_model=None):
         "id": "chatcmpl-" + (resp.get("responseId") or str(int(time.time() * 1000))),
         "object": "chat.completion",
         "created": int(time.time()),
-        "model": request_model or resp.get("modelVersion") or "gemini-3.8-flash",
+        "model": clean_model_name(request_model or resp.get("modelVersion") or "gemini-3.8-flash"),
         "choices": choices,
         **( {"usage": translated_usage} if translated_usage else {} ),
     }
@@ -561,7 +563,7 @@ def _antigravity_headers(access):
     }
 
 
-from pool_runtime import AccountPool, PoolError, record, retry_seconds
+from pool_runtime import AccountPool, PoolError, record, retry_seconds, clean_model_name
 AG_POOL = AccountPool('antigravity')
 
 
@@ -621,7 +623,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self._send_json({"error": {"message": str(message), "type": "antigravity_bridge"}}, status)
 
     def _record_bridge_request(self, out_resp, req_model, pool_name='Antigravity'):
-        record(pool_name,req_model,out_resp.get('usage'),getattr(self,'_account_used',None))
+        record(pool_name, clean_model_name(req_model), out_resp.get('usage'), getattr(self, '_account_used', None))
 
     def do_GET(self):
         path = urllib.parse.urlparse(self.path).path

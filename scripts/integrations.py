@@ -63,14 +63,39 @@ def read_config(agent, path):
 def providers(agent):
     result = {}
     for name, port, transport, models in [
-        ('gemini', os.environ.get('AG_BRIDGE_PORT', '8123'), 'chat_completions', ['gemini-3.8-flash-tiered']),
-        ('codex', os.environ.get('CODEX_BRIDGE_PORT', '8124'), 'codex_responses', ['gpt-6-astra', 'gpt-5.6-luna', 'gpt-5.6-sol'])
+        ('gemini', os.environ.get('AG_BRIDGE_PORT', '8123'), 'chat_completions', [
+            'gemini-3.8-flash',
+            'gemini-3.7-flash',
+            'gemini-3.6-flash',
+            'gemini-3.1-pro',
+            'claude-sonnet-4-6',
+        ]),
+        ('codex', os.environ.get('CODEX_BRIDGE_PORT', '8124'), 'codex_responses', [
+            'gpt-6-astra',
+            'gpt-5.6-luna',
+            'gpt-5.6-sol',
+            'gpt-5.6-terra',
+            'gpt-5.5',
+            'gpt-5.4-mini',
+        ])
     ]:
         url = f'http://127.0.0.1:{int(port)}/v1'
         if agent == 'hermes':
-            result['aipool-' + name] = {'api': url, 'api_key': 'pool-key', 'transport': transport, 'default_model': models[0], 'models': {m: {} for m in models}, 'discover_models': True}
+            result['aipool-' + name] = {
+                'api': url,
+                'api_key': 'pool-key',
+                'transport': transport,
+                'default_model': models[0],
+                'models': {m: {'context_length': 1048576} for m in models},
+                'discover_models': True,
+            }
         else:
-            result['aipool-' + name] = {'baseUrl': url, 'apiKey': 'pool-key', 'api': 'openai-responses' if name == 'codex' else 'openai-completions', 'models': [{'id': m, 'name': m} for m in models]}
+            result['aipool-' + name] = {
+                'baseUrl': url,
+                'apiKey': 'pool-key',
+                'api': 'openai-responses' if name == 'codex' else 'openai-completions',
+                'models': [{'id': m, 'name': m, 'contextWindow': 1048576} for m in models]
+            }
     return result
 
 

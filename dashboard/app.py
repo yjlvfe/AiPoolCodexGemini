@@ -352,7 +352,7 @@ class PoolManager:
             return {
                 "antigravity": self._cached_ag or {},
                 "codex": self._cached_cdx or {},
-                "active_hermes_default": "gemini-3.8-flash-tiered",
+                "active_hermes_default": "gemini-3.8-flash",
                 "fallback_status": "Disabled (Pure Model Lock)",
                 "timestamp": time.time()
             }

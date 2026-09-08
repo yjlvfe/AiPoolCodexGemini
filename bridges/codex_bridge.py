@@ -20,7 +20,14 @@ HOST = os.environ.get('CODEX_BRIDGE_HOST','127.0.0.1')
 PORT = int(os.environ.get('CODEX_BRIDGE_PORT','8124'))
 UPSTREAM_URL = os.environ.get('CODEX_UPSTREAM_URL','https://chatgpt.com/backend-api/codex/responses')
 POOL = AccountPool('codex')
-MODELS = ['gpt-6-astra','gpt-5.6-luna','gpt-5.6-sol']
+MODELS = [
+    'gpt-6-astra',
+    'gpt-5.6-luna',
+    'gpt-5.6-sol',
+    'gpt-5.6-terra',
+    'gpt-5.5',
+    'gpt-5.4-mini',
+]
 
 
 def response_request(payload, chat=False):

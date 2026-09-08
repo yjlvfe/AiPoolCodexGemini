@@ -4,12 +4,25 @@
       "gemini_pool": {
         "baseUrl": "http://127.0.0.1:8123/v1",
         "apiKey": "pool-key",
-        "models": ["gemini-3.8-flash-tiered", "claude-sonnet-4-6"]
+        "models": [
+          "gemini-3.8-flash",
+          "gemini-3.7-flash",
+          "gemini-3.6-flash",
+          "gemini-3.1-pro",
+          "claude-sonnet-4-6"
+        ]
       },
       "codex_pool": {
         "baseUrl": "http://127.0.0.1:8124/v1",
         "apiKey": "pool-key",
-        "models": ["gpt-6-astra", "gpt-5.6-luna", "gpt-5.6-sol"]
+        "models": [
+          "gpt-6-astra",
+          "gpt-5.6-luna",
+          "gpt-5.6-sol",
+          "gpt-5.6-terra",
+          "gpt-5.5",
+          "gpt-5.4-mini"
+        ]
       }
     }
   }

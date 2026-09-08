@@ -128,11 +128,27 @@ def initialize(path=None):
                     if 'duplicate column' not in str(exc):
                         raise
         conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS aipool_request_id ON request_events(request_id)')
+        # Automatically clean any legacy model names with internal suffixes
+        conn.execute("UPDATE request_events SET model = 'gemini-3.8-flash' WHERE model = 'gemini-3.8-flash-tiered'")
+        conn.execute("UPDATE request_events SET model = 'gemini-3.7-flash' WHERE model = 'gemini-3.7-flash-tiered'")
+        conn.execute("UPDATE request_events SET model = 'gemini-3.6-flash' WHERE model = 'gemini-3.6-flash-tiered'")
+        conn.execute("UPDATE request_events SET model = 'gemini-3.1-pro' WHERE model = 'gemini-3.1-pro-low'")
     return path
+
+
+def clean_model_name(model):
+    if not model or not isinstance(model, str):
+        return model or ''
+    # Strip internal routing suffixes like -tiered, -high, -medium, -low if applicable
+    m = model.strip()
+    if m.endswith('-tiered'):
+        m = m[:-7]
+    return m
 
 
 def record(provider, model, usage=None, account=None, status='OK', request_id=None):
     path = initialize()
+    model = clean_model_name(model)
     usage = usage or {}
     prompt = usage.get('input_tokens',usage.get('prompt_tokens'))
     completion = usage.get('output_tokens',usage.get('completion_tokens'))
@@ -152,11 +168,19 @@ def report(path):
     with sqlite3.connect(path,timeout=10) as conn:
         conn.row_factory = sqlite3.Row
         for r in conn.execute("SELECT pool,model,count(*) calls,sum(prompt_tokens) p,sum(completion_tokens) c,sum(total_tokens) t,max(timestamp) ts FROM request_events WHERE pool IN ('Codex','Antigravity') GROUP BY pool,model"):
+            m_name = clean_model_name(r['model'])
             p = providers[r['pool']]
             p['total_tokens'] += r['t'] or 0
             p['requests'] += r['calls']
-            p['models'][r['model']] = {'model':r['model'],'provider':r['pool'],'requests_count':r['calls'],'prompt_tokens':r['p'],'completion_tokens':r['c'],'total_tokens':r['t'] or 0,'last_used':time.strftime('%m/%d %H:%M',time.localtime(r['ts']))}
+            if m_name in p['models']:
+                entry = p['models'][m_name]
+                entry['requests_count'] += r['calls']
+                entry['prompt_tokens'] += (r['p'] or 0)
+                entry['completion_tokens'] += (r['c'] or 0)
+                entry['total_tokens'] += (r['t'] or 0)
+            else:
+                p['models'][m_name] = {'model':m_name,'provider':r['pool'],'requests_count':r['calls'],'prompt_tokens':r['p'] or 0,'completion_tokens':r['c'] or 0,'total_tokens':r['t'] or 0,'last_used':time.strftime('%m/%d %H:%M',time.localtime(r['ts']))}
         for r in conn.execute("SELECT * FROM request_events WHERE pool IN ('Codex','Antigravity') ORDER BY id DESC LIMIT 100"):
-            recent.append({'model':r['model'],'provider':r['pool'],'pool':r['pool'],'prompt':r['prompt_tokens'],'completion':r['completion_tokens'],'tokens':r['total_tokens'],'time_formatted':r['time_formatted'],'status':r['status'] or 'LEGACY','account':r['account'],'usage_known':r['usage_known']})
+            recent.append({'model':clean_model_name(r['model']),'provider':r['pool'],'pool':r['pool'],'prompt':r['prompt_tokens'],'completion':r['completion_tokens'],'tokens':r['total_tokens'],'time_formatted':r['time_formatted'],'status':r['status'] or 'LEGACY','account':r['account'],'usage_known':r['usage_known']})
     models = [v for p in providers.values() for v in p['models'].values()]
     return {'providers':providers,'total_pool_tokens':sum(p['total_tokens'] for p in providers.values()),'top_model':max(models,key=lambda x:x['total_tokens'])['model'] if models else 'None','recent_requests':recent}

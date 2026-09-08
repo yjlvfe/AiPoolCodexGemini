@@ -1,7 +1,7 @@
 # ==============================================================================
 # Hermes Agent Configuration Snippet (AiPoolCodexGemini)
 # ==============================================================================
-# Append these settings into /root/.hermes/config.yaml under custom_providers:
+# Clean model names and 1,000,000 token context window for all models.
 
 custom_providers:
   # Gemini / Antigravity Gateway (Port 8123)
@@ -9,15 +9,21 @@ custom_providers:
     base_url: "http://127.0.0.1:8123/v1"
     api_key: "dummy-key"
     models:
-      - id: "gemini-3.8-flash-tiered"
-        display_name: "Gemini 3.8 Flash Tiered"
+      - id: "gemini-3.8-flash"
+        display_name: "Gemini Flash 3.8"
         context_window: 1048576
-      - id: "gemini-2.5-pro"
-        display_name: "Gemini 2.5 Pro"
+      - id: "gemini-3.7-flash"
+        display_name: "Gemini Flash 3.7"
+        context_window: 1048576
+      - id: "gemini-3.6-flash"
+        display_name: "Gemini Flash 3.6"
+        context_window: 1048576
+      - id: "gemini-3.1-pro"
+        display_name: "Gemini 3.1 Pro"
         context_window: 1048576
       - id: "claude-sonnet-4-6"
         display_name: "Claude Sonnet 4.6"
-        context_window: 200000
+        context_window: 1048576
 
   # Codex / ChatGPT Gateway (Port 8124)
   codex:
@@ -26,10 +32,19 @@ custom_providers:
     models:
       - id: "gpt-6-astra"
         display_name: "ChatGPT Astra"
-        context_window: 200000
+        context_window: 1048576
       - id: "gpt-5.6-luna"
         display_name: "ChatGPT Luna"
-        context_window: 200000
+        context_window: 1048576
       - id: "gpt-5.6-sol"
         display_name: "ChatGPT Sol"
-        context_window: 200000
+        context_window: 1048576
+      - id: "gpt-5.6-terra"
+        display_name: "ChatGPT Terra"
+        context_window: 1048576
+      - id: "gpt-5.5"
+        display_name: "ChatGPT 5.5"
+        context_window: 1048576
+      - id: "gpt-5.4-mini"
+        display_name: "ChatGPT 5.4 Mini"
+        context_window: 1048576

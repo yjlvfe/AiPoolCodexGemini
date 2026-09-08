@@ -1486,7 +1486,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 </div>
                 <div class="settings-info-box">
                     Config Path: <code style="color: var(--accent-cyan);">~/.hermes/config.yaml</code><br>
-                    Models: <span style="color: var(--accent-emerald);">gemini-3.8-flash-tiered</span>, <span style="color: var(--accent-purple);">gpt-6-astra</span>
+                    Models: <span style="color: var(--accent-emerald);">gemini-3.8-flash (1M)</span>, <span style="color: var(--accent-purple);">gpt-6-astra (1M)</span> + full family
                 </div>
                 <div style="display: flex; gap: 8px;">
                     <button class="action-btn" id="btn-sync-hermes" onclick="triggerIntegration('hermes')" style="flex: 1; background: linear-gradient(135deg, #0ea5e9, #0284c7); color: #fff; border: none; padding: 10px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">

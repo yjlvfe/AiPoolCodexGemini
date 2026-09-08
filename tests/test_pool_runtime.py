@@ -123,7 +123,8 @@ class GatewayTests(unittest.TestCase):
             self.assertEqual(code,200,body)
             self.assertIn('local fixture response',body)
             self.assertEqual((self.home/provider/'active').read_text().strip(),'2')
-            self.assertEqual([c[2]['model'] for c in self.calls[-2:]],[model,model])
+            expected_upstream = 'gemini-3.8-flash-tiered' if model == 'gemini-3.8-flash' else model
+            self.assertEqual([c[2]['model'] for c in self.calls[-2:]],[expected_upstream, expected_upstream])
             self.assertEqual([c[1] for c in self.calls[-2:]],['Bearer account-one','Bearer account-two'])
         import pool_runtime
         result=pool_runtime.report(self.home/'logs.db')

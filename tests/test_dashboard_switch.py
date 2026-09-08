@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / 'dashboard'))
 sys.path.insert(0, str(ROOT / 'cli'))
 sys.path.insert(0, str(ROOT / 'scripts'))
+sys.path.insert(0, str(ROOT / 'bridges'))
 
 from app import PoolManager
 
@@ -182,6 +183,33 @@ class DashboardManualSwitch(unittest.TestCase):
         self.assertIn('has_update', res)
         self.assertIn('behind_count', res)
         self.assertIn('local_commit', res)
+
+    def test_dashboard_model_normalization_and_logs_clean(self):
+        import codex_bridge
+        expected_codex = ['gpt-6-astra', 'gpt-5.6-luna', 'gpt-5.6-sol', 'gpt-5.6-terra', 'gpt-5.5', 'gpt-5.4-mini']
+        for m in expected_codex:
+            self.assertIn(m, codex_bridge.MODELS)
+
+        import gemini_bridge
+        self.assertIn('gemini-3.8-flash', gemini_bridge._CANDIDATE_MODELS)
+        self.assertNotIn('gemini-3.8-flash-tiered', gemini_bridge._CANDIDATE_MODELS)
+        self.assertEqual(gemini_bridge._send_model('gemini-3.8-flash'), 'gemini-3.8-flash-tiered')
+        self.assertEqual(gemini_bridge._send_model('Gemini Flash 3.8'), 'gemini-3.8-flash-tiered')
+
+        import pool_runtime
+        self.assertEqual(pool_runtime.clean_model_name('gemini-3.8-flash-tiered'), 'gemini-3.8-flash')
+        self.assertEqual(pool_runtime.clean_model_name('gemini-3.7-flash-tiered'), 'gemini-3.7-flash')
+
+        from integrations import providers
+        hermes_prov = providers('hermes')
+        for p_name in ['gemini', 'codex']:
+            p_cfg = hermes_prov[f'aipool-{p_name}']
+            for m_id, m_cfg in p_cfg['models'].items():
+                self.assertEqual(m_cfg['context_length'], 1048576)
+
+        pm = PoolManager()
+        status = pm.get_all_status()
+        self.assertEqual(status.get('active_hermes_default'), 'gemini-3.8-flash')
 
 
 if __name__ == '__main__':
