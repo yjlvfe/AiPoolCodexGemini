@@ -1133,6 +1133,28 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
         let cachedReportData = null;
         let currentProvider = 'Codex';
         let currentSelectedModel = 'gpt-6-astra';
+        let clientSessionId = localStorage.getItem('yj_aipool_session') || '';
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlToken = urlParams.get('token') || '';
+
+        function resolveApiUrl(subpath) {
+            const hasAipool = window.location.pathname.startsWith('/aipool');
+            const cleanPath = subpath.startsWith('/') ? subpath : '/' + subpath;
+            const fullPath = (hasAipool ? '/aipool' : '') + cleanPath;
+            const params = new URLSearchParams();
+            if (clientSessionId) params.set('session_id', clientSessionId);
+            if (urlToken) params.set('token', urlToken);
+            const qs = params.toString();
+            return fullPath + (qs ? '?' + qs : '');
+        }
+
+        function apiHeaders(extraHeaders = {}) {
+            const headers = { ...extraHeaders };
+            if (clientSessionId) {
+                headers['X-Session-ID'] = clientSessionId;
+            }
+            return headers;
+        }
 
         function toggleDropdown() {
             const wrapper = document.getElementById('custom-model-select');
@@ -1208,7 +1230,10 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
 
         async function fetchSettingsStatus() {
             try {
-                const res = await fetch('/api/settings/status');
+                const res = await fetch(resolveApiUrl('/api/settings/status'), {
+                    headers: apiHeaders(),
+                    credentials: 'same-origin'
+                });
                 if (!res.ok) return;
                 const data = await res.json();
                 
@@ -1249,7 +1274,10 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
 
         async function fetchCliToolsStatus() {
             try {
-                const res = await fetch('/api/settings/check_cli');
+                const res = await fetch(resolveApiUrl('/api/settings/check_cli'), {
+                    headers: apiHeaders(),
+                    credentials: 'same-origin'
+                });
                 if (!res.ok) return;
                 const data = await res.json();
 
@@ -1298,10 +1326,11 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             btn.disabled = true;
 
             try {
-                const res = await fetch('/api/settings/install_cli', {
+                const res = await fetch(resolveApiUrl('/api/settings/install_cli'), {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ tool: tool })
+                    headers: apiHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ tool: tool }),
+                    credentials: 'same-origin'
                 });
                 const data = await res.json();
                 if (data.success) {
@@ -1328,7 +1357,11 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
 
             try {
                 const endpoint = target === 'hermes' ? '/api/settings/integrate_hermes' : '/api/settings/integrate_openclaw';
-                const res = await fetch(endpoint, { method: 'POST' });
+                const res = await fetch(resolveApiUrl(endpoint), {
+                    method: 'POST',
+                    headers: apiHeaders(),
+                    credentials: 'same-origin'
+                });
                 const data = await res.json();
                 if (data.success) {
                     btn.innerHTML = '<span>✅</span><span>Linked Successfully!</span>';
@@ -1348,7 +1381,11 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
 
         function confirmUninstall() {
             if (confirm('Are you completely sure you want to uninstall the suite and stop all services?\\n\\nThis will stop services immediately and remove CLI shortcuts.')) {
-                fetch('/api/settings/uninstall', { method: 'POST' })
+                fetch(resolveApiUrl('/api/settings/uninstall'), {
+                    method: 'POST',
+                    headers: apiHeaders(),
+                    credentials: 'same-origin'
+                })
                     .then(res => res.json())
                     .then(data => {
                         alert(data.message || 'Uninstall launched successfully.');
@@ -1580,10 +1617,6 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             });
         }
 
-        let clientSessionId = localStorage.getItem('yj_aipool_session') || '';
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlToken = urlParams.get('token') || '';
-
         async function switchAccount(accountNum, btnEl) {
             const system = currentProvider === 'Codex' ? 'codex' : 'antigravity';
             const oldText = btnEl ? btnEl.innerText : 'Switch';
@@ -1592,9 +1625,9 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 btnEl.innerText = 'Switching...';
             }
             try {
-                const res = await fetch('/aipool/api/accounts/switch', {
+                const res = await fetch(resolveApiUrl('/api/accounts/switch'), {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'X-Session-ID': clientSessionId },
+                    headers: apiHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify({ system: system, account: accountNum }),
                     credentials: 'same-origin'
                 });
@@ -1631,15 +1664,9 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             const btn = document.querySelector('.refresh-btn');
             if (btn) btn.classList.add('rotating');
             try {
-                let url = force ? '/aipool/api/refresh' : '/aipool/api/logs_data';
-                const params = new URLSearchParams();
-                if (clientSessionId) params.set('session_id', clientSessionId);
-                if (urlToken) params.set('token', urlToken);
-                const qs = params.toString();
-                const endpoint = url + (qs ? '?' + qs : '');
-
-                const res = await fetch(endpoint, {
-                    headers: { 'X-Session-ID': clientSessionId },
+                const path = force ? '/api/refresh' : '/api/logs_data';
+                const res = await fetch(resolveApiUrl(path), {
+                    headers: apiHeaders(),
                     credentials: 'same-origin'
                 });
                 if (!res.ok) {

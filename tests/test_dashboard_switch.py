@@ -69,6 +69,19 @@ class DashboardManualSwitch(unittest.TestCase):
         self.assertNotIn("providerBar.style.display = 'flex'", server_py)
         self.assertIn("providerBar.style.display = '';", server_py)
 
+    def test_resolve_api_url_proxy_compatibility(self):
+        server_py = (ROOT / 'dashboard/server.py').read_text()
+        # Verify resolveApiUrl and apiHeaders exist
+        self.assertIn('function resolveApiUrl(subpath)', server_py)
+        self.assertIn('function apiHeaders(extraHeaders = {})', server_py)
+        # Verify settings endpoints use resolveApiUrl
+        self.assertIn("fetch(resolveApiUrl('/api/settings/status')", server_py)
+        self.assertIn("fetch(resolveApiUrl('/api/settings/check_cli')", server_py)
+        self.assertIn("fetch(resolveApiUrl('/api/settings/install_cli')", server_py)
+        self.assertIn("fetch(resolveApiUrl(endpoint)", server_py)
+        self.assertIn("fetch(resolveApiUrl('/api/settings/uninstall')", server_py)
+        self.assertIn("fetch(resolveApiUrl('/api/accounts/switch')", server_py)
+
 
 if __name__ == '__main__':
     unittest.main()
