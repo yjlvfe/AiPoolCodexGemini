@@ -141,6 +141,15 @@ class DashboardManualSwitch(unittest.TestCase):
         # Verify cli-tool-item stacks on mobile
         self.assertIn('.cli-tool-item {', server_py)
 
+    def test_recheck_button_position_and_settings_top_row(self):
+        server_py = (ROOT / 'dashboard/server.py').read_text()
+        # Verify settings-card-top-row exists in CSS
+        self.assertIn('.settings-card-top-row {', server_py)
+        # Verify Re-check button is nested inside settings-card-top-row alongside title
+        self.assertIn('<div class="settings-card-top-row">\n                        <div class="settings-card-title-group">\n                            <span class="settings-card-icon">🛠️</span>\n                            <span class="settings-card-title">CLI Tools Status</span>\n                        </div>\n                        <button class="recheck-btn"', server_py)
+        # Verify subtitle is placed cleanly outside/below the top row
+        self.assertIn('</div>\n                    <div class="settings-card-sub">Detects and configures CLI tools', server_py)
+
 
 if __name__ == '__main__':
     unittest.main()

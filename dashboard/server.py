@@ -913,31 +913,39 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
         }
         .settings-card-header {
             display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 14px;
+            width: 100%;
+        }
+        .settings-card-top-row {
+            display: flex;
             justify-content: space-between;
-            align-items: flex-start;
-            margin-bottom: 12px;
+            align-items: center;
+            width: 100%;
             gap: 10px;
         }
         .settings-card-title-group {
             display: flex;
-            gap: 12px;
+            gap: 10px;
             align-items: center;
             min-width: 0;
         }
         .settings-card-icon {
-            font-size: 26px;
+            font-size: 24px;
             flex-shrink: 0;
         }
         .settings-card-title {
             font-size: 15px;
             font-weight: 700;
             color: #fff;
+            white-space: nowrap;
         }
         .settings-card-sub {
             font-size: 12px;
             color: var(--text-secondary);
-            margin-top: 2px;
             line-height: 1.4;
+            padding-left: 34px;
         }
         .settings-info-box {
             background: rgba(0, 0, 0, 0.3);
@@ -1020,13 +1028,15 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 font-size: 13px;
                 padding: 8px 10px;
             }
-            .settings-card-header {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 8px;
+            .settings-card-title {
+                font-size: 14px;
             }
-            .settings-card-header .badge {
-                align-self: flex-start;
+            .settings-card-sub {
+                padding-left: 0;
+                font-size: 11px;
+            }
+            .settings-card-top-row {
+                gap: 8px;
             }
             .cli-tool-item {
                 flex-direction: column;
@@ -1318,14 +1328,14 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             <!-- Hermes Agent Integration Card -->
             <div class="glass-card settings-card">
                 <div class="settings-card-header">
-                    <div class="settings-card-title-group">
-                        <span class="settings-card-icon">🤖</span>
-                        <div>
-                            <div class="settings-card-title">Hermes Agent Integration</div>
-                            <div class="settings-card-sub">Auto-link pool gateways in ~/.hermes/config.yaml</div>
+                    <div class="settings-card-top-row">
+                        <div class="settings-card-title-group">
+                            <span class="settings-card-icon">🤖</span>
+                            <span class="settings-card-title">Hermes Agent Integration</span>
                         </div>
+                        <span id="hermes-badge" class="badge">Checking...</span>
                     </div>
-                    <span id="hermes-badge" class="badge">Checking...</span>
+                    <div class="settings-card-sub">Auto-link pool gateways in ~/.hermes/config.yaml</div>
                 </div>
                 <div class="settings-info-box">
                     Config Path: <code style="color: var(--accent-cyan);">~/.hermes/config.yaml</code><br>
@@ -1342,14 +1352,14 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             <!-- OpenClaw Integration Card -->
             <div class="glass-card settings-card">
                 <div class="settings-card-header">
-                    <div class="settings-card-title-group">
-                        <span class="settings-card-icon">🦅</span>
-                        <div>
-                            <div class="settings-card-title">OpenClaw Integration</div>
-                            <div class="settings-card-sub">Auto-link gemini_pool & codex_pool in ~/.openclaw/openclaw.json</div>
+                    <div class="settings-card-top-row">
+                        <div class="settings-card-title-group">
+                            <span class="settings-card-icon">🦅</span>
+                            <span class="settings-card-title">OpenClaw Integration</span>
                         </div>
+                        <span id="openclaw-badge" class="badge">Checking...</span>
                     </div>
-                    <span id="openclaw-badge" class="badge">Checking...</span>
+                    <div class="settings-card-sub">Auto-link gemini_pool & codex_pool in ~/.openclaw/openclaw.json</div>
                 </div>
                 <div class="settings-info-box">
                     Config Path: <code style="color: var(--accent-cyan);">~/.openclaw/openclaw.json</code><br>
@@ -1365,17 +1375,17 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
 
             <!-- CLI Tools Prerequisites Card -->
             <div class="glass-card settings-card">
-                <div class="settings-card-header" style="align-items: center;">
-                    <div class="settings-card-title-group">
-                        <span class="settings-card-icon">🛠️</span>
-                        <div>
-                            <div class="settings-card-title">CLI Tools Status</div>
-                            <div class="settings-card-sub">Detects and configures CLI tools required for enrolling accounts.</div>
+                <div class="settings-card-header">
+                    <div class="settings-card-top-row">
+                        <div class="settings-card-title-group">
+                            <span class="settings-card-icon">🛠️</span>
+                            <span class="settings-card-title">CLI Tools Status</span>
                         </div>
+                        <button class="recheck-btn" onclick="fetchCliToolsStatus()" title="Re-check installed CLI tools">
+                            🔄 Re-check
+                        </button>
                     </div>
-                    <button class="recheck-btn" onclick="fetchCliToolsStatus()">
-                        🔄 Re-check
-                    </button>
+                    <div class="settings-card-sub">Detects and configures CLI tools required for enrolling accounts.</div>
                 </div>
 
                 <div style="display: flex; flex-direction: column; gap: 10px;">
