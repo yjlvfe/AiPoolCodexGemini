@@ -91,7 +91,13 @@ class GatewayTests(unittest.TestCase):
 
     def tearDown(self):
         for s in self.servers:s.shutdown();s.server_close()
-        self.urls.stop();self.env.stop();self.temp.cleanup()
+        self.urls.stop();self.env.stop()
+        try:
+            self.temp.cleanup()
+        except OSError:
+            import shutil
+            time.sleep(0.1)
+            shutil.rmtree(self.temp.name, ignore_errors=True)
 
     def request(self,base,model,stream=False,path='/v1/chat/completions'):
         payload={'model':model,'messages':[{'role':'user','content':'fixture'}],'stream':stream}
@@ -186,7 +192,13 @@ class GatewayTests(unittest.TestCase):
         for base,model in [(self.codex_url,'gpt-6-astra'),(self.ag_url,'gemini-3.8-flash')]:
             self.assertEqual(self.request(base,model)[0],200)
         import pool_runtime
-        rows=pool_runtime.report(self.home/'logs.db')['recent_requests']
+        start = time.time()
+        rows = []
+        while time.time() - start < 4:
+            rows=pool_runtime.report(self.home/'logs.db')['recent_requests']
+            if len(rows) >= 2:
+                break
+            time.sleep(0.05)
         self.assertEqual(len(rows),2)
         self.assertTrue(all(r['prompt'] is None and r['completion'] is None for r in rows),rows)
 
