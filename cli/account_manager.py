@@ -173,9 +173,9 @@ class Manager:
             if same:
                 raise ValueError(f'This account is already registered as {self.prefix}{n}; choose a different account')
 
-    def enroll(self, browser=False):
+    def enroll(self, browser=False, resume=False, slot=None):
         if self.ag:
-            return ag_module().login()
+            return ag_module().login(resume=resume, slot=slot)
         private_dir(self.store)
         with tempfile.TemporaryDirectory(prefix='.login-', dir=self.store) as home:
             env = codex_env(home)
@@ -191,10 +191,11 @@ class Manager:
                 raise ValueError('Codex did not create auth.json; update the official CLI and retry')
             return read_json(path)
 
-    def add_or_switch(self, number=None, source=None, browser=False, server_verified=False):
+    def add_or_switch(self, number=None, source=None, browser=False, server_verified=False, verify=False, resume=False):
         with self.locked():
             ids = self.ids()
-            number = slot(number) if number else str(max(map(int, ids), default=0) + 1)
+            resume_slot = ag_module().pending_slot() if self.ag and resume else None
+            number = slot(number or resume_slot) if (number or resume_slot) else str(max(map(int, ids), default=0) + 1)
             path = self.credential(number)
             existing = path.is_file()
             previous = self.active()
@@ -204,13 +205,18 @@ class Manager:
                 saved = read_json(self.credential(previous))
                 if self.identity(candidate).get('identity') == self.identity(saved).get('identity'):
                     previous_live = candidate
-            data = read_json(Path(source).expanduser()) if source else read_json(path) if existing else self.enroll(browser)
+            data = read_json(Path(source).expanduser()) if source else read_json(path) if existing else self.enroll(browser, resume=resume, slot=number)
             if source is None and existing and previous == number and previous_live:
                 data = previous_live
             if self.ag:
-                if server_verified:
+                if server_verified or (source is None and existing and not verify):
+                    # Local-only path: ordinary switches and bridge rotation never block on Google.
                     meta = self.identity(data)
+                    if not meta.get('email'):
+                        raise ValueError('Saved credential has no email identity; re-verify with: ' + self.prefix + ' switch ' + number + ' --verify')
                     derived = {'access_token':data['token']['access_token'], 'refresh_token':data['token']['refresh_token'], 'project_id':data.get('project_id'), 'email':meta.get('email')}
+                    if not server_verified:
+                        print('Local switch (no Google round-trip). Server check: ' + self.prefix + ' switch ' + number + ' --verify', flush=True)
                 else:
                     data, derived, meta = ag_module().validate(data)
             else:
@@ -322,19 +328,24 @@ def main(provider):
         cmd, rest = 'switch', [cmd] + rest
     try:
         if cmd in ('help', '--help', '-h'):
-            print(f'{manager.label} Account Manager\n\n{manager.prefix} add [FILE] [--browser]  Add a NEW identity or import credentials\n{manager.prefix} switch N / {manager.prefix}N   Switch, or enroll an unregistered slot\n{manager.prefix} list                  List saved identities without network calls\n{manager.prefix} usage [N] [--short]   Query current provider limits\n{manager.prefix} clean                 Non-destructive duplicate scan\n{manager.prefix} rm N                  Archive a non-active account\nNo provider/model settings are changed.')
+            print(f'{manager.label} Account Manager\n\n{manager.prefix} add [FILE] [--browser] [--resume]  Add or import an account; --resume continues a paused login\n{manager.prefix} switch N [--verify] / {manager.prefix}N   Switch accounts (instant, local); --verify re-checks with Google\n{manager.prefix} refresh-active     Re-validate the active account against Google\n{manager.prefix} list                  List saved identities without network calls\n{manager.prefix} usage [N] [--short]   Query current provider limits\n{manager.prefix} clean                 Non-destructive duplicate scan\n{manager.prefix} rm N                  Archive a non-active account\nNo provider/model settings are changed.')
         elif cmd == 'add':
             browser = '--browser' in rest
-            sources = [x for x in rest if x != '--browser']
+            resume = '--resume' in rest
+            sources = [x for x in rest if x not in ('--browser', '--resume')]
             if len(sources) > 1 or (sources and sources[0].startswith('-')):
-                raise ValueError('Usage: add [FILE] [--browser]')
-            manager.add_or_switch(source=sources[0] if sources else None, browser=browser)
+                raise ValueError('Usage: add [FILE] [--browser] [--resume]')
+            manager.add_or_switch(source=sources[0] if sources else None, browser=browser, resume=resume)
         elif cmd in ('switch', 'refresh-active'):
-            if cmd == 'refresh-active' and not rest:
-                rest = [manager.active()]
-            if len(rest) != 1:
-                raise ValueError('Usage: switch N')
-            manager.add_or_switch(number=rest[0])
+            verify = '--verify' in rest
+            positional = [x for x in rest if x != '--verify']
+            if cmd == 'refresh-active':
+                verify = True
+                if not positional:
+                    positional = [manager.active()]
+            if len(positional) != 1:
+                raise ValueError('Usage: switch N [--verify]')
+            manager.add_or_switch(number=positional[0], verify=verify)
         elif cmd in ('usage', '--usage'):
             selected = [x for x in rest if x != '--short']
             if len(selected) > 1:

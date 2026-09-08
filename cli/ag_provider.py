@@ -14,6 +14,8 @@ import urllib.error
 import urllib.parse
 import urllib.request
 import webbrowser
+import io
+import tempfile
 
 TOKEN_URL = 'https://oauth2.googleapis.com/token'
 USERINFO_URL = 'https://www.googleapis.com/oauth2/v1/userinfo?alt=json'
@@ -129,10 +131,79 @@ def callback_code(url, state, redirect):
     return code
 
 
-def login():
-    port = int(os.environ.get('AG_OAUTH_PORT', '51121'))
-    redirect = f'http://localhost:{port}/oauth-callback'
-    url, state, verifier = authorization(redirect)
+def pending_file():
+    store = Path(os.environ.get('AG_ACCOUNT_STORE', Path.home() / '.antigravity-accounts'))
+    return store / 'pending-oauth.json'
+
+
+def pending_slot():
+    """Return the account slot a paused login was targeting, if the session is still valid."""
+    path = pending_file()
+    try:
+        pending = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return None
+    if not isinstance(pending, dict) or time.time() > pending.get('expires', 0):
+        return None
+    return pending.get('slot')
+
+
+def save_pending(url, state, verifier, redirect, slot):
+    pending = {'url':url, 'state':state, 'verifier':verifier, 'redirect':redirect, 'slot':slot,
+               'created':time.time(), 'expires':time.time() + 3600}
+    path = pending_file()
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+        fd, tmp = tempfile.mkstemp(prefix='.pending-oauth-', dir=path.parent)
+        with os.fdopen(fd, 'w') as f:
+            os.fchmod(f.fileno(), 0o600)
+            json.dump(pending, f)
+            f.flush()
+            os.fsync(f.fileno())
+        os.replace(tmp, path)
+    except OSError:
+        # The panel still works; resume is simply unavailable on this filesystem.
+        pass
+
+
+def load_pending(resume):
+    path = pending_file()
+    if not resume:
+        return None
+    try:
+        pending = json.loads(path.read_text())
+    except (OSError, ValueError):
+        raise ValueError('No pending Antigravity login to resume; start fresh with: ag add') from None
+    if not isinstance(pending, dict) or time.time() > pending.get('expires', 0):
+        try:
+            path.unlink()
+        except OSError:
+            pass
+        raise ValueError('The saved Antigravity login session has expired; start again with: ag add') from None
+    required = ('url', 'state', 'verifier', 'redirect')
+    if not all(isinstance(pending.get(k), str) and pending[k] for k in required):
+        raise ValueError('Saved login session is corrupt; start again with: ag add') from None
+    return pending
+
+
+def clear_pending():
+    try:
+        pending_file().unlink()
+    except OSError:
+        pass
+
+
+def login(resume=False, slot=None):
+    """Enroll a Google account. Prints a continuation panel and keeps a resumable session."""
+    port = int(os.environ.get('AG_OAUTH_PORT', '0'))
+    pending = load_pending(resume)
+    if pending:
+        port = int(urllib.parse.urlparse(pending['redirect']).port or port)
+        url, state, verifier, redirect = pending['url'], pending['state'], pending['verifier'], pending['redirect']
+        if slot is None:
+            slot = pending.get('slot')
+    else:
+        url, state, verifier, redirect = None, None, None, None
     received = {}
 
     class Callback(BaseHTTPRequestHandler):
@@ -142,7 +213,6 @@ def login():
                 body, status = b'Authorization received. Return to your terminal for validation.', 200
             except ValueError as exc:
                 body, status = str(exc).encode(), 400
-                # A mismatched request must not terminate the legitimate session.
             self.send_response(status)
             self.send_header('Content-Type', 'text/plain; charset=utf-8')
             self.send_header('Content-Length', str(len(body)))
@@ -154,34 +224,95 @@ def login():
     try:
         server = HTTPServer(('127.0.0.1', port), Callback)
     except OSError:
-        raise ValueError(f'OAuth callback port {port} is in use. Close the other login or set AG_OAUTH_PORT') from None
-    server.timeout = 0.25
-    print('Open this URL and choose a DIFFERENT Google account:\n' + url, flush=True)
-    print('On SSH: if localhost cannot connect in your browser, copy the FULL resulting callback URL and paste it here. Do not share it.\nWaiting for callback or pasted URL (5 minutes; Ctrl+C cancels)...', flush=True)
-    if not os.environ.get('SSH_CONNECTION') and os.environ.get('AIPOOL_NO_BROWSER') != '1' and (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')):
-        webbrowser.open(url)
-    deadline = time.monotonic() + 300
-    stdin_open = True
+        raise ValueError('OAuth callback port is unavailable. Close the other login, free the port, or start fresh with: ag add') from None
     try:
+        port = server.server_address[1]
+        server.timeout = 0.25
+        if url is None:
+            redirect = 'http://localhost:' + str(port) + '/oauth-callback'
+            url, state, verifier = authorization(redirect)
+            save_pending(url, state, verifier, redirect, slot)
+        print('=' * 64)
+        print(' Antigravity Account Enrollment - Continuation Panel')
+        print('=' * 64)
+        print(' STEP 1 | Open this URL and choose the Google account to ADD:')
+        print('        | ' + url)
+        print(' STEP 2 | Approve the consent screen (offline access must stay ON).')
+        print(' STEP 3 | Google redirects the browser to ' + redirect)
+        print('        |   * Browser on THIS machine: detected automatically.')
+        print('        |   * SSH / phone / remote: copy the FULL redirected URL')
+        print('        |     and paste it here, then press Enter.')
+        print(' STEP 4 | Stay here while Google validates the account (~1 minute).')
+        print('        |   * Window closed before finishing? Resume the SAME login:')
+        print('        |       ag add --resume')
+        print('=' * 64)
+        print('Waiting for callback or pasted URL (10 minutes; Ctrl+C keeps the session)...', flush=True)
+        if not os.environ.get('SSH_CONNECTION') and os.environ.get('AIPOOL_NO_BROWSER') != '1' and (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')):
+            webbrowser.open(url)
+        deadline = time.monotonic() + 600
+        stdin_open = sys.stdin is not None
+        last_tick = 0.0
         while time.monotonic() < deadline and not received.get('code'):
             server.handle_request()
-            if stdin_open and select.select([sys.stdin], [], [], 0)[0]:
-                line = sys.stdin.readline()
-                if not line:
+            if stdin_open:
+                try:
+                    readable = select.select([sys.stdin], [], [], 0)[0]
+                except (OSError, ValueError, io.UnsupportedOperation):
                     stdin_open = False
-                elif line.strip():
-                    received['code'] = callback_code(line.strip(), state, redirect)
+                else:
+                    if readable:
+                        line = sys.stdin.readline()
+                        if not line:
+                            stdin_open = False
+                        elif line.strip():
+                            try:
+                                received['code'] = callback_code(line.strip(), state, redirect)
+                            except ValueError as exc:
+                                print(str(exc), flush=True)
+            now = time.monotonic()
+            if now - last_tick >= 30:
+                print('Still waiting (' + str(max(0, int(deadline - now))) + 's left). Paste the redirected URL, or Ctrl+C and continue later with: ag add --resume', flush=True)
+                last_tick = now
+    except KeyboardInterrupt:
+        raise ValueError('Login paused; the session is kept. Continue later with: ag add --resume') from None
     finally:
         server.server_close()
     if not received.get('code'):
-        raise ValueError('OAuth login timed out; no account was saved')
+        raise ValueError('OAuth login paused (timeout); the session is kept. Resume with: ag add --resume')
     client, secret = oauth_client()
     token = request(TOKEN_URL, {'client_id':client, 'client_secret':secret, 'grant_type':'authorization_code', 'code':received['code'], 'redirect_uri':redirect, 'code_verifier':verifier}, form=True)
     if not token.get('refresh_token'):
-        raise ValueError('Google returned no refresh token; approve offline consent and retry')
+        raise ValueError('Google returned no refresh token; approve offline consent and run ag add again')
+    clear_pending()
     return {'token':token}
+
+
+def refresh(data):
+    """Light refresh: fresh access token + verified identity. No Code Assist onboarding."""
+    token = data.get('token', data)
+    if not isinstance(token, dict) or not isinstance(token.get('refresh_token'), str) or not token['refresh_token']:
+        raise ValueError('Credential does not contain a Google refresh token')
+    client, secret = oauth_client()
+    fresh = request(TOKEN_URL, {'client_id':client, 'client_secret':secret, 'grant_type':'refresh_token', 'refresh_token':token['refresh_token']}, form=True)
+    access = fresh.get('access_token')
+    if not access:
+        raise ValueError('Google returned no access token')
+    info = request(USERINFO_URL, access=access)
+    email = info.get('email')
+    if not isinstance(email, str) or not email or info.get('verified_email') is False:
+        raise ValueError('Google returned no verified account identity')
+    project = data.get('project_id') or token.get('project_id') or ''
+    expiry = time.time() + int(fresh.get('expires_in', 3599))
+    canonical = {'token':{**token, 'access_token':access, 'refresh_token':fresh.get('refresh_token') or token['refresh_token'], 'token_type':'Bearer', 'expiry':int(expiry * 1000)}, 'email':email}
+    derived = {**canonical['token'], 'expires_at':expiry, 'email':email}
+    if project:
+        canonical['project_id'] = project
+        derived['project_id'] = project
+    return canonical, derived, {'identity':email.casefold(), 'email':email, 'project_id':project or None, 'status':'OK (light refresh)'}
 
 
 def quota(data):
     access = data['token']['access_token']
-    return request(BASE + ':retrieveUserQuotaSummary', {'project':data['project_id']}, access)
+    result = request(BASE + ':retrieveUserQuotaSummary', {'project':data['project_id']}, access)
+    summary = result.get('quotaSummary')
+    return summary if isinstance(summary, dict) else result

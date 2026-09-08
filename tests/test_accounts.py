@@ -4,7 +4,9 @@ import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
+import time
 import unittest
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -150,6 +152,136 @@ if 'app-server' in args:
         self.assertIn('already registered', duplicate.stderr)
         self.assertFalse((self.home / '.codex-accounts/2').exists())
         self.assertEqual((self.home / '.codex-accounts/active').read_text().strip(), '1')
+
+
+class AntigravityAccounts(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory(dir=ROOT.parent, prefix='aipool-agtest-')
+        self.addCleanup(self.tmp.cleanup)
+        self.home = Path(self.tmp.name) / 'home with spaces'
+        self.home.mkdir()
+        self.env = {**os.environ, "AIPOOL_CONFIG_ENV": os.devnull, 'HOME': str(self.home), 'AG_ACCOUNT_STORE': str(self.home / '.antigravity-accounts'), 'AG_CLI_AUTH': str(self.home / '.gemini-live'), 'AIPOOL_NO_BROWSER': '1'}
+
+    def ag_data(self, email='agone@example.test', project='project-one'):
+        return {'token': {'refresh_token': 'refresh-' + email, 'access_token': 'access-' + email, 'token_type': 'Bearer', 'expiry': 9999999999999}, 'email': email, 'project_id': project}
+
+    def slot(self, number, **kw):
+        store = Path(self.env['AG_ACCOUNT_STORE'])
+        directory = store / str(number)
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / 'antigravity-oauth-token').write_text(json.dumps(self.ag_data(**kw)))
+        return directory
+
+    def run_ag(self, *args):
+        return subprocess.run([str(ROOT / 'cli/ag'), *args], env=self.env, text=True, capture_output=True, timeout=20)
+
+    def test_switch_is_local_instant_and_offline(self):
+        self.slot(1)
+        self.slot(2, email='agtwo@example.test', project='project-two')
+        (Path(self.env['AG_ACCOUNT_STORE']) / 'active').write_text('1')
+        result = self.run_ag('2')
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn('Local switch', result.stdout)
+        self.assertIn('Active Antigravity account: 2', result.stdout)
+        self.assertEqual((Path(self.env['AG_ACCOUNT_STORE']) / 'active').read_text().strip(), '2')
+        self.assertEqual(json.loads((Path(self.env['AG_CLI_AUTH']).read_text()))['email'], 'agtwo@example.test')
+        slot_one = json.loads((Path(self.env['AG_ACCOUNT_STORE']) / '1/antigravity-oauth-token').read_text())
+        self.assertEqual(slot_one['email'], 'agone@example.test')
+
+    def test_add_resume_without_pending_fails_cleanly(self):
+        result = self.run_ag('add', '--resume')
+        self.assertNotEqual(result.returncode, 0)
+        self.assertIn('No pending Antigravity login', result.stderr)
+
+    def test_add_resume_continues_pending_session(self):
+        import contextlib
+        import io
+        import socket
+        import threading
+        import urllib.request
+        sys.path.insert(0, str(ROOT / 'cli'))
+        import ag_provider
+        sock = socket.socket()
+        sock.bind(('127.0.0.1', 0))
+        port = sock.getsockname()[1]
+        sock.close()
+        store = Path(self.env['AG_ACCOUNT_STORE'])
+        store.mkdir(parents=True)
+        pending = {'url': 'https://accounts.google.com/example', 'state': 'fixture-state', 'verifier': 'fixture-verifier',
+                   'redirect': f'http://localhost:{port}/oauth-callback', 'slot': '2', 'expires': time.time() + 3600}
+        (store / 'pending-oauth.json').write_text(json.dumps(pending))
+        self.env.update(AG_OAUTH_PORT=str(port), AG_OAUTH_CLIENT_ID='fixture-cid', AG_OAUTH_CLIENT_SECRET='fixture-secret')
+        old = {k: v for k, v in os.environ.items()}
+        os.environ.update(self.env)
+        calls = {}
+        def fake_request(url, payload=None, access=None, form=False):
+            calls['payload'] = payload
+            calls['form'] = form
+            return {'access_token': 'new-access', 'refresh_token': 'new-refresh', 'expires_in': 3599}
+        try:
+            original = ag_provider.request
+            ag_provider.request = fake_request
+            output = io.StringIO()
+            result = {}
+            def runner():
+                with contextlib.redirect_stdout(output):
+                    result['token'] = ag_provider.login(resume=True)
+            thread = threading.Thread(target=runner)
+            thread.start()
+            deadline = time.time() + 15
+            while time.time() < deadline and 'STEP 1' not in output.getvalue():
+                time.sleep(0.05)
+            self.assertIn('STEP 1', output.getvalue(), 'Continuation panel was not printed')
+            self.assertIn('ag add --resume', output.getvalue())
+            with urllib.request.urlopen(f'http://127.0.0.1:{port}/oauth-callback?code=fixture-code&state=fixture-state', timeout=5) as response:
+                self.assertEqual(response.status, 200)
+            thread.join(15)
+            self.assertFalse(thread.is_alive())
+            token = result.get('token')
+            self.assertIsNotNone(token)
+            self.assertEqual(token['token']['refresh_token'], 'new-refresh')
+            self.assertEqual(calls.get('form'), True)
+            self.assertEqual(calls.get('payload', {}).get('code'), 'fixture-code')
+            self.assertEqual(calls.get('payload', {}).get('code_verifier'), 'fixture-verifier')
+            self.assertFalse((store / 'pending-oauth.json').exists())
+        finally:
+            ag_provider.request = original
+            os.environ.clear()
+            os.environ.update(old)
+
+    def test_quota_unwraps_quota_summary(self):
+        sys.path.insert(0, str(ROOT / 'cli'))
+        import ag_provider
+        original = ag_provider.request
+        try:
+            ag_provider.request = lambda url, payload=None, access=None, form=False: {'quotaSummary': {'groups': ['fixture-group']}}
+            self.assertEqual(ag_provider.quota({'token': {'access_token': 'a'}, 'project_id': 'p'}), {'groups': ['fixture-group']})
+            ag_provider.request = lambda url, payload=None, access=None, form=False: {'groups': []}
+            self.assertEqual(ag_provider.quota({'token': {'access_token': 'a'}, 'project_id': 'p'}), {'groups': []})
+        finally:
+            ag_provider.request = original
+
+    def test_usage_failure_shows_remediation_hint(self):
+        import contextlib
+        import io
+        sys.path.insert(0, str(ROOT / 'cli'))
+        from account_manager import Manager
+        from unittest.mock import patch
+        import usage_format
+        self.slot(1)
+        (Path(self.env['AG_ACCOUNT_STORE']) / 'active').write_text('1')
+        old = {k: v for k, v in os.environ.items()}
+        os.environ.update(self.env)
+        try:
+            manager = Manager('antigravity')
+            with patch.object(usage_format, 'inspect', side_effect=ValueError('Google refresh failed: Cannot reach Google')):
+                lines = usage_format.show_account(manager, '1')
+        finally:
+            os.environ.clear()
+            os.environ.update(old)
+        text = lines if isinstance(lines, str) else '\n'.join(lines)
+        self.assertIn('CHECK FAILED', text)
+        self.assertIn('Fix: re-check with Google: ag switch 1 --verify', text)
 
 
 if __name__ == '__main__':

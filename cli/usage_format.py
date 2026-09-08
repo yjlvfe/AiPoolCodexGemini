@@ -35,8 +35,11 @@ def inspect(manager, number):
         snapshot = path.read_bytes()
     if manager.ag:
         provider = ag_module()
-        fresh, _, meta = provider.validate(data)
-        info = {'status':'OK', 'email':meta['email'], 'usage':provider.quota(fresh)}
+        fresh, _, meta = provider.refresh(data)
+        project = fresh.get('project_id') or data.get('project_id')
+        if not project:
+            raise ValueError('No Code Assist project on this account yet; run: ' + manager.prefix + ' switch ' + number + ' --verify to onboard it')
+        info = {'status':'OK', 'email':meta['email'], 'usage':provider.quota({**fresh, 'project_id':project})}
     else:
         with tempfile.TemporaryDirectory(prefix='.query-', dir=manager.store) as home:
             atomic_bytes(Path(home) / 'auth.json', encoded(data))
@@ -69,6 +72,8 @@ def show_account(manager, number, short=False):
     lines = [f'{number}{active} {email}'] if short else [f'Account {number}{active}', f'Email: {email}']
     if status != 'OK':
         lines.append('Status: ' + status + (': ' + info['error'] if info.get('error') else ''))
+        if manager.ag:
+            lines.append('Fix: re-check with Google: ' + manager.prefix + ' switch ' + number + ' --verify   (or open Antigravity once in a browser, then retry)')
     elif manager.ag:
         if not short:
             lines.append('Status: OK')
