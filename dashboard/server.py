@@ -236,6 +236,32 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             gap: 5px;
             letter-spacing: -0.2px;
         }
+        .settings-top-btn {
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: var(--text-main);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            display: flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            font-family: inherit;
+        }
+        .settings-top-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.25);
+            transform: translateY(-1px);
+        }
+        .settings-top-btn.active {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(168, 85, 247, 0.35));
+            border-color: rgba(168, 85, 247, 0.6);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(168, 85, 247, 0.25);
+        }
 
         /* Provider Segmented Pill Selector */
         .provider-segmented-wrap {
@@ -756,14 +782,20 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                     <div class="brand-subtitle">Autonomous Failover Architecture</div>
                 </div>
             </div>
-            <div class="device-badge">
-                <span>🔒</span>
-                <span>جهاز موثق (24h)</span>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <button id="settings-toggle-btn" class="settings-top-btn" onclick="toggleSettingsView()">
+                    <span id="settings-btn-icon">⚙️</span>
+                    <span id="settings-btn-text">الإعدادات</span>
+                </button>
+                <div class="device-badge">
+                    <span>🔒</span>
+                    <span>موثق (24h)</span>
+                </div>
             </div>
         </header>
 
         <!-- Provider Tab Bar -->
-        <div class="provider-segmented-wrap">
+        <div class="provider-segmented-wrap" id="provider-segmented-bar">
             <button class="provider-tab-btn active codex-theme" id="tab-codex" onclick="switchProvider('Codex')">
                 <span>🟣</span>
                 <span>ChatGPT</span>
@@ -771,10 +803,6 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             <button class="provider-tab-btn antigravity-theme" id="tab-antigravity" onclick="switchProvider('Antigravity')">
                 <span>🟢</span>
                 <span>Gemini</span>
-            </button>
-            <button class="provider-tab-btn" id="tab-settings" onclick="switchProvider('Settings')" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);">
-                <span>⚙️</span>
-                <span>الإعدادات</span>
             </button>
         </div>
 
@@ -953,37 +981,45 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             }
         });
 
+        let isSettingsOpen = false;
+
+        function toggleSettingsView() {
+            isSettingsOpen = !isSettingsOpen;
+            const btn = document.getElementById('settings-toggle-btn');
+            const btnIcon = document.getElementById('settings-btn-icon');
+            const btnText = document.getElementById('settings-btn-text');
+            const providerBar = document.getElementById('provider-segmented-bar');
+            const poolSec = document.getElementById('pool-overview-section');
+            const streamSec = document.getElementById('stream-section');
+            const settingsSec = document.getElementById('settings-view-section');
+
+            if (isSettingsOpen) {
+                btn.classList.add('active');
+                btnIcon.innerText = '📊';
+                btnText.innerText = 'لوحة التحكم';
+                providerBar.style.display = 'none';
+                poolSec.style.display = 'none';
+                streamSec.style.display = 'none';
+                settingsSec.style.display = 'flex';
+                fetchSettingsStatus();
+            } else {
+                btn.classList.remove('active');
+                btnIcon.innerText = '⚙️';
+                btnText.innerText = 'الإعدادات';
+                providerBar.style.display = 'flex';
+                poolSec.style.display = 'block';
+                streamSec.style.display = 'block';
+                settingsSec.style.display = 'none';
+                switchProvider(currentProvider);
+            }
+        }
+
         function switchProvider(prov) {
             currentProvider = prov;
             
             const tabCodex = document.getElementById('tab-codex');
             const tabAg = document.getElementById('tab-antigravity');
-            const tabSet = document.getElementById('tab-settings');
-            const poolSec = document.getElementById('pool-overview-section');
-            const streamSec = document.getElementById('stream-section');
-            const settingsSec = document.getElementById('settings-view-section');
-
-            if (prov === 'Settings') {
-                tabCodex.className = 'provider-tab-btn codex-theme';
-                tabAg.className = 'provider-tab-btn antigravity-theme';
-                tabSet.className = 'provider-tab-btn active';
-                tabSet.style.background = 'linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(168, 85, 247, 0.3))';
-                tabSet.style.borderColor = 'rgba(168, 85, 247, 0.5)';
-                
-                poolSec.style.display = 'none';
-                streamSec.style.display = 'none';
-                settingsSec.style.display = 'flex';
-                fetchSettingsStatus();
-                return;
-            }
-
-            // Restore normal view
-            tabSet.style.background = 'rgba(255,255,255,0.05)';
-            tabSet.style.borderColor = 'rgba(255,255,255,0.1)';
-            poolSec.style.display = 'block';
-            streamSec.style.display = 'block';
-            settingsSec.style.display = 'none';
-
+            
             if (prov === 'Codex') {
                 tabCodex.className = 'provider-tab-btn active codex-theme';
                 tabAg.className = 'provider-tab-btn antigravity-theme';
