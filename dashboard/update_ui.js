@@ -76,11 +76,30 @@ async function readBuild() {
     return data;
 }
 function renderBuild(data) {
-    document.getElementById('system-version-pill').textContent = buildLabel(data, true);
-    document.getElementById('settings-installed-version').textContent = buildLabel(data, true);
-    document.getElementById('settings-source-version').textContent = buildLabel(data) + (data.dirty ? ' — local changes' : '');
-    document.getElementById('settings-commit-date').textContent = data.commit_date || 'Unknown';
-    document.getElementById('settings-commit-message').textContent = data.commit_msg || '';
+    const pillHeader = document.getElementById('system-version-pill');
+    if (pillHeader) pillHeader.textContent = buildLabel(data, true);
+    const instEl = document.getElementById('settings-installed-version');
+    if (instEl) instEl.textContent = buildLabel(data, true);
+    const srcEl = document.getElementById('settings-source-version');
+    if (srcEl) srcEl.textContent = buildLabel(data) + (data.dirty ? ' — local changes' : '');
+    const dateEl = document.getElementById('settings-commit-date');
+    if (dateEl) dateEl.textContent = data.commit_date || 'Unknown';
+    const msgEl = document.getElementById('settings-commit-message');
+    if (msgEl) msgEl.textContent = data.commit_msg || '';
+    const updatePill = document.getElementById('update-status-pill');
+    if (updatePill) {
+        if (data.dirty) {
+            updatePill.textContent = 'Local Changes';
+            updatePill.style.background = 'rgba(245, 158, 11, 0.15)';
+            updatePill.style.color = '#fbbf24';
+            updatePill.style.borderColor = 'rgba(245, 158, 11, 0.3)';
+        } else {
+            updatePill.textContent = 'Live ' + (data.running_version || data.version || 'v1.8');
+            updatePill.style.background = 'rgba(56, 189, 248, 0.15)';
+            updatePill.style.color = '#38bdf8';
+            updatePill.style.borderColor = 'rgba(56, 189, 248, 0.3)';
+        }
+    }
 }
 async function loadBuildInfo() {
     try {

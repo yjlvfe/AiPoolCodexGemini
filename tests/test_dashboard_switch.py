@@ -153,16 +153,17 @@ class DashboardManualSwitch(unittest.TestCase):
 
     def test_system_updates_creative_card_design(self):
         server_py = (ROOT / 'dashboard/server.py').read_text()
-        # Verify bento grid and commit box CSS
+        # Verify Bento grid, commit box, and bouncing dots CSS
         self.assertIn('.bento-update-grid {', server_py)
         self.assertIn('.bento-update-cell {', server_py)
         self.assertIn('.commit-log-box {', server_py)
         self.assertIn('.update-cta-btn {', server_py)
         self.assertIn('.bouncing-dots {', server_py)
         self.assertIn('.check-update-btn {', server_py)
-        # Verify System Updates header has sleek recheck button in top-row
+        # Verify System Updates header has clean status pill without duplicate recheck button
         self.assertIn('<span class="settings-card-title">System Updates</span>', server_py)
-        self.assertIn('<button class="recheck-btn" onclick="loadBuildInfo()"', server_py)
+        self.assertIn('id="update-status-pill"', server_py)
+        self.assertNotIn('<button class="recheck-btn" onclick="loadBuildInfo()"', server_py)
         # Verify all JS element targets exist for update_ui.js
         self.assertIn('id="settings-installed-version"', server_py)
         self.assertIn('id="settings-source-version"', server_py)

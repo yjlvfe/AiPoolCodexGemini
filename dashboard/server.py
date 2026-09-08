@@ -1574,9 +1574,9 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                             <span class="settings-card-icon">🚀</span>
                             <span class="settings-card-title">System Updates</span>
                         </div>
-                        <button class="recheck-btn" onclick="loadBuildInfo()" title="Re-check running build against repository">
-                            🔄 Re-check
-                        </button>
+                        <span id="update-status-pill" class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">
+                            Live Synchronized
+                        </span>
                     </div>
                     <div class="settings-card-sub">Continuous release delivery with live verified deployment.</div>
                 </div>
@@ -1859,7 +1859,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
         async function installCliTool(tool) {
             const btn = tool === 'codex' ? document.getElementById('btn-install-codex') : document.getElementById('btn-install-antigravity');
             const originalText = btn.innerHTML;
-            btn.innerHTML = '<span>⏳</span><span>Configuring...</span>';
+            btn.innerHTML = '<span><span class="spin-icon">⏳</span></span><span>Installing <span class="bouncing-dots" style="color: currentColor;"><span></span><span></span><span></span></span></span>';
             btn.disabled = true;
 
             try {
@@ -1889,7 +1889,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
         async function triggerIntegration(target) {
             const btn = target === 'hermes' ? document.getElementById('btn-sync-hermes') : document.getElementById('btn-sync-openclaw');
             const originalHtml = btn.innerHTML;
-            btn.innerHTML = '<span>⏳</span><span>Linking...</span>';
+            btn.innerHTML = '<span><span class="spin-icon">⚡</span></span><span>Configuring <span class="bouncing-dots" style="color: currentColor;"><span></span><span></span><span></span></span></span>';
             btn.disabled = true;
 
             try {
