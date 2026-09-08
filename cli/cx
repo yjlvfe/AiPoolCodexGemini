@@ -6,7 +6,19 @@ set -euo pipefail
 
 STORE_DIR="${CODEX_ACCOUNT_STORE:-$HOME/.codex-accounts}"
 ACTIVE_FILE="$STORE_DIR/active"
-SWITCH_BIN="${SWITCH_BIN:-/usr/local/bin/codex-account-switch}"
+# Dynamically locate codex-account-switch
+if [ -z "${SWITCH_BIN:-}" ]; then
+    _SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [ -x "$_SELF_DIR/codex-account-switch" ]; then
+        SWITCH_BIN="$_SELF_DIR/codex-account-switch"
+    elif [ -x "$HOME/.local/bin/codex-account-switch" ]; then
+        SWITCH_BIN="$HOME/.local/bin/codex-account-switch"
+    elif [ -x "/usr/local/bin/codex-account-switch" ]; then
+        SWITCH_BIN="/usr/local/bin/codex-account-switch"
+    else
+        SWITCH_BIN="$(command -v codex-account-switch 2>/dev/null || echo "codex-account-switch")"
+    fi
+fi
 
 list_accounts() {
     echo "=========================================================="

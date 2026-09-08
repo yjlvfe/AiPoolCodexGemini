@@ -6,7 +6,19 @@ set -euo pipefail
 
 STORE_DIR="${AG_ACCOUNT_STORE:-$HOME/.antigravity-accounts}"
 ACTIVE_FILE="$STORE_DIR/active"
-SWITCH_BIN="${SWITCH_BIN:-/usr/local/bin/antigravity-account-switch}"
+# Dynamically locate antigravity-account-switch
+if [ -z "${SWITCH_BIN:-}" ]; then
+    _SELF_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    if [ -x "$_SELF_DIR/antigravity-account-switch" ]; then
+        SWITCH_BIN="$_SELF_DIR/antigravity-account-switch"
+    elif [ -x "$HOME/.local/bin/antigravity-account-switch" ]; then
+        SWITCH_BIN="$HOME/.local/bin/antigravity-account-switch"
+    elif [ -x "/usr/local/bin/antigravity-account-switch" ]; then
+        SWITCH_BIN="/usr/local/bin/antigravity-account-switch"
+    else
+        SWITCH_BIN="$(command -v antigravity-account-switch 2>/dev/null || echo "antigravity-account-switch")"
+    fi
+fi
 
 list_accounts() {
     echo "=========================================================="

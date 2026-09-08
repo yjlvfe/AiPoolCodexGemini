@@ -236,6 +236,13 @@ def enroll(n, target):
         print(f"Registering Antigravity account {n}. Complete Google OAuth; setup will continue automatically.")
         env={**os.environ,"HOME":home,"AG_SESSION_TOKEN_FILE":str(cli_dir/"antigravity-oauth-token")}
         candidate=cli_dir/"antigravity-oauth-token"
+        if not shutil.which(AGY) and not os.path.isfile(AGY):
+            print("❌ Error: Antigravity OAuth helper binary ('agy') is not found.", file=sys.stderr)
+            print("💡 You can import an existing token directly with:", file=sys.stderr)
+            print("   ag add /path/to/antigravity-oauth-token", file=sys.stderr)
+            print("💡 Or copy your existing accounts folder from your other machine:", file=sys.stderr)
+            print("   scp -r user@server:~/.antigravity-accounts ~/", file=sys.stderr)
+            die("login helper unavailable")
         proc=subprocess.Popen([AGY],env=env)
         deadline=time.monotonic()+900
         try:

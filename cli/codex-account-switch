@@ -297,6 +297,14 @@ perform_new_login() (
   trap 'exit 143' TERM
   trap 'exit 129' HUP
 
+  if [[ -z "$CODEX_BIN" || ! -x "$CODEX_BIN" ]]; then
+    echo "❌ Error: OpenAI Codex CLI binary ('codex') is not installed or not in PATH."
+    echo "💡 To enroll a new account via device-auth, install it with:"
+    echo "   npm install -g @openai/codex"
+    echo "💡 Or import an existing credentials file directly:"
+    echo "   c add /path/to/auth.json"
+    exit 1
+  fi
   CODEX_HOME=$login_home "$CODEX_BIN" login --device-auth
   wait_for_auth_file "$login_home/auth.json" || die 'new isolated Codex authentication is missing'
   CODEX_HOME=$login_home "$CODEX_BIN" login status >/dev/null 2>&1 || die 'new isolated Codex login status failed'
