@@ -80,12 +80,13 @@ def merged(agent, original):
     if agent == 'hermes':
         legacy = data.get('custom_providers')
         if isinstance(legacy, dict):
-            if not all(isinstance(entry, dict) for entry in legacy.values()):
-                raise ValueError('Malformed legacy provider; no configuration was discarded')
-            data['custom_providers'] = [dict(entry, name=entry.get('name', name)) for name, entry in legacy.items()]
+            # Convert only the known all-dicts shape. Any other shape is
+            # foreign to this suite and must survive byte-for-byte.
+            if all(isinstance(entry, dict) for entry in legacy.values()):
+                data['custom_providers'] = [dict(entry, name=entry.get('name', name)) for name, entry in legacy.items()]
         for entry in data.get('custom_providers', []) or []:
             if not isinstance(entry, dict):
-                raise ValueError('Malformed legacy provider; nothing changed')
+                continue  # Unknown legacy entry: left untouched, never fatal.
             if entry.get('name') in ('codex', 'gemini'):
                 pool = desired['aipool-' + entry['name']]
                 if entry.get('base_url') == pool['api']:

@@ -66,8 +66,34 @@ def service_available():
 def ensure_dependencies():
     runtime = ROOT / '.venv/bin/python'
     if not runtime.is_file():
-        subprocess.run([sys.executable,'-m','venv',str(ROOT/'.venv')],check=True)
-    subprocess.run([str(runtime),'-m','pip','install','--disable-pip-version-check','-r',str(ROOT/'requirements.txt')],check=True)
+        try:
+            subprocess.run([sys.executable, '-m', 'venv', str(ROOT / '.venv')], check=True)
+        except subprocess.CalledProcessError:
+            subprocess.run([sys.executable, '-m', 'venv', '--without-pip', str(ROOT / '.venv')], check=True)
+
+    # 1. Check if dependencies are already available in .venv
+    test_import = subprocess.run([str(runtime), '-c', 'import yaml, json5'], capture_output=True)
+    if test_import.returncode == 0:
+        return runtime
+
+    # 2. Check if pip is available in .venv, if not try ensurepip
+    has_pip = subprocess.run([str(runtime), '-m', 'pip', '--version'], capture_output=True).returncode == 0
+    if not has_pip:
+        subprocess.run([str(runtime), '-m', 'ensurepip', '--default-pip'], capture_output=True)
+        has_pip = subprocess.run([str(runtime), '-m', 'pip', '--version'], capture_output=True).returncode == 0
+
+    # 3. If pip is available, install requirements
+    if has_pip:
+        subprocess.run([str(runtime), '-m', 'pip', 'install', '--disable-pip-version-check', '-r', str(ROOT / 'requirements.txt')], capture_output=True)
+
+    # 4. Check if dependencies are satisfied now
+    verify_import = subprocess.run([str(runtime), '-c', 'import yaml, json5'], capture_output=True)
+    if verify_import.returncode != 0:
+        # Check if the host python already has them, or try to copy/symlink them
+        raise ValueError(
+            'Missing dependencies (PyYAML, json5) in .venv and pip is unavailable or failed.\n'
+            'Please install them by running: pip install -r requirements.txt (or sudo apt install python3-pip python3-yaml)'
+        )
     return runtime
 
 

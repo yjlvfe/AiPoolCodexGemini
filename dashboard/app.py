@@ -285,18 +285,22 @@ class PoolManager:
         # Only actual requests recorded by the pool bridges; no session/log estimates.
         return self._build_logs_report()
 
-    def switch_account(self, system: str, account_num: int) -> bool:
+    def switch_account(self, system: str, account_num: int) -> tuple:
         if system not in ('antigravity', 'codex') or not isinstance(account_num, int) or account_num < 1:
-            return False
+            return False, 'Invalid system or account number.'
         import sys
         cmd = os.path.join(os.path.dirname(_CURRENT_DIR), 'cli', 'ag' if system == 'antigravity' else 'cx')
         # Dashboard only switches existing slots; interactive enrollment belongs in a terminal.
         store = self.ag_store if system == 'antigravity' else self.codex_store
         if not os.path.exists(os.path.join(store, str(account_num))):
-            return False
-        res = subprocess.run([sys.executable, cmd, 'switch', str(account_num)], capture_output=True, text=True, timeout=150)
+            return False, f'Account {account_num} does not exist on this device.'
+        try:
+            res = subprocess.run([sys.executable, cmd, 'switch', str(account_num)], capture_output=True, text=True, timeout=150)
+        except subprocess.TimeoutExpired:
+            return False, 'Switch timed out after 150s.'
         threading.Thread(target=self._update_all_background, daemon=True).start()
-        return res.returncode == 0
+        detail = (res.stdout or '').strip() or (res.stderr or '').strip()
+        return res.returncode == 0, detail or f'Switched to account {account_num}'
 
     def get_all_status(self) -> Dict[str, Any]:
         with self._lock:

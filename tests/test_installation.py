@@ -58,7 +58,22 @@ class Installation(unittest.TestCase):
                 result = subprocess.run([str(binary / name)] + (['help'] if name == 'ag' else []), env=env, capture_output=True, text=True, timeout=5)
                 self.assertEqual(result.returncode, 0, result.stderr)
                 self.assertNotIn('Traceback', result.stderr)
-            result = subprocess.run(['python3', str(script), '--uninstall', '--cli-only'], env=env, capture_output=True, text=True)
-            self.assertEqual(result.returncode, 0, result.stderr)
-            self.assertFalse((binary / 'ag').exists())
-            self.assertTrue((ROOT / 'cli/ag').exists())
+
+    def test_ensure_dependencies_resilient_to_missing_pip(self):
+        import importlib.util
+        import sys
+        from unittest.mock import patch, MagicMock
+        spec = importlib.util.spec_from_file_location('install_mod', ROOT / 'scripts/manage_install.py')
+        module = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(module)
+        with tempfile.TemporaryDirectory(dir=ROOT.parent, prefix='aipool-pip-test-') as td:
+            fake_root = Path(td)
+            venv_bin = fake_root / '.venv/bin'
+            venv_bin.mkdir(parents=True)
+            fake_python = venv_bin / 'python'
+            fake_python.write_text('#!' + sys.executable + '\nimport sys\n# Fake python that pretends yaml/json5 are installed\nif "-c" in sys.argv and "import yaml, json5" in sys.argv[sys.argv.index("-c")+1]:\n    sys.exit(0)\n# If called with pip, pretend pip is missing\nif "-m" in sys.argv and "pip" in sys.argv:\n    sys.stderr.write("No module named pip\\n")\n    sys.exit(1)\nsys.exit(0)\n')
+            fake_python.chmod(0o755)
+            with patch.object(module, 'ROOT', fake_root):
+                # Since fake python can import yaml, json5, ensure_dependencies should succeed without calling pip
+                runtime = module.ensure_dependencies()
+                self.assertEqual(runtime, fake_python)

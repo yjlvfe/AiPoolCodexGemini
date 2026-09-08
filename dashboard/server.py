@@ -555,6 +555,35 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             background: rgba(16, 185, 129, 0.08);
             box-shadow: inset 0 0 16px rgba(16, 185, 129, 0.06);
         }
+        .account-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .account-switch-btn {
+            background: rgba(56, 189, 248, 0.08);
+            border: 1px solid rgba(56, 189, 248, 0.30);
+            color: var(--accent-cyan);
+            border-radius: 6px;
+            padding: 5px 12px;
+            font-size: 11px;
+            font-weight: 700;
+            font-family: inherit;
+            letter-spacing: 0.4px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+        }
+        .account-switch-btn:hover {
+            background: rgba(56, 189, 248, 0.18);
+            border-color: var(--accent-cyan);
+            color: #fff;
+            transform: translateY(-1px);
+        }
+        .account-switch-btn:disabled {
+            opacity: 0.55;
+            cursor: wait;
+            transform: none;
+        }
         .acc-info-left {
             display: flex;
             align-items: center;
@@ -1418,8 +1447,18 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                             ${isActive ? '<span style="font-size: 9px; background: rgba(16,185,129,0.2); color:#10b981; padding: 2px 7px; border-radius: 6px; font-weight: 800; font-family:monospace; letter-spacing:0.5px;">ACTIVE</span>' : ''}
                         </div>
                     </div>
-                    ${metricsHtml}
+                    <div class="account-actions">
+                        ${metricsHtml}
+                        ${isActive ? '' : `<button class="account-switch-btn" onclick="event.stopPropagation(); switchAccount(${acc.account}, this)" title="Switch to Account #${acc.account}">Switch</button>`}
+                    </div>
                 `;
+                if (!isActive) {
+                    div.style.cursor = 'pointer';
+                    div.onclick = function() {
+                        const btn = this.querySelector('.account-switch-btn');
+                        if (btn) btn.click();
+                    };
+                }
                 container.appendChild(div);
             });
         }
@@ -1526,6 +1565,46 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
         let clientSessionId = localStorage.getItem('yj_aipool_session') || '';
         const urlParams = new URLSearchParams(window.location.search);
         const urlToken = urlParams.get('token') || '';
+
+        async function switchAccount(accountNum, btnEl) {
+            const system = currentProvider === 'Codex' ? 'codex' : 'antigravity';
+            const oldText = btnEl ? btnEl.innerText : 'Switch';
+            if (btnEl) {
+                btnEl.disabled = true;
+                btnEl.innerText = 'Switching...';
+            }
+            try {
+                const res = await fetch('/aipool/api/accounts/switch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'X-Session-ID': clientSessionId },
+                    body: JSON.stringify({ system: system, account: accountNum }),
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    showToast('⚠️ ' + (data.message || 'Switch failed'));
+                    return;
+                }
+                showToast('✓ ' + (data.message || ('Switched to account #' + accountNum)));
+                await fetchLiveLogs(true);
+                // Also refresh account list status
+                try {
+                    const statusRes = await fetch('/api/settings/status');
+                    if (statusRes.ok) {
+                        currentStatus = await statusRes.json();
+                        renderAccountsList();
+                    }
+                } catch(e) {}
+            } catch (err) {
+                console.error('Switch failed:', err);
+                showToast('⚠️ Switch request failed');
+            } finally {
+                if (btnEl) {
+                    btnEl.disabled = false;
+                    btnEl.innerText = oldText;
+                }
+            }
+        }
 
         async function fetchLiveLogs(force = false) {
             const btn = document.querySelector('.refresh-btn');
@@ -1820,12 +1899,36 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             self.send_json_response({"error": "Unauthorized"}, status_code=401)
             return
 
+        pm = GLOBAL_POOL_MANAGER
+
         if path in ("/aipool/api/settings/integrate_hermes", "/api/settings/integrate_hermes"):
             self.send_json_response(integrate_agent("hermes"))
             return
 
         if path in ("/aipool/api/settings/integrate_openclaw", "/api/settings/integrate_openclaw"):
             self.send_json_response(integrate_agent("openclaw"))
+            return
+
+        if path in ("/aipool/api/accounts/switch", "/api/accounts/switch"):
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length).decode("utf-8") if content_length > 0 else "{}"
+            try:
+                payload = json.loads(body)
+            except Exception:
+                payload = {}
+            system = payload.get("system", "")
+            try:
+                account = int(payload.get("account", 0))
+            except (TypeError, ValueError):
+                account = 0
+            if system not in ("antigravity", "codex") or account < 1:
+                self.send_json_response({"success": False, "message": "Invalid system or account number."}, status_code=400)
+                return
+            ok, detail = pm.switch_account(system, account)
+            if not ok:
+                self.send_json_response({"success": False, "message": detail or "Switch failed."}, status_code=502)
+                return
+            self.send_json_response({"success": True, "message": detail, "system": system, "account": account})
             return
 
         if path in ("/aipool/api/settings/update", "/api/settings/update"):

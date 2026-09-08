@@ -56,6 +56,35 @@ class Integrations(unittest.TestCase):
             self.assertNotEqual(result.returncode,0)
             self.assertFalse((Path(td)/'.hermes/config.yaml').exists())
 
+    def test_malformed_legacy_custom_providers_tolerated(self):
+        import yaml
+        with tempfile.TemporaryDirectory(dir=ROOT.parent) as td:
+            home = Path(td)
+            directory = home / '.hermes'
+            directory.mkdir()
+            path = directory / 'config.yaml'
+            # Test various legacy or malformed shapes of custom_providers:
+            # e.g., strings in list, dictionary with non-dict values, etc.
+            config_data = {
+                'custom_providers': [
+                    'invalid_string_entry',
+                    {'name': 'custom_model', 'base_url': 'https://custom.test/v1'},
+                    12345
+                ],
+                'providers': {}
+            }
+            path.write_text(yaml.safe_dump(config_data))
+            env = {k: v for k, v in os.environ.items() if not k.startswith(('HERMES_', 'OPENCLAW_'))}
+            env.update(AIPOOL_CONFIG_ENV=os.devnull, HOME=str(home), AIPOOL_INTEGRATION_OFFLINE='1')
+            result = subprocess.run([sys.executable, str(ROOT / 'scripts/setup-hermes.py')], env=env, capture_output=True, text=True)
+            self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+            info = json.loads(result.stdout)
+            self.assertTrue(info['success'])
+            self.assertTrue(info['verified'])
+            updated = yaml.safe_load(path.read_text())
+            self.assertIn('aipool-gemini', updated['providers'])
+            self.assertIn('aipool-codex', updated['providers'])
+
 
 class NativeCliInjection(unittest.TestCase):
     """Fake agent CLIs prove the suite injects through the agents' own commands."""
