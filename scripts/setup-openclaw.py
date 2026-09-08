@@ -12,35 +12,27 @@ CONFIG_PATH = os.path.expanduser("~/.openclaw/openclaw.json")
 
 GEMINI_PROVIDER = {
     "baseUrl": "http://127.0.0.1:8123/v1",
-    "apiKey": "dummy-pool-key",
-    "models": [
-        "gemini-3.8-flash-tiered",
-        "claude-sonnet-4-6",
-        "claude-opus-4-6-thinking"
-    ]
+    "apiKey": "pool-key",
+    "models": ["gemini-3.8-flash-tiered", "gemini-2.5-pro", "claude-sonnet-4-6"]
 }
 
 CODEX_PROVIDER = {
     "baseUrl": "http://127.0.0.1:8124/v1",
-    "apiKey": "dummy-pool-key",
-    "models": [
-        "gpt-6-astra",
-        "gpt-5.6-luna",
-        "gpt-5.6-sol"
-    ]
+    "apiKey": "pool-key",
+    "models": ["gpt-6-astra", "gpt-5.6-luna", "gpt-5.6-sol"]
 }
 
 def main():
     if not os.path.exists(CONFIG_PATH):
-        print(f"❌ لم يتم العثور على ملف إعدادات OpenClaw في: {CONFIG_PATH}")
-        print("تأكد من تثبيت OpenClaw أولاً.")
+        print(f"❌ OpenClaw config file not found at: {CONFIG_PATH}")
+        print("Please ensure OpenClaw is installed first.")
         sys.exit(1)
 
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
-            data = json.load(f) or {}
+            data = json.load(f)
     except Exception as e:
-        print(f"❌ خطأ أثناء قراءة {CONFIG_PATH}: {e}")
+        print(f"❌ Error reading {CONFIG_PATH}: {e}")
         sys.exit(1)
 
     if "models" not in data or not isinstance(data["models"], dict):
@@ -60,13 +52,13 @@ def main():
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
             json.dump(data, f, indent=2, ensure_ascii=False)
         print("==========================================================")
-        print(" ✅ تم ربط مزودات الذكاء الاصطناعي بنجاح في OpenClaw!")
+        print(" ✅ AI Pool Gateways successfully linked in OpenClaw!")
         print("==========================================================")
-        print(" 🟢 مزود Gemini: gemini_pool/gemini-3.8-flash-tiered")
-        print(" 🟣 مزود Codex:  codex_pool/gpt-6-astra")
+        print(" 🟢 Gemini Provider: gemini_pool/gemini-3.8-flash-tiered")
+        print(" 🟣 Codex Provider:  codex_pool/gpt-6-astra")
         print("==========================================================")
     except Exception as e:
-        print(f"❌ فشل حفظ الإعدادات: {e}")
+        print(f"❌ Failed to save config: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

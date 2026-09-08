@@ -1,204 +1,136 @@
-# 🚀 منظومة إدارة وتعدد حسابات الذكاء الاصطناعي الموحدة (AI Multi-Account Pool & Gateway Suite)
+# 🚀 AiPoolCodexGemini Suite
 
-منظومة موحدة متكاملة لإدارة وتعدد حسابات **Gemini** و **Codex (ChatGPT)**، وتوفير جسور محلية عالية السرعة متوافقة 100% مع واجهة OpenAI القياسية (`/v1/chat/completions`)، مع لوحة تحكم ويب لحظية وبوت تيليجرام لتوليد روابط الدخول السريعة المشفرة.
+**Autonomous Multi-Account AI Pool & Failover Gateway Suite**
 
----
-
-## 🌟 مميزات المنظومة:
-
-1. **جسر Gemini (Antigravity Gateway):**
-   - منفذ الاستماع: `8123`
-   - يدعم التبديل اللحظي بين عدة حسابات (`ag1`, `ag2`, `ag3`, ...).
-   - تجديد تلقائي لتوكنات المصادقة (OAuth Auto-Refresh).
-   - متوافق مع كافة نماذج Gemini و Claude و OSS.
-
-2. **جسر Codex (ChatGPT Gateway):**
-   - منفذ الاستماع: `8124`
-   - يدعم التبديل اللحظي بين حسابات ChatGPT Plus المخفضة والمشتركة (`c1`, `c2`, `c3`, ...).
-   - فحص دقيق للحصص والاستهلاك الأسبوعي ونافذة 5 ساعات.
-   - متوافق مع كافة نماذج Astra و Luna و Sol.
-
-3. **لوحة التحكم والمراقبة (Dashboard):**
-   - منفذ الاستماع: `8444` (أو عبر البروكسي `/aipool/`).
-   - سجل عمليات مشترك (Real Activity Stream) لآخر 100 عملية مع توقيت 24 ساعة رقمي (`MM/DD HH:MM`).
-   - عدادات توكنات فورية دقيقة بدون إبطاء أو فحص ثقيل للحسابات.
-   - قائمة حسابات قابلة للطي (مخفية افتراضياً وتظهر بنقرة زر).
-   - حماية كاملة بروابط ماجيك مشفرة صالحة لـ 30 دقيقة عبر بوت التيليجرام.
-
-4. **أدوات سطر أوامر موحدة فائقة السهولة:**
-   - أوامر `ag` و `cx` لإدارة الحسابات بنقرة واحدة.
-   - الحفاظ على كافة الاختصارات المعتادة (`ag1..N`, `c1..N`, `agusage`, `cusage`).
+A unified, self-contained architecture for orchestrating multiple **Gemini** (Antigravity) and **Codex** (ChatGPT) accounts. Provides local high-speed OpenAI-compatible gateways (`/v1/chat/completions`), dynamic automatic account failover on rate limits (HTTP 429), a real-time web dashboard, and seamless one-click integrations for **Hermes Agent** and **OpenClaw**.
 
 ---
 
-## 📂 هيكل المشروع:
+## 🌟 Key Architecture & Features
 
-```text
-ai-pool-suite/
-├── README.md                      # هذا الدليل الشامل
-├── install.sh                     # سكريبت التثبيت والتشغيل التلقائي بنقرة واحدة
-├── config.env                     # ملف الإعدادات الموحد والمنافذ
-├── bridges/
-│   ├── gemini_bridge.py           # جسر Gemini على البورت 8123
-│   └── codex_bridge.py            # جسر Codex على البورت 8124
-├── dashboard/
-│   ├── server.py                  # خادم لوحة التحكم على البورت 8444
-│   ├── app.py                     # معالج بيانات الحسابات والسجلات
-│   └── bot_service.py             # بوت التيليجرام للمصادقة السريعة
-├── cli/
-│   ├── ag                         # الأداة الموحدة لحسابات Gemini
-│   ├── cx                         # الأداة الموحدة لحسابات Codex
-│   ├── antigravity-account-switch # محرك تبديل حسابات Gemini
-│   ├── codex-account-switch       # محرك تبديل حسابات Codex
-│   └── codex-account-query        # محرك استعلام حصص حسابات Codex
-├── systemd/                       # ملفات خدمات النظام
-└── examples/                      # نماذج الإعدادات الجاهزة لهيرمس وأوبن كلاو
-```
+1. **Gemini Gateway (Port `8123`):**
+   - OpenAI-compatible endpoint: `http://127.0.0.1:8123/v1`
+   - Autonomous dynamic failover across all connected Google accounts (`1..N`) on HTTP 429.
+   - Built-in token auto-refresh via Google OAuth.
+   - 1:1 model mapping (`gemini-3.8-flash-tiered`, `gemini-2.5-pro`, `claude-sonnet-4-6`, etc.).
+
+2. **Codex / ChatGPT Gateway (Port `8124`):**
+   - OpenAI-compatible endpoint: `http://127.0.0.1:8124/v1`
+   - Instant switching across discounted and shared ChatGPT Plus accounts.
+   - Exact quota tracking (5-hour window, weekly quota, and active account identification).
+   - Strict 1:1 model naming (`gpt-6-astra`, `gpt-5.6-luna`, `gpt-5.6-sol`).
+
+3. **Web Dashboard & Settings (Port `8444`):**
+   - Modern OLED glassmorphism UI with real-time stats, pool capacity meters, and operation streams.
+   - Independent **Settings** section in top header for instant one-click provider linking.
+   - Localhost direct access support and secure 24-hour token authentication via Telegram bot (@YJReportbot).
+
+4. **One-Click Tool Integrations:**
+   - Auto-links local pool gateways into **Hermes Agent** (`~/.hermes/config.yaml`).
+   - Auto-links local pool gateways into **OpenClaw** (`~/.openclaw/openclaw.json`).
+   - Non-destructive: appends pool providers while preserving all existing configurations.
 
 ---
 
-## ⚡ خطوات التثبيت والتشغيل على أي سيرفر جديد:
+## 📥 Installation
 
-### الخطوة 1: نقل المجلد
-انسخ مجلد `ai-pool-suite` إلى السيرفر الجديد في المسار:
-`/root/Projects/ai-pool-suite`
+Clone the repository and run the unified installer:
 
-### الخطوة 2: تشغيل سكريبت التثبيت
-من داخل المجلد، نفّذ أمراً واحداً فقط:
 ```bash
+git clone https://github.com/yjlvfe/AiPoolCodexGemini.git
+cd AiPoolCodexGemini
 chmod +x install.sh
 ./install.sh
 ```
-يقوم السكريبت تلقائياً بـ:
-- تجهيز المجلدات وإعطاء الصلاحيات.
-- تثبيت كافة أوامر الـ CLI في `/usr/local/bin` (`ag`, `cx`, `ag1..N`, `c1..N`, `agusage`, `cusage`).
-- تسجيل وتفعيل وتشغيل خدمات Systemd الأربعة تلقائياً.
+
+Upon completion, all four systemd services will start automatically, and the dashboard URL will be displayed:
+👉 **Dashboard:** `http://localhost:8444` (or `http://127.0.0.1:8444`)
 
 ---
 
-## 🔑 كيفية إضافة وإدارة الحسابات:
+## 💻 CLI Commands & Usage
 
-### 1. حسابات Gemini (Antigravity):
-- **عرض الحسابات:** `ag` أو `ag list`
-- **التبديل لحساب:** `ag 2` أو `ag2`
-- **فحص الاستهلاك:** `ag usage` أو `agusage`
-- **إضافة حساب جديد وتفعيله فوراً:**
+### 1. Codex / ChatGPT Accounts:
+- **List accounts & active status:**
+  ```bash
+  cx
+  ```
+- **Add new account (interactive device authorization):**
+  ```bash
+  c add
+  # or
+  cx add
+  ```
+- **Switch active account:**
+  ```bash
+  c 1
+  c 2
+  cx 3
+  # or directly by number shortcut
+  c1
+  c2
+  ```
+- **Inspect quotas & reset windows:**
+  ```bash
+  cusage
+  ```
+
+### 2. Gemini / Antigravity Accounts:
+- **List accounts & active status:**
+  ```bash
+  ag
+  ```
+- **Add new account (interactive OAuth enrollment):**
   ```bash
   ag add
   ```
-  *(يقوم تلقائياً بحجز أول خانة فارغة وبدء إجراء تسجيل الدخول الفوري للحساب)*
-
-### 2. حسابات Codex (ChatGPT):
-- **عرض الحسابات:** `cx` أو `cx list`
-- **التبديل لحساب:** `c 1` أو `c 2` أو `cx 3`
-- **فحص الاستهلاك:** `cx usage` أو `cusage`
-- **إضافة حساب جديد وتفعيله فوراً:**
+- **Switch active account:**
   ```bash
-  c add
-  # أو
-  cx add
+  ag 1
+  ag 2
+  # or directly by number shortcut
+  ag1
+  ag2
   ```
-  *(يقوم فوراً بحجز الخانة التالية تلقائياً وبدء جلسة تسجيل الدخول الرسمية برمز الجهاز وضع الكود وتنشيطه)*
+- **Inspect quotas & remaining capacity:**
+  ```bash
+  agusage
+  ```
 
 ---
 
-## 🗑️ إلغاء التثبيت وحذف الخدمات (Uninstall):
+## 🔗 One-Click Tool Integrations
 
-إذا أردت في أي وقت إيقاف الخدمات وحذف كافة الأوامر والاختصارات من النظام:
-```bash
-./uninstall.sh
-```
-*(يقوم بإيقاف وتعطيل خدمات Systemd الأربعة وإزالة كافة الأوامر من `/usr/local/bin` بنظافة تامة، مع إبقاء ملفات حساباتك محفوظة كأمان).*
+Link your local gateways to your agents without manual configuration:
 
----
-
-## 🔗 الربط التلقائي بنقرة واحدة (Hermes & OpenClaw):
-
-بدلاً من نسخ ولصق الإعدادات يدوياً، وفرنا أمرين مستقلين للربط التلقائي الفوري:
-
-### 1. ربط المزودات في هيرمس (Hermes Agent):
+### Link to Hermes Agent:
 ```bash
 ./setup-hermes.sh
 ```
-*(يقوم تلقائياً بتحديث `~/.hermes/config.yaml` وإضافة مزودي `gemini` و `codex` مع كافة الموديلات).*
+*Safely appends `gemini` and `codex` custom providers into `~/.hermes/config.yaml` with backup.*
 
-### 2. ربط المزودات في أوبن كلاو (OpenClaw):
+### Link to OpenClaw:
 ```bash
 ./setup-openclaw.sh
 ```
-*(يقوم تلقائياً بتحديث `~/.openclaw/openclaw.json` وإضافة مزودي `gemini_pool` و `codex_pool`).*
+*Safely appends `gemini_pool` and `codex_pool` providers into `~/.openclaw/openclaw.json` with backup.*
+
+*(Both integrations can also be triggered with a single click from the Dashboard Settings page).*
 
 ---
 
-### أو الربط اليدوي إذا رغبت:
+## 🗑️ Uninstalling
 
-#### في هيرمس (`~/.hermes/config.yaml`):
+To cleanly stop all background services, disable systemd units, and remove all CLI shortcuts from `/usr/local/bin`:
 
-```yaml
-custom_providers:
-  # مزود Gemini
-  gemini:
-    base_url: "http://127.0.0.1:8123/v1"
-    api_key: "dummy-key"
-    models:
-      - id: "gemini-3.8-flash-tiered"
-        display_name: "Gemini 3.8 Flash"
-        context_window: 1048576
-
-  # مزود Codex (ChatGPT)
-  codex:
-    base_url: "http://127.0.0.1:8124/v1"
-    api_key: "dummy-key"
-    models:
-      - id: "gpt-6-astra"
-        display_name: "GPT-6 Astra"
-        context_window: 128000
-      - id: "gpt-5.6-luna"
-        display_name: "GPT-5.6 Luna"
-        context_window: 128000
-```
-
----
-
-## 🔗 ربط المنظومة مع OpenClaw:
-
-في إعدادات المزودات في `openclaw.json`:
-
-```json
-{
-  "gemini_pool": {
-    "baseUrl": "http://127.0.0.1:8123/v1",
-    "apiKey": "any-key",
-    "models": ["gemini-3.8-flash-tiered"]
-  },
-  "codex_pool": {
-    "baseUrl": "http://127.0.0.1:8124/v1",
-    "apiKey": "any-key",
-    "models": ["gpt-6-astra", "gpt-5.6-luna"]
-  }
-}
-```
-
----
-
-## 🛠️ إدارة الخدمات (Systemd):
-
-لإعادة تشغيل أي خدمة أو فحص حالتها:
 ```bash
-# جسر Gemini
-systemctl --user status ai-gemini-bridge
-
-# جسر Codex
-systemctl --user status ai-codex-bridge
-
-# لوحة التحكم
-systemctl --user status ai-dashboard
-
-# بوت التيليجرام
-systemctl --user status ai-bot
+./uninstall.sh
 ```
+*(Your account tokens and credentials remain safely preserved in `~/.antigravity-accounts` and `~/.codex-accounts`).*
 
 ---
 
-## 📱 الوصول للوحة التحكم:
-أرسل الأمر `/dashboard` أو `/link` إلى بوت التيليجرام الخاص بك، وسيرسل لك رابط الماجيك المشفر للدخول مباشرة بضغطة زر دون الحاجة لكتابة كلمات مرور!
+## 🛡️ Security & Privacy
+- Zero leakage: credentials, OAuth tokens, and database files are strictly excluded via `.gitignore`.
+- No forced fallbacks: models are pinned 1:1 to their real names to prevent unintended substitutions.
+- Session safety: Localhost access is supported directly; external access is guarded by 24h authenticated sessions.

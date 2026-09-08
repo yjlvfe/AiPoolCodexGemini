@@ -6,41 +6,47 @@ Safely updates ~/.hermes/config.yaml with Gemini and Codex local pool gateways.
 
 import os
 import sys
-import yaml
+import shutil
 
 CONFIG_PATH = os.path.expanduser("~/.hermes/config.yaml")
 
 GEMINI_PROVIDER = {
     "base_url": "http://127.0.0.1:8123/v1",
-    "api_key": "dummy-pool-key",
+    "api_key": "pool-key",
     "models": [
-        {"id": "gemini-3.8-flash-tiered", "display_name": "Gemini 3.8 Flash (Multi-Pool)", "context_window": 1048576},
-        {"id": "claude-sonnet-4-6", "display_name": "Claude Sonnet 4.6 (Via Gemini Pool)", "context_window": 200000},
-        {"id": "claude-opus-4-6-thinking", "display_name": "Claude Opus 4.6 Thinking (Via Gemini Pool)", "context_window": 200000}
+        {"id": "gemini-3.8-flash-tiered", "display_name": "Gemini 3.8 Flash Tiered", "context_window": 1048576},
+        {"id": "gemini-2.5-pro", "display_name": "Gemini 2.5 Pro", "context_window": 1048576},
+        {"id": "claude-sonnet-4-6", "display_name": "Claude Sonnet 4.6", "context_window": 200000}
     ]
 }
 
 CODEX_PROVIDER = {
     "base_url": "http://127.0.0.1:8124/v1",
-    "api_key": "dummy-pool-key",
+    "api_key": "pool-key",
     "models": [
-        {"id": "gpt-6-astra", "display_name": "GPT-6 Astra (Multi-Pool)", "context_window": 128000},
-        {"id": "gpt-5.6-luna", "display_name": "GPT-5.6 Luna (Multi-Pool)", "context_window": 128000},
-        {"id": "gpt-5.6-sol", "display_name": "GPT-5.6 Sol (Multi-Pool)", "context_window": 128000}
+        {"id": "gpt-6-astra", "display_name": "ChatGPT Astra", "context_window": 200000},
+        {"id": "gpt-5.6-luna", "display_name": "ChatGPT Luna", "context_window": 200000},
+        {"id": "gpt-5.6-sol", "display_name": "ChatGPT Sol", "context_window": 200000}
     ]
 }
 
 def main():
+    try:
+        import yaml
+    except ImportError:
+        print("❌ Error: PyYAML is required. Run: pip install pyyaml")
+        sys.exit(1)
+
     if not os.path.exists(CONFIG_PATH):
-        print(f"❌ لم يتم العثور على ملف إعدادات هيرمس في: {CONFIG_PATH}")
-        print("تأكد من تثبيت هيرمس أولاً أو تشغيل 'hermes setup'.")
+        print(f"❌ Hermes config file not found at: {CONFIG_PATH}")
+        print("Please ensure Hermes is installed or run 'hermes setup' first.")
         sys.exit(1)
 
     try:
         with open(CONFIG_PATH, "r", encoding="utf-8") as f:
             data = yaml.safe_load(f) or {}
     except Exception as e:
-        print(f"❌ خطأ أثناء قراءة {CONFIG_PATH}: {e}")
+        print(f"❌ Error reading {CONFIG_PATH}: {e}")
         sys.exit(1)
 
     if "custom_providers" not in data or not isinstance(data["custom_providers"], dict):
@@ -49,22 +55,25 @@ def main():
     data["custom_providers"]["gemini"] = GEMINI_PROVIDER
     data["custom_providers"]["codex"] = CODEX_PROVIDER
 
+    # Backup original config
+    backup_path = CONFIG_PATH + ".bak"
     try:
+        shutil.copyfile(CONFIG_PATH, backup_path)
         with open(CONFIG_PATH, "w", encoding="utf-8") as f:
-            yaml.dump(data, f, allow_unicode=True, sort_keys=False)
+            yaml.dump(data, f, default_flow_style=False, sort_keys=False, allow_unicode=True)
         print("==========================================================")
-        print(" ✅ تم ربط مزودات الذكاء الاصطناعي بنجاح في Hermes Agent!")
+        print(" ✅ AI Pool Gateways successfully linked in Hermes Agent!")
         print("==========================================================")
-        print(" 🟢 مزود Gemini: custom:gemini/gemini-3.8-flash-tiered")
-        print(" 🟣 مزود Codex:  custom:codex/gpt-6-astra")
+        print(" 🟢 Gemini Provider: custom:gemini/gemini-3.8-flash-tiered")
+        print(" 🟣 Codex Provider:  custom:codex/gpt-6-astra")
         print("----------------------------------------------------------")
-        print(" للاستخدام الفوري في هيرمس:")
-        print(" hermes model gemini-3.8-flash-tiered")
-        print(" أو")
-        print(" hermes model gpt-6-astra")
+        print(" To test immediately in Hermes:")
+        print("   hermes model custom:gemini/gemini-3.8-flash-tiered")
+        print(" or")
+        print("   hermes model custom:codex/gpt-6-astra")
         print("==========================================================")
     except Exception as e:
-        print(f"❌ فشل حفظ الإعدادات: {e}")
+        print(f"❌ Failed to save config: {e}")
         sys.exit(1)
 
 if __name__ == "__main__":

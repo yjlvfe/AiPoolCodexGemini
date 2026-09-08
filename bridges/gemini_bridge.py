@@ -2,8 +2,8 @@
 """
 Antigravity Gateway Bridge
 =========================
-تحويل توكن حساب Google إلى نهاية OpenAI-متوافقة (chat/completions)
-لاستخدام اشتراك Gemini داخل Hermes بدون API key وبدون Cloud Console.
+Converts Google Account token into OpenAI-compatible endpoints (chat/completions)
+to use Gemini subscriptions inside Hermes without manual API keys.
 """
 
 import json
@@ -26,12 +26,12 @@ from copy import deepcopy
 HOST = os.environ.get("AG_BRIDGE_HOST", "127.0.0.1")
 PORT = int(os.environ.get("AG_BRIDGE_PORT", "8123"))
 
-# OAuth client الخاص بـ antigravity
+# Antigravity OAuth client credentials
 CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
 CLIENT_SECRET = "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"
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 
-# Endpoint بوابة antigravity
+# Antigravity gateway endpoints
 ANTIGRAVITY_ENDPOINTS = [
     "https://daily-cloudcode-pa.googleapis.com",
     "https://daily-cloudcode-pa.sandbox.googleapis.com",

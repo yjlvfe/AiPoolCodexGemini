@@ -14,11 +14,11 @@ from app import PoolManager, TokenAuthManager
 PORT = 8444
 auth_manager = TokenAuthManager()
 HTML_LOGIN_TEMPLATE = """<!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>AI Pools Gateway • تسجيل الدخول</title>
+    <title>AI Pools Gateway • Access Restricted</title>
     <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Cairo:wght@600;700;800;900&display=swap" rel="stylesheet">
     <style>
         :root {
@@ -37,7 +37,7 @@ HTML_LOGIN_TEMPLATE = """<!DOCTYPE html>
                 radial-gradient(circle at 10% 20%, rgba(0, 242, 254, 0.08) 0%, transparent 40%),
                 radial-gradient(circle at 90% 80%, rgba(157, 78, 221, 0.08) 0%, transparent 40%);
             color: var(--text-main);
-            font-family: 'Cairo', 'Plus Jakarta Sans', -apple-system, sans-serif;
+            font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
             min-height: 100vh;
             display: flex;
             align-items: center;
@@ -92,10 +92,10 @@ HTML_LOGIN_TEMPLATE = """<!DOCTYPE html>
 <body>
     <div class="login-card">
         <div class="icon-wrap">🛡️</div>
-        <h1>بوابة الذكاء الاصطناعي</h1>
-        <p>الوصول مقيد ومحمي بجلسة تشفير خاصة بيوسف.<br>يرجى طلب رابط التوثيق عبر البوت في تيليجرام.</p>
+        <h1>AI Pool Gateway</h1>
+        <p>Access restricted and secured by encrypted device session.<br>Please request an authentication magic link via Telegram bot.</p>
         <div class="hint-badge">
-            <span>🤖 أرسل /start إلى</span>
+            <span>🤖 Send /start to</span>
             <strong style="color: var(--accent-cyan);">@YJReportbot</strong>
         </div>
     </div>
@@ -104,7 +104,7 @@ HTML_LOGIN_TEMPLATE = """<!DOCTYPE html>
 """
 
 HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
-<html lang="ar" dir="rtl">
+<html lang="en" dir="ltr">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -135,7 +135,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
         body {
             background-color: #030712;
             color: var(--text-main);
-            font-family: 'IBM Plex Sans Arabic', 'Plus Jakarta Sans', -apple-system, sans-serif;
+            font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
             min-height: 100vh;
             padding: 16px 14px 40px;
             line-height: 1.5;
@@ -768,29 +768,29 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
     <div class="ambient-glow-2"></div>
     <div class="app-container">
         <div id="toast-notification">
-            <span id="toast-text">تم تحديث السجلات بنجاح</span>
+            <span id="toast-text">Logs refreshed successfully</span>
         </div>
-        <!-- Top Navigation -->
+        <!-- Top Navigation Header -->
         <header class="top-navbar">
             <div class="brand-section">
                 <div class="brand-logo">⚡</div>
                 <div>
                     <div class="brand-title">
                         <span>AI Pool Guardian</span>
-                        <span style="color: var(--accent-cyan); font-size: 10px;">● LIVE</span>
+                        <span style="color: var(--accent-cyan); font-size: 10px; letter-spacing: 0.5px;">● LIVE</span>
                     </div>
                     <div class="brand-subtitle">Autonomous Failover Architecture</div>
                 </div>
             </div>
-            <div style="display: flex; align-items: center; gap: 8px;">
+            <div style="display: flex; align-items: center; gap: 10px;">
+                <div class="device-badge" title="Authenticated Device Session">
+                    <span>🔒</span>
+                    <span>Verified</span>
+                </div>
                 <button id="settings-toggle-btn" class="settings-top-btn" onclick="toggleSettingsView()">
                     <span id="settings-btn-icon">⚙️</span>
-                    <span id="settings-btn-text">الإعدادات</span>
+                    <span id="settings-btn-text">Settings</span>
                 </button>
-                <div class="device-badge">
-                    <span>🔒</span>
-                    <span>موثق (24h)</span>
-                </div>
             </div>
         </header>
 
@@ -815,21 +815,21 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 </div>
                 <button class="refresh-btn" onclick="fetchLiveLogs(true)">
                     <span>🔄</span>
-                    <span>تحديث</span>
+                    <span>Refresh</span>
                 </button>
             </div>
 
             <!-- Pool Overall Capacity Card -->
             <div style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: var(--border-radius-md); padding: 12px 14px; margin-bottom: 16px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-                    <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">📊 سعة المجمع:</span>
+                    <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">📊 Pool Capacity:</span>
                     <span id="pool-total-capacity-text" style="font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; color:var(--accent-cyan);">--</span>
                 </div>
                 <!-- 5H & Weekly Bar -->
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                     <div>
                         <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-tertiary); margin-bottom:3px;">
-                            <span>5 ساعات</span>
+                            <span>5-Hour</span>
                             <span id="pool-5h-summary-val" style="font-family:'JetBrains Mono'; font-weight:700; color:#fff;">--%</span>
                         </div>
                         <div style="height:6px; background:rgba(255,255,255,0.06); border-radius:3px; overflow:hidden;">
@@ -838,7 +838,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                     </div>
                     <div>
                         <div style="display:flex; justify-content:space-between; font-size:10px; color:var(--text-tertiary); margin-bottom:3px;">
-                            <span>أسبوعي</span>
+                            <span>Weekly</span>
                             <span id="pool-wk-summary-val" style="font-family:'JetBrains Mono'; font-weight:700; color:#fff;">--%</span>
                         </div>
                         <div style="height:6px; background:rgba(255,255,255,0.06); border-radius:3px; overflow:hidden;">
@@ -851,15 +851,15 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             <!-- 3-Metrics Grid for Overall Provider Consumption -->
             <div class="stats-tri-grid">
                 <div class="stat-tri-card">
-                    <div class="stat-tri-label">إجمالي التوكنات</div>
+                    <div class="stat-tri-label">Total Tokens</div>
                     <div class="stat-tri-val" id="model-total-tokens" style="color: var(--accent-cyan);">--</div>
                 </div>
                 <div class="stat-tri-card">
-                    <div class="stat-tri-label">إجمالي الطلبات</div>
+                    <div class="stat-tri-label">Total Requests</div>
                     <div class="stat-tri-val" id="model-total-requests" style="color: var(--accent-purple);">--</div>
                 </div>
                 <div class="stat-tri-card">
-                    <div class="stat-tri-label">المتوسط / طلب</div>
+                    <div class="stat-tri-label">Avg / Req</div>
                     <div class="stat-tri-val" id="model-avg-tokens" style="color: var(--accent-emerald);">--</div>
                 </div>
             </div>
@@ -867,10 +867,10 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             <!-- Pool Accounts Summary List -->
             <div style="margin-top: 14px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-                    <div style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">الحسابات المتصلة:</div>
+                    <div style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">Connected Accounts:</div>
                     <button id="accounts-toggle-btn" class="accounts-toggle-btn" onclick="toggleAccountsList()">
                         <span id="accounts-toggle-icon">👁️</span>
-                        <span id="accounts-toggle-text">عرض الحسابات</span>
+                        <span id="accounts-toggle-text">View Accounts</span>
                         <span id="accounts-toggle-chevron" style="transition: transform 0.3s ease; display: inline-block; font-size: 10px; transform: rotate(180deg);">▾</span>
                     </button>
                 </div>
@@ -885,7 +885,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             <div class="stream-header">
                 <div class="stream-title-text">
                     <span>⚡</span>
-                    <span>سجل العمليات العام (Real Stream)</span>
+                    <span>Live Operations Stream</span>
                 </div>
             </div>
             <div class="stream-list" id="activity-stream-list">
@@ -902,19 +902,19 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                         <span style="font-size: 26px;">🤖</span>
                         <div>
                             <div style="font-size: 15px; font-weight: 700; color: #fff;">Hermes Agent Integration</div>
-                            <div style="font-size: 12px; color: var(--text-secondary);">ربط بوابات الـ Pool تلقائياً في ~/.hermes/config.yaml</div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">Auto-link pool gateways in ~/.hermes/config.yaml</div>
                         </div>
                     </div>
-                    <span id="hermes-badge" class="badge" style="background: rgba(255,255,255,0.06); color: #94a3b8; font-size: 11px; padding: 4px 8px; border-radius: 6px;">فحص...</span>
+                    <span id="hermes-badge" class="badge" style="background: rgba(255,255,255,0.06); color: #94a3b8; font-size: 11px; padding: 4px 8px; border-radius: 6px;">Checking...</span>
                 </div>
                 <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #cbd5e1; margin-bottom: 12px; line-height: 1.6;">
-                    مسار التكوين: <code style="color: var(--accent-cyan);">~/.hermes/config.yaml</code><br>
-                    الموديلات: <span style="color: var(--accent-emerald);">gemini-3.8-flash-tiered</span>, <span style="color: var(--accent-purple);">gpt-6-astra</span>
+                    Config Path: <code style="color: var(--accent-cyan);">~/.hermes/config.yaml</code><br>
+                    Models: <span style="color: var(--accent-emerald);">gemini-3.8-flash-tiered</span>, <span style="color: var(--accent-purple);">gpt-6-astra</span>
                 </div>
                 <div style="display: flex; gap: 8px;">
                     <button class="action-btn" id="btn-sync-hermes" onclick="triggerIntegration('hermes')" style="flex: 1; background: linear-gradient(135deg, #0ea5e9, #0284c7); color: #fff; border: none; padding: 10px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
                         <span>⚡</span>
-                        <span>ربط Hermes تلقائياً الآن</span>
+                        <span>Auto-Link Hermes Agent</span>
                     </button>
                 </div>
             </div>
@@ -926,19 +926,19 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                         <span style="font-size: 26px;">🦅</span>
                         <div>
                             <div style="font-size: 15px; font-weight: 700; color: #fff;">OpenClaw Integration</div>
-                            <div style="font-size: 12px; color: var(--text-secondary);">ربط بوابات gemini_pool و codex_pool في ~/.openclaw/openclaw.json</div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">Auto-link gemini_pool & codex_pool in ~/.openclaw/openclaw.json</div>
                         </div>
                     </div>
-                    <span id="openclaw-badge" class="badge" style="background: rgba(255,255,255,0.06); color: #94a3b8; font-size: 11px; padding: 4px 8px; border-radius: 6px;">فحص...</span>
+                    <span id="openclaw-badge" class="badge" style="background: rgba(255,255,255,0.06); color: #94a3b8; font-size: 11px; padding: 4px 8px; border-radius: 6px;">Checking...</span>
                 </div>
                 <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #cbd5e1; margin-bottom: 12px; line-height: 1.6;">
-                    مسار التكوين: <code style="color: var(--accent-cyan);">~/.openclaw/openclaw.json</code><br>
-                    المزودات: <span style="color: var(--accent-emerald);">gemini_pool</span>, <span style="color: var(--accent-purple);">codex_pool</span>
+                    Config Path: <code style="color: var(--accent-cyan);">~/.openclaw/openclaw.json</code><br>
+                    Providers: <span style="color: var(--accent-emerald);">gemini_pool</span>, <span style="color: var(--accent-purple);">codex_pool</span>
                 </div>
                 <div style="display: flex; gap: 8px;">
                     <button class="action-btn" id="btn-sync-openclaw" onclick="triggerIntegration('openclaw')" style="flex: 1; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: #fff; border: none; padding: 10px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
                         <span>⚡</span>
-                        <span>ربط OpenClaw تلقائياً الآن</span>
+                        <span>Auto-Link OpenClaw</span>
                     </button>
                 </div>
             </div>
@@ -948,16 +948,16 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
                     <span style="font-size: 26px;">⚠️</span>
                     <div>
-                        <div style="font-size: 15px; font-weight: 700; color: #ef4444;">منطقة الخطر (Danger Zone)</div>
-                        <div style="font-size: 12px; color: var(--text-secondary);">إلغاء تثبيت المنظومة وإيقاف وتعطيل خدمات Systemd وحذف أدوات الـ CLI بالكامل</div>
+                        <div style="font-size: 15px; font-weight: 700; color: #ef4444;">Danger Zone</div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">Uninstall suite, stop/disable all Systemd services, and remove CLI tools.</div>
                     </div>
                 </div>
                 <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #cbd5e1; margin-bottom: 12px;">
-                    💡 ملاحظة: هذا الإجراء سيوقف الخدمات فوراً ويزيل الأوامر من النظام مع الحفاظ على ملفات الحسابات كنسخة احتياطية.
+                    💡 Note: This will stop all background services and remove commands while preserving account tokens.
                 </div>
                 <button class="action-btn" onclick="confirmUninstall()" style="width: 100%; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; padding: 12px 14px; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
                     <span>🗑️</span>
-                    <span>إلغاء التثبيت وحذف الخدمات بالكامل</span>
+                    <span>Uninstall Suite & Stop Services</span>
                 </button>
             </div>
         </section>
@@ -996,7 +996,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             if (isSettingsOpen) {
                 btn.classList.add('active');
                 btnIcon.innerText = '📊';
-                btnText.innerText = 'لوحة التحكم';
+                btnText.innerText = 'Dashboard';
                 providerBar.style.display = 'none';
                 poolSec.style.display = 'none';
                 streamSec.style.display = 'none';
@@ -1005,7 +1005,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             } else {
                 btn.classList.remove('active');
                 btnIcon.innerText = '⚙️';
-                btnText.innerText = 'الإعدادات';
+                btnText.innerText = 'Settings';
                 providerBar.style.display = 'flex';
                 poolSec.style.display = 'block';
                 streamSec.style.display = 'block';
@@ -1047,22 +1047,22 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 
                 const hermesBadge = document.getElementById('hermes-badge');
                 if (data.hermes && data.hermes.connected) {
-                    hermesBadge.innerText = '🟢 متصل ومفعّل';
+                    hermesBadge.innerText = '🟢 Connected';
                     hermesBadge.style.background = 'rgba(16, 185, 129, 0.15)';
                     hermesBadge.style.color = '#34d399';
                 } else {
-                    hermesBadge.innerText = '⚪ غير مربوط';
+                    hermesBadge.innerText = '⚪ Disconnected';
                     hermesBadge.style.background = 'rgba(255, 255, 255, 0.08)';
                     hermesBadge.style.color = '#94a3b8';
                 }
 
                 const openclawBadge = document.getElementById('openclaw-badge');
                 if (data.openclaw && data.openclaw.connected) {
-                    openclawBadge.innerText = '🟢 متصل ومفعّل';
+                    openclawBadge.innerText = '🟢 Connected';
                     openclawBadge.style.background = 'rgba(16, 185, 129, 0.15)';
                     openclawBadge.style.color = '#34d399';
                 } else {
-                    openclawBadge.innerText = '⚪ غير مربوط';
+                    openclawBadge.innerText = '⚪ Disconnected';
                     openclawBadge.style.background = 'rgba(255, 255, 255, 0.08)';
                     openclawBadge.style.color = '#94a3b8';
                 }
@@ -1072,7 +1072,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
         async function triggerIntegration(target) {
             const btn = target === 'hermes' ? document.getElementById('btn-sync-hermes') : document.getElementById('btn-sync-openclaw');
             const originalHtml = btn.innerHTML;
-            btn.innerHTML = '<span>⏳</span><span>جاري الربط...</span>';
+            btn.innerHTML = '<span>⏳</span><span>Linking...</span>';
             btn.disabled = true;
 
             try {
@@ -1080,14 +1080,14 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 const res = await fetch(endpoint, { method: 'POST' });
                 const data = await res.json();
                 if (data.success) {
-                    btn.innerHTML = '<span>✅</span><span>تم الربط بنجاح!</span>';
+                    btn.innerHTML = '<span>✅</span><span>Linked Successfully!</span>';
                     fetchSettingsStatus();
                 } else {
-                    alert('خطأ في الربط: ' + (data.message || 'فشل'));
+                    alert('Integration error: ' + (data.message || 'Failed'));
                     btn.innerHTML = originalHtml;
                 }
             } catch(e) {
-                alert('فشل الاتصال بالخادم: ' + e);
+                alert('Server connection error: ' + e);
                 btn.innerHTML = originalHtml;
             } finally {
                 btn.disabled = false;
@@ -1096,14 +1096,14 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
         }
 
         function confirmUninstall() {
-            if (confirm('هل أنت متأكد تماماً من رغبتك في إلغاء تثبيت المنظومة وحذف الخدمات؟\\n\\nسيتم إيقاف كافة الخدمات فوراً وإزالة أدوات الـ CLI من النظام.')) {
+            if (confirm('Are you completely sure you want to uninstall the suite and stop all services?\\n\\nThis will stop services immediately and remove CLI shortcuts.')) {
                 fetch('/api/settings/uninstall', { method: 'POST' })
                     .then(res => res.json())
                     .then(data => {
-                        alert(data.message || 'جاري إلغاء التثبيت الآن.');
+                        alert(data.message || 'Uninstall launched successfully.');
                         window.location.reload();
                     })
-                    .catch(e => alert('خطأ: ' + e));
+                    .catch(e => alert('Error: ' + e));
             }
         }
 
@@ -1153,7 +1153,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                     wk_pct = gemM['wk_pool_pct'] || 0;
                 }
 
-                document.getElementById('pool-total-capacity-text').innerText = `${tot_accs} حسابات (${h5_pct}% نشط)`;
+                document.getElementById('pool-total-capacity-text').innerText = `${tot_accs} Accounts (${h5_pct}% Active)`;
                 document.getElementById('pool-5h-summary-val').innerText = `${h5_pct}%`;
                 document.getElementById('pool-5h-progress').style.width = `${Math.min(100, Math.max(0, h5_pct))}%`;
                 document.getElementById('pool-wk-summary-val').innerText = `${wk_pct}%`;
@@ -1161,7 +1161,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             }
 
             if (accounts.length === 0) {
-                container.innerHTML = '<div style="font-size: 11px; color: var(--text-tertiary);">جاري مزامنة الحسابات...</div>';
+                container.innerHTML = '<div style="font-size: 11px; color: var(--text-tertiary);">Synchronizing accounts...</div>';
                 return;
             }
 
@@ -1224,12 +1224,12 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             accountsVisible = !accountsVisible;
             if (accountsVisible) {
                 container.classList.remove('collapsed');
-                if (textEl) textEl.innerText = 'إخفاء الحسابات';
+                if (textEl) textEl.innerText = 'Hide Accounts';
                 if (iconEl) iconEl.innerText = '🙈';
                 if (chevronEl) chevronEl.style.transform = 'rotate(0deg)';
             } else {
                 container.classList.add('collapsed');
-                if (textEl) textEl.innerText = 'عرض الحسابات';
+                if (textEl) textEl.innerText = 'View Accounts';
                 if (iconEl) iconEl.innerText = '👁️';
                 if (chevronEl) chevronEl.style.transform = 'rotate(180deg)';
             }
@@ -1253,7 +1253,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             const requests = recentRequests || [];
 
             if (requests.length === 0) {
-                listContainer.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-tertiary);">لا توجد سجلات بعد</div>';
+                listContainer.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-tertiary);">No activity records yet</div>';
                 return;
             }
 
@@ -1335,12 +1335,12 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 updateProviderStatsAndModels();
                 renderGeneralActivityStream(data.recent_requests || []);
                 if (force) {
-                    showToast('✓ تم تحديث السجلات بنجاح');
+                    showToast('✓ Logs refreshed successfully');
                 }
             } catch (err) {
                 console.error('Failed to load logs:', err);
                 if (force) {
-                    showToast('⚠️ تعذر تحديث السجلات');
+                    showToast('⚠️ Unable to refresh logs');
                 }
             } finally {
                 if (btn) setTimeout(() => btn.classList.remove('rotating'), 500);
@@ -1405,7 +1405,7 @@ def execute_integration_script(script_name):
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     script_path = os.path.join(base_dir, script_name)
     if not os.path.exists(script_path):
-        return False, f"الملف غير موجود: {script_path}"
+        return False, f"Script not found: {script_path}"
     try:
         res = subprocess.run(["bash", script_path], capture_output=True, text=True, timeout=20)
         if res.returncode == 0:
@@ -1575,9 +1575,9 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             uninstall_script = os.path.join(base_dir, "uninstall.sh")
             if os.path.exists(uninstall_script):
                 subprocess.Popen(["bash", "-c", f"sleep 1 && {uninstall_script}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                self.send_json_response({"success": True, "message": "تم إطلاق عملية إلغاء التثبيت وحذف الخدمات في الخلفية بنجاح."})
+                self.send_json_response({"success": True, "message": "Uninstall process launched in background successfully."})
             else:
-                self.send_json_response({"success": False, "message": "ملف uninstall.sh غير موجود."}, status_code=404)
+                self.send_json_response({"success": False, "message": "uninstall.sh script not found."}, status_code=404)
             return
 
         self.send_json_response({"error": "Not Found"}, status_code=404)

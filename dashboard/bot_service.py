@@ -33,16 +33,16 @@ def call_tg(method: str, payload: dict = None):
 def send_dashboard_link(chat_id: int, user_id: int):
     magic_link = auth_manager.generate_magic_link(DASHBOARD_BASE_URL, user_id)
     text = (
-        "🔐 <b>رابط الدخول السريع للوحة تحكم الـ Pool</b>\n\n"
-        "أهلاً يوسف، تم توليد رابط آمن وخاص بك للدخول للوحة التحكم:\n\n"
-        f"🔗 <b><a href=\"{magic_link}\">اضغط هنا لفتح لوحة التحكم (AI Pools)</a></b>\n\n"
-        "⏱️ <i>صلاحية الرابط: 30 دقيقة فقط للاستخدام لمرة واحدة.</i>\n"
-        "🛡️ <i>الموديلات مفصولة تماماً (Gemini على 8123 و ChatGPT على 8124).</i>"
+        "🔐 <b>AI Pool Dashboard Access Link</b>\n\n"
+        "Hello, a secure one-time authentication link has been generated for you:\n\n"
+        f'🔗 <b><a href="{magic_link}">Click here to open AI Pool Dashboard</a></b>\n\n'
+        "⏱️ <i>Link validity: 30 minutes (single device registration).</i>\n"
+        "🛡️ <i>Independent Gateways: Gemini (:8123) & Codex (:8124).</i>"
     )
     markup = {
         "inline_keyboard": [
-            [{"text": "🚀 فتح لوحة التحكم الآن", "url": magic_link}],
-            [{"text": "🔄 طلب رابط جديد", "callback_data": "refresh_link"}]
+            [{"text": "🚀 Open Dashboard Now", "url": magic_link}],
+            [{"text": "🔄 Request New Link", "callback_data": "refresh_link"}]
         ]
     }
     call_tg("sendMessage", {

@@ -10,7 +10,7 @@ SWITCH_BIN="${SWITCH_BIN:-/usr/local/bin/codex-account-switch}"
 
 list_accounts() {
     echo "=========================================================="
-    echo " 🟣 حسابات Codex / ChatGPT المسجلة:"
+    echo " 🟣 Registered Codex / ChatGPT Accounts:"
     echo "=========================================================="
     active_acc=""
     if [ -f "$ACTIVE_FILE" ]; then
@@ -30,17 +30,17 @@ list_accounts() {
                 email=$(python3 -c "import json; print(json.load(open('$auth_file')).get('email', json.load(open('$auth_file')).get('user', 'Account #$b')))" 2>/dev/null || echo "Account #$b")
             fi
             if [ "$b" = "$active_acc" ]; then
-                echo -e "  [#$b] $email \033[1;32m(نشط الآن ✓)\033[0m"
+                echo -e "  [#$b] $email \033[1;32m(ACTIVE ✓)\033[0m"
             else
                 echo -e "  [#$b] $email"
             fi
         fi
     done
     if [ "$found" -eq 0 ]; then
-        echo "  لا توجد حسابات مسجلة بعد في $STORE_DIR"
+        echo "  No registered accounts found in $STORE_DIR"
     fi
     echo "=========================================================="
-    echo "للتبديل: cx <رقم> (مثال: cx 3) | للفحص: cusage"
+    echo "To switch: c <num> (e.g. c 3) | To inspect: cusage"
     echo "=========================================================="
 }
 
@@ -89,14 +89,14 @@ if [ "$cmd" = "add" ]; then
         target="$STORE_DIR/$next"
         cp "$input_file" "$target"
         chmod 600 "$target"
-        echo "✓ تم استيراد بيانات الحساب كـ Account #$next"
-        echo "جاري التنشيط..."
+        echo "✓ Account data imported as Account #$next"
+        echo "Activating..."
         exec "$SWITCH_BIN" switch "$next"
     else
         echo "=========================================================="
-        echo " ➕ إضافة حساب Codex / ChatGPT جديد (Account #$next)"
+        echo " ➕ Adding New Codex / ChatGPT Account (#$next)"
         echo "=========================================================="
-        echo "جاري بدء جلسة تسجيل الدخول الرسمية برمز الجهاز..."
+        echo "Starting official device-code authorization session..."
         exec "$SWITCH_BIN" switch "$next"
     fi
 fi

@@ -10,7 +10,7 @@ SWITCH_BIN="${SWITCH_BIN:-/usr/local/bin/antigravity-account-switch}"
 
 list_accounts() {
     echo "=========================================================="
-    echo " 🟢 حسابات Gemini / Antigravity المسجلة:"
+    echo " 🟢 Registered Gemini / Antigravity Accounts:"
     echo "=========================================================="
     active_acc=""
     if [ -f "$ACTIVE_FILE" ]; then
@@ -28,7 +28,7 @@ list_accounts() {
                     email=$(python3 -c "import json; print(json.load(open('$meta')).get('email','Unknown'))" 2>/dev/null || echo "Unknown")
                 fi
                 if [ "$num" = "$active_acc" ]; then
-                    echo -e "  [#$num] $email \033[1;32m(نشط الآن ✓)\033[0m"
+                    echo -e "  [#$num] $email \033[1;32m(ACTIVE ✓)\033[0m"
                 else
                     echo -e "  [#$num] $email"
                 fi
@@ -36,10 +36,10 @@ list_accounts() {
         fi
     done
     if [ "$found" -eq 0 ]; then
-        echo "  لا توجد حسابات مسجلة بعد في $STORE_DIR"
+        echo "  No registered accounts found in $STORE_DIR"
     fi
     echo "=========================================================="
-    echo "للتبديل: ag <رقم> (مثال: ag 2) | للفحص: agusage"
+    echo "To switch: ag <num> (e.g. ag 2) | To inspect: agusage"
     echo "=========================================================="
 }
 
@@ -89,14 +89,14 @@ if [ "$cmd" = "add" ]; then
         mkdir -p "$target_dir"
         cp "$input_file" "$target_dir/antigravity-oauth-token"
         chmod 600 "$target_dir/antigravity-oauth-token"
-        echo "✓ تم استيراد بيانات الحساب كـ Account #$next"
-        echo "جاري التنشيط..."
+        echo "✓ Account data imported as Account #$next"
+        echo "Activating..."
         exec "$SWITCH_BIN" "$next"
     else
         echo "=========================================================="
-        echo " ➕ إضافة حساب Gemini / Antigravity جديد (Account #$next)"
+        echo " ➕ Adding New Gemini / Antigravity Account (#$next)"
         echo "=========================================================="
-        echo "جاري بدء جلسة التسجيل للحساب..."
+        echo "Starting official enrollment session..."
         exec "$SWITCH_BIN" "$next"
     fi
 fi
