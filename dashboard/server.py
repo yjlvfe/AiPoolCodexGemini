@@ -960,18 +960,94 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
         .recheck-btn {
             white-space: nowrap !important;
             flex-shrink: 0;
-            background: rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.12);
             color: #cbd5e1;
             padding: 6px 12px;
-            border-radius: 6px;
+            border-radius: 8px;
             font-size: 11px;
+            font-weight: 600;
+            font-family: inherit;
             cursor: pointer;
-            transition: var(--transition-smooth);
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
         }
         .recheck-btn:hover {
-            background: rgba(255, 255, 255, 0.12);
+            background: rgba(56, 189, 248, 0.15);
+            border-color: rgba(56, 189, 248, 0.35);
+            color: #38bdf8;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        .bento-update-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .bento-update-cell {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .bento-cell-label {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+        }
+        .bento-cell-value {
+            font-size: 12px;
+            color: #f1f5f9;
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .commit-log-box {
+            background: rgba(0, 0, 0, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-left: 3px solid #6366f1;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 11px;
+            color: #94a3b8;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+        .update-cta-btn {
+            width: 100%;
+            background: linear-gradient(135deg, #0284c7, #6366f1, #a855f7);
+            background-size: 200% 200%;
             color: #fff;
+            border: none;
+            padding: 12px 16px;
+            border-radius: 10px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.25);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .update-cta-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 24px rgba(99, 102, 241, 0.45);
+        }
+        .update-cta-btn:disabled {
+            opacity: 0.6;
+            cursor: wait;
+            transform: none;
         }
         .cli-tool-item {
             background: rgba(0, 0, 0, 0.25);
@@ -1036,6 +1112,10 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 font-size: 11px;
             }
             .settings-card-top-row {
+                gap: 8px;
+            }
+            .bento-update-grid {
+                grid-template-columns: 1fr;
                 gap: 8px;
             }
             .cli-tool-item {
@@ -1420,30 +1500,59 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             </div>
 
             <!-- System Updates Card -->
-            <div class="glass-card" style="padding: 16px;">
-                <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
-                    <span style="font-size: 26px;">🔄</span>
-                    <div>
-                        <div style="font-size: 15px; font-weight: 700; color: #fff;">System Updates</div>
-                        <div style="font-size: 12px; color: var(--text-secondary);">Pull the latest releases & fixes from GitHub with one click.</div>
+            <div class="glass-card settings-card">
+                <div class="settings-card-header">
+                    <div class="settings-card-top-row">
+                        <div class="settings-card-title-group">
+                            <span class="settings-card-icon">🚀</span>
+                            <span class="settings-card-title">System Updates</span>
+                        </div>
+                        <button class="recheck-btn" onclick="loadBuildInfo()" title="Re-check running build against repository">
+                            🔄 Re-check
+                        </button>
+                    </div>
+                    <div class="settings-card-sub">Continuous release delivery with live verified deployment.</div>
+                </div>
+
+                <!-- Bento Grid Info -->
+                <div class="bento-update-grid">
+                    <div class="bento-update-cell">
+                        <span class="bento-cell-label">Running Build</span>
+                        <div class="bento-cell-value">
+                            <span style="color: #34d399; font-weight: 700;" id="settings-installed-version">Loading…</span>
+                        </div>
+                    </div>
+                    <div class="bento-update-cell">
+                        <span class="bento-cell-label">Source Repo</span>
+                        <div class="bento-cell-value">
+                            <span style="color: #38bdf8;">🐙 yjlvfe/AiPoolCodexGemini</span>
+                            <span id="settings-source-version" style="display:none">Loading…</span>
+                        </div>
                     </div>
                 </div>
-                <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #cbd5e1; margin-bottom: 12px; line-height: 1.6;">
-                    Running build: <strong id="settings-installed-version">Loading…</strong><br>
-                    Source build: <code id="settings-source-version">Loading…</code><br>
-                    Commit time: <span id="settings-commit-date">—</span><br>
-                    <span id="settings-commit-message"></span><br>
-                    Last update: <span id="settings-last-update">No recorded update</span><br>
-                    Source: <code style="overflow-wrap:anywhere">github.com/yjlvfe/AiPoolCodexGemini</code><br>
-                    Accounts, sessions and local configuration are preserved.
+
+                <!-- Commit Log Stream Box -->
+                <div class="commit-log-box">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 10px; color: var(--text-tertiary);">
+                        <span>🕒 <span id="settings-commit-date">—</span></span>
+                        <span>⏱️ <span id="settings-last-update">Up to date</span></span>
+                    </div>
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #cbd5e1;" id="settings-commit-message">Loading latest commit...</div>
                 </div>
-                <button class="action-btn" onclick="loadBuildInfo()" style="margin-bottom:10px">Re-check version</button>
-                <div id="update-result-box" hidden style="border:1px solid #38bdf8;border-radius:8px;padding:12px;margin-bottom:12px">
+
+                <!-- Zero Risk Security Pill -->
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #10b981; margin-bottom: 12px; background: rgba(16, 185, 129, 0.08); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.15);">
+                    <span>🛡️</span>
+                    <span>Zero-Risk: Account tokens, session auth, and port bindings are preserved.</span>
+                </div>
+
+                <div id="update-result-box" hidden style="border:1px solid #38bdf8;border-radius:8px;padding:12px;margin-bottom:12px;background:rgba(0,0,0,0.4);">
                     <strong id="update-result-title"></strong>
-                    <pre id="update-result-detail" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;max-height:260px;overflow:auto"></pre>
+                    <pre id="update-result-detail" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;max-height:260px;overflow:auto;margin-top:6px;"></pre>
                 </div>
-                <button class="action-btn" id="btn-update-suite" onclick="triggerUpdate()" style="width: 100%; background: linear-gradient(135deg, #0284c7, #0369a1); color: #fff; border: none; padding: 11px 14px; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
-                    <span>🔄</span>
+
+                <button class="update-cta-btn" id="btn-update-suite" onclick="triggerUpdate()">
+                    <span>⚡</span>
                     <span>Update Suite from GitHub</span>
                 </button>
             </div>

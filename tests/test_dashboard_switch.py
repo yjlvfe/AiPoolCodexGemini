@@ -150,6 +150,25 @@ class DashboardManualSwitch(unittest.TestCase):
         # Verify subtitle is placed cleanly outside/below the top row
         self.assertIn('</div>\n                    <div class="settings-card-sub">Detects and configures CLI tools', server_py)
 
+    def test_system_updates_creative_card_design(self):
+        server_py = (ROOT / 'dashboard/server.py').read_text()
+        # Verify bento grid and commit box CSS
+        self.assertIn('.bento-update-grid {', server_py)
+        self.assertIn('.bento-update-cell {', server_py)
+        self.assertIn('.commit-log-box {', server_py)
+        self.assertIn('.update-cta-btn {', server_py)
+        # Verify System Updates header has sleek recheck button in top-row
+        self.assertIn('<span class="settings-card-title">System Updates</span>', server_py)
+        self.assertIn('<button class="recheck-btn" onclick="loadBuildInfo()"', server_py)
+        # Verify all JS element targets exist for update_ui.js
+        self.assertIn('id="settings-installed-version"', server_py)
+        self.assertIn('id="settings-source-version"', server_py)
+        self.assertIn('id="settings-commit-date"', server_py)
+        self.assertIn('id="settings-commit-message"', server_py)
+        self.assertIn('id="settings-last-update"', server_py)
+        self.assertIn('id="update-result-box"', server_py)
+        self.assertIn('id="btn-update-suite"', server_py)
+
 
 if __name__ == '__main__':
     unittest.main()
