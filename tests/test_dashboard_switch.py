@@ -51,6 +51,18 @@ class DashboardManualSwitch(unittest.TestCase):
                 self.assertIn('switch', args)
                 self.assertIn('2', args)
 
+    def test_ui_switch_contract(self):
+        server_py = (ROOT / 'dashboard/server.py').read_text()
+        # Verify switch buttons are hidden by default
+        self.assertIn('.account-switch-btn {\n            display: none !important;', server_py)
+        # Verify switch buttons are revealed on .selected
+        self.assertIn('.account-item-pill.selected .account-switch-btn {\n            display: inline-flex !important;', server_py)
+        # Verify clicking account does not trigger switchAccount
+        self.assertNotIn('btn.click()', server_py)
+        # Verify switchAccount updates DOM live immediately
+        self.assertIn('// Live immediate DOM update: mark account active and refresh UI without reload', server_py)
+        self.assertIn('renderAccountsList();', server_py)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -561,8 +561,9 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             gap: 10px;
         }
         .account-switch-btn {
-            background: rgba(56, 189, 248, 0.08);
-            border: 1px solid rgba(56, 189, 248, 0.30);
+            display: none !important;
+            background: rgba(56, 189, 248, 0.12);
+            border: 1px solid rgba(56, 189, 248, 0.35);
             color: var(--accent-cyan);
             border-radius: 6px;
             padding: 5px 12px;
@@ -572,6 +573,15 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             letter-spacing: 0.4px;
             cursor: pointer;
             transition: all 0.25s ease;
+        }
+        .account-item-pill.selected {
+            border-color: rgba(56, 189, 248, 0.45);
+            background: rgba(56, 189, 248, 0.06);
+            box-shadow: 0 0 12px rgba(56, 189, 248, 0.1);
+        }
+        .account-item-pill.selected .account-switch-btn {
+            display: inline-flex !important;
+            align-items: center;
         }
         .account-switch-btn:hover {
             background: rgba(56, 189, 248, 0.18);
@@ -1454,9 +1464,16 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 `;
                 if (!isActive) {
                     div.style.cursor = 'pointer';
-                    div.onclick = function() {
-                        const btn = this.querySelector('.account-switch-btn');
-                        if (btn) btn.click();
+                    div.title = 'Click to select and show Switch button';
+                    div.onclick = function(e) {
+                        if (e.target && e.target.closest && e.target.closest('.account-switch-btn')) return;
+                        const isAlreadySelected = this.classList.contains('selected');
+                        document.querySelectorAll('.account-item-pill.selected').forEach(el => {
+                            if (el !== this) el.classList.remove('selected');
+                        });
+                        if (!isAlreadySelected) {
+                            this.classList.add('selected');
+                        }
                     };
                 }
                 container.appendChild(div);
@@ -1586,15 +1603,18 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                     return;
                 }
                 showToast('✓ ' + (data.message || ('Switched to account #' + accountNum)));
+                
+                // Live immediate DOM update: mark account active and refresh UI without reload
+                const sysKey = system === 'codex' ? 'codex' : 'antigravity';
+                if (cachedReportData && cachedReportData.status && cachedReportData.status[sysKey]) {
+                    const accList = cachedReportData.status[sysKey].accounts || [];
+                    accList.forEach(a => {
+                        a.is_active = (Number(a.account) === Number(accountNum));
+                    });
+                    renderAccountsList();
+                }
+
                 await fetchLiveLogs(true);
-                // Also refresh account list status
-                try {
-                    const statusRes = await fetch('/api/settings/status');
-                    if (statusRes.ok) {
-                        currentStatus = await statusRes.json();
-                        renderAccountsList();
-                    }
-                } catch(e) {}
             } catch (err) {
                 console.error('Switch failed:', err);
                 showToast('⚠️ Switch request failed');
@@ -1629,6 +1649,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 
                 // Update logs and general provider stats exclusively (no account quota calls)
                 updateProviderStatsAndModels();
+                renderAccountsList();
                 renderGeneralActivityStream(data.recent_requests || []);
                 if (force) {
                     showToast('✓ Logs refreshed successfully');

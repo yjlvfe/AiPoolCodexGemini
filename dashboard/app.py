@@ -304,6 +304,11 @@ class PoolManager:
         except subprocess.TimeoutExpired:
             return False, 'Switch timed out after 150s.'
         threading.Thread(target=self._update_all_background, daemon=True).start()
+        with self._lock:
+            cached_data = self._cached_ag if system == 'antigravity' else self._cached_cdx
+            if cached_data and 'accounts' in cached_data:
+                for acc in cached_data['accounts']:
+                    acc['is_active'] = (acc.get('account') == account_num)
         detail = (res.stdout or '').strip() or (res.stderr or '').strip()
         return res.returncode == 0, detail or f'Switched to account {account_num}'
 
