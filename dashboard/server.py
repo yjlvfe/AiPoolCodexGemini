@@ -6,6 +6,7 @@ import socketserver
 import urllib.parse
 import json
 import time
+import threading
 import os
 from http import cookies
 import subprocess
@@ -992,6 +993,25 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 </div>
             </div>
 
+            <!-- System Updates Card -->
+            <div class="glass-card" style="padding: 16px;">
+                <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
+                    <span style="font-size: 26px;">🔄</span>
+                    <div>
+                        <div style="font-size: 15px; font-weight: 700; color: #fff;">System Updates</div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">Pull the latest releases & fixes from GitHub with one click.</div>
+                    </div>
+                </div>
+                <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #cbd5e1; margin-bottom: 12px; line-height: 1.6;">
+                    Source: <code style="color: var(--accent-cyan);">https://github.com/yjlvfe/AiPoolCodexGemini</code><br>
+                    Safety: <span style="color: var(--accent-emerald);">Preserves all auth tokens, sessions, and databases</span>
+                </div>
+                <button class="action-btn" id="btn-update-suite" onclick="triggerUpdate()" style="width: 100%; background: linear-gradient(135deg, #0284c7, #0369a1); color: #fff; border: none; padding: 11px 14px; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <span>🔄</span>
+                    <span>Update Suite from GitHub</span>
+                </button>
+            </div>
+
             <!-- Danger Zone (Uninstall) -->
             <div class="glass-card" style="padding: 16px; border: 1px solid rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.03);">
                 <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
@@ -1141,6 +1161,35 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             } finally {
                 btn.disabled = false;
                 setTimeout(() => { btn.innerHTML = originalHtml; }, 3000);
+            }
+        }
+
+        async function triggerUpdate() {
+            if (!confirm('Do you want to update AiPoolCodexGemini suite from GitHub now?\\n\\nThis will pull the latest version and safely restart services.')) {
+                return;
+            }
+            const btn = document.getElementById('btn-update-suite');
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<span>⏳</span><span>Updating Suite...</span>';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/settings/update', { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    btn.innerHTML = '<span>✅</span><span>Updated & Restarted!</span>';
+                    alert('✓ Update completed successfully!\\n\\n' + (data.message || ''));
+                    setTimeout(() => window.location.reload(), 1500);
+                } else {
+                    alert('Update failed: ' + (data.message || 'Unknown error'));
+                    btn.innerHTML = originalHtml;
+                }
+            } catch(e) {
+                btn.innerHTML = '<span>✅</span><span>Update Executed</span>';
+                alert('Update request sent. Services are restarting.');
+                setTimeout(() => window.location.reload(), 2500);
+            } finally {
+                btn.disabled = false;
             }
         }
 
@@ -1450,13 +1499,14 @@ def get_settings_status():
         "openclaw": {"installed": openclaw_installed, "connected": openclaw_connected}
     }
 
-def execute_integration_script(script_name):
+def execute_integration_script(script_name, *extra_args):
     base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     script_path = os.path.join(base_dir, script_name)
     if not os.path.exists(script_path):
         return False, f"Script not found: {script_path}"
     try:
-        res = subprocess.run(["bash", script_path], capture_output=True, text=True, timeout=20)
+        cmd = ["bash", script_path] + list(extra_args)
+        res = subprocess.run(cmd, capture_output=True, text=True, timeout=30)
         if res.returncode == 0:
             return True, res.stdout.strip()
         return False, res.stderr.strip() or res.stdout.strip()
@@ -1617,6 +1667,16 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
         if path in ("/aipool/api/settings/integrate_openclaw", "/api/settings/integrate_openclaw"):
             ok, msg = execute_integration_script("setup-openclaw.sh")
             self.send_json_response({"success": ok, "message": msg})
+            return
+
+        if path in ("/aipool/api/settings/update", "/api/settings/update"):
+            ok, msg = execute_integration_script("update.sh", "--no-dashboard")
+            self.send_json_response({"success": ok, "message": msg})
+            if ok:
+                threading.Thread(
+                    target=lambda: (time.sleep(1.5), subprocess.run(["systemctl", "--user", "restart", "ai-dashboard.service"])),
+                    daemon=True
+                ).start()
             return
 
         if path in ("/aipool/api/settings/uninstall", "/api/settings/uninstall"):

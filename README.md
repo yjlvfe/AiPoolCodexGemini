@@ -119,6 +119,18 @@ Link your local gateways to your agents without manual configuration:
 
 ---
 
+## 🔄 One-Click Suite Updates
+
+Keep your suite up-to-date with the latest features, security patches, and performance optimizations:
+
+```bash
+./update.sh
+```
+*Or simply open the **Settings** view in the Web Dashboard and click **Update Suite from GitHub**.*
+*All tokens, sessions, and databases are strictly preserved.*
+
+---
+
 ## 🗑️ Uninstalling
 
 To cleanly stop all background services, disable systemd units, and remove all CLI shortcuts from `/usr/local/bin`:
