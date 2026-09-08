@@ -18,9 +18,10 @@ import datetime
 HOST = "127.0.0.1"
 PORT = 8124
 UPSTREAM_URL = "https://chatgpt.com/backend-api/codex"
-ACCOUNTS_DIR = "/root/.codex-accounts"
+ACCOUNTS_DIR = os.environ.get("CODEX_ACCOUNT_STORE", os.path.expanduser("~/.codex-accounts"))
 ACTIVE_FILE = os.path.join(ACCOUNTS_DIR, "active")
-DB_PATH = "/root/Projects/ai-pool-suite/dashboard/auth.db"
+_BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+DB_PATH = os.environ.get("AUTH_DB_PATH", os.path.join(_BASE_DIR, "dashboard", "auth.db"))
 
 _active_account = None
 

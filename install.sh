@@ -114,13 +114,81 @@ else
     done
 fi
 
-# 6. Install Systemd Services (User Services, no sudo required)
-echo "🔄 Installing and starting Systemd services..."
-for svc in ai-gemini-bridge ai-codex-bridge ai-dashboard ai-bot; do
-    if [ -f "$SCRIPT_DIR/systemd/$svc.service" ]; then
-        cp -f "$SCRIPT_DIR/systemd/$svc.service" "$SYSTEMD_USER_DIR/$svc.service"
-    fi
-done
+# 6. Install Systemd Services (User Services, completely portable)
+echo "🔄 Configuring and starting Systemd user services..."
+PYTHON_BIN="$(command -v python3)"
+
+# ai-gemini-bridge.service
+cat <<EOF > "$SYSTEMD_USER_DIR/ai-gemini-bridge.service"
+[Unit]
+Description=AI Suite - Gemini / Antigravity Gateway Bridge (Port 8123)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=$SCRIPT_DIR/bridges
+ExecStart=$PYTHON_BIN $SCRIPT_DIR/bridges/gemini_bridge.py
+Restart=always
+RestartSec=3
+Environment=AG_BRIDGE_HOST=127.0.0.1
+Environment=AG_BRIDGE_PORT=8123
+
+[Install]
+WantedBy=default.target
+EOF
+
+# ai-codex-bridge.service
+cat <<EOF > "$SYSTEMD_USER_DIR/ai-codex-bridge.service"
+[Unit]
+Description=AI Suite - Codex / ChatGPT Gateway Bridge (Port 8124)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=$SCRIPT_DIR/bridges
+ExecStart=$PYTHON_BIN $SCRIPT_DIR/bridges/codex_bridge.py
+Restart=always
+RestartSec=3
+Environment=CODEX_BRIDGE_HOST=127.0.0.1
+Environment=CODEX_BRIDGE_PORT=8124
+
+[Install]
+WantedBy=default.target
+EOF
+
+# ai-dashboard.service
+cat <<EOF > "$SYSTEMD_USER_DIR/ai-dashboard.service"
+[Unit]
+Description=AI Suite - Multi-Account Pool Dashboard (Port 8444)
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=$SCRIPT_DIR/dashboard
+ExecStart=$PYTHON_BIN $SCRIPT_DIR/dashboard/server.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
+EOF
+
+# ai-bot.service
+cat <<EOF > "$SYSTEMD_USER_DIR/ai-bot.service"
+[Unit]
+Description=AI Suite - Multi-Account Pool Telegram Bot Service
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=$SCRIPT_DIR/dashboard
+ExecStart=$PYTHON_BIN $SCRIPT_DIR/dashboard/bot_service.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target
+EOF
 
 systemctl --user daemon-reload
 
@@ -129,12 +197,27 @@ for svc in ai-gemini-bridge ai-codex-bridge ai-dashboard ai-bot; do
     systemctl --user restart "$svc.service" 2>/dev/null || true
 done
 
+# Quick health check for dashboard
+sleep 1.5
+DASHBOARD_LIVE=0
+if command -v curl &>/dev/null && curl -s -m 2 http://127.0.0.1:8444/ &>/dev/null; then
+    DASHBOARD_LIVE=1
+elif python3 -c "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8444/', timeout=2)" 2>/dev/null; then
+    DASHBOARD_LIVE=1
+fi
+
 echo ""
 echo "=========================================================="
 echo " ✅ Installation and Setup Completed Successfully!"
 echo "=========================================================="
-echo " 🌐 Web Dashboard:"
-echo "    👉 Open in browser: http://localhost:8444  (or http://127.0.0.1:8444)"
+if [ "$DASHBOARD_LIVE" -eq 1 ]; then
+    echo " 🌐 Web Dashboard: [LIVE ✓]"
+    echo "    👉 Open in browser: http://localhost:8444"
+else
+    echo " 🌐 Web Dashboard: [Starting...]"
+    echo "    👉 Open in browser: http://localhost:8444"
+    echo "    (If not open immediately, check status: systemctl --user status ai-dashboard)"
+fi
 echo "----------------------------------------------------------"
 echo " 🟢 Gemini Gateway: http://127.0.0.1:8123/v1"
 echo " 🟣 Codex Gateway:  http://127.0.0.1:8124/v1"

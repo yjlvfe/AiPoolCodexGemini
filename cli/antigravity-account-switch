@@ -3,16 +3,17 @@ import contextlib, datetime, fcntl, importlib.util, io, json, os, shutil, signal
 import urllib.parse, urllib.request
 from pathlib import Path
 
-STORE = Path(os.environ.get("AG_ACCOUNT_STORE", "/root/.antigravity-accounts"))
-CLI_AUTH = Path(os.environ.get("AG_CLI_AUTH", "/root/.gemini/antigravity-cli/antigravity-oauth-token"))
-HERMES_AUTH = Path(os.environ.get("AG_HERMES_AUTH", "/root/.hermes/.antigravity_oauth.json"))
-AGY = os.environ.get("AGY_BIN", "/root/.local/bin/agy")
+STORE = Path(os.environ.get("AG_ACCOUNT_STORE", Path.home() / ".antigravity-accounts"))
+CLI_AUTH = Path(os.environ.get("AG_CLI_AUTH", Path.home() / ".gemini/antigravity-cli/antigravity-oauth-token"))
+HERMES_AUTH = Path(os.environ.get("AG_HERMES_AUTH", Path.home() / ".hermes/.antigravity_oauth.json"))
+AGY = os.environ.get("AGY_BIN", str(Path.home() / ".local/bin/agy"))
 SYSTEMCTL = os.environ.get("AG_SYSTEMCTL", "systemctl")
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 USERINFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo?alt=json"
 
 def oauth_client():
-    bridge_path=Path(os.environ.get("AG_BRIDGE_SOURCE", "/root/Projects/AiPoolCodexGemini/bridges/gemini_bridge.py"))
+    default_bridge = Path(__file__).resolve().parent.parent / "bridges/gemini_bridge.py"
+    bridge_path = Path(os.environ.get("AG_BRIDGE_SOURCE", str(default_bridge)))
     spec=importlib.util.spec_from_file_location("_ag_bridge_config",bridge_path)
     module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
     return module.CLIENT_ID,module.CLIENT_SECRET

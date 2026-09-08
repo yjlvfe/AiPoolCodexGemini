@@ -13,8 +13,9 @@ import threading
 import re
 from typing import Dict, Any, Optional, List
 
-DB_PATH = "/root/Projects/AiPoolCodexGemini/dashboard/auth.db"
-HERMES_STATE_DB = "/root/.hermes/state.db"
+_CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+DB_PATH = os.environ.get("AUTH_DB_PATH", os.path.join(_CURRENT_DIR, "auth.db"))
+HERMES_STATE_DB = os.environ.get("HERMES_STATE_DB", os.path.expanduser("~/.hermes/state.db"))
 
 class TokenAuthManager:
     def __init__(self, db_path: str = DB_PATH, session_expiry_hours: int = 24):
@@ -198,8 +199,8 @@ class PoolManager:
     Zero blocking on user requests: API returns in <10 milliseconds!
     """
     def __init__(self):
-        self.ag_store = "/root/.antigravity-accounts"
-        self.codex_store = "/root/.codex-accounts"
+        self.ag_store = os.environ.get("AG_ACCOUNT_STORE", os.path.expanduser("~/.antigravity-accounts"))
+        self.codex_store = os.environ.get("CODEX_ACCOUNT_STORE", os.path.expanduser("~/.codex-accounts"))
         self.state_db = HERMES_STATE_DB
         self.auth_db = DB_PATH
         
@@ -284,7 +285,7 @@ class PoolManager:
 
             def query_single_codex(n, active_acc):
                 with tempfile.TemporaryDirectory() as td:
-                    auth_src = f"/root/.codex-accounts/{n}/auth.json"
+                    auth_src = os.path.join(self.codex_store, str(n), "auth.json")
                     if not os.path.exists(auth_src):
                         return None
                     auth_dst = os.path.join(td, "auth.json")
@@ -470,7 +471,7 @@ class PoolManager:
             except Exception: pass
 
         # Also merge requests from auth.db (request_events table: Gateway + OpenClaw + Codex bridges)
-        auth_db_path = "/root/Projects/AiPoolCodexGemini/dashboard/auth.db"
+        auth_db_path = self.auth_db
         if os.path.exists(auth_db_path):
             try:
                 c_auth = sqlite3.connect(auth_db_path, timeout=5)
@@ -576,7 +577,7 @@ class PoolManager:
         # Query real INDIVIDUAL API calls from request_events DB table (OpenClaw + Gateway + Hermes)
         individual_requests = []
         try:
-            auth_db = "/root/Projects/AiPoolCodexGemini/dashboard/auth.db"
+            auth_db = self.auth_db
             if os.path.exists(auth_db):
                 conn = sqlite3.connect(auth_db, timeout=5)
                 conn.row_factory = sqlite3.Row
@@ -602,7 +603,7 @@ class PoolManager:
             print("Error reading request_events from auth.db:", e)
 
         # Also fallback/merge with Hermes log if request_events has few items
-        log_path = "/root/.hermes/logs/agent.log"
+        log_path = os.environ.get("HERMES_LOG_PATH", os.path.expanduser("~/.hermes/logs/agent.log"))
         if len(individual_requests) < 100 and os.path.exists(log_path):
             try:
                 # Read last lines of agent.log
@@ -732,7 +733,7 @@ class PoolManager:
             cached = dict(self._cached_logs or {})
         # Always fetch fresh real individual requests so OpenClaw and Gateway logs show up with 0 delay
         try:
-            auth_db = "/root/Projects/AiPoolCodexGemini/dashboard/auth.db"
+            auth_db = self.auth_db
             if os.path.exists(auth_db):
                 conn = sqlite3.connect(auth_db, timeout=5)
                 conn.row_factory = sqlite3.Row

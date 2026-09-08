@@ -17,6 +17,7 @@ import threading
 import http.server
 import socketserver
 import sys
+import shutil
 import secrets
 from copy import deepcopy
 
@@ -586,7 +587,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
             t_tok = int(usage.get("total_tokens") or (p_tok + c_tok))
             model_name = req_model or out_resp.get("model") or "gemini-3.8-flash"
             
-            auth_db = "/root/Projects/AiPoolCodexGemini/dashboard/auth.db"
+            _BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            auth_db = os.environ.get("AUTH_DB_PATH", os.path.join(_BASE_DIR, "dashboard", "auth.db"))
             if os.path.exists(auth_db):
                 import sqlite3
                 now = time.time()
@@ -752,7 +754,8 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     # Automatic account rotation in antigravity pool!
                     try:
                         import glob
-                        active_f = "/root/.antigravity-accounts/active"
+                        ag_store = os.environ.get("AG_ACCOUNT_STORE", os.path.expanduser("~/.antigravity-accounts"))
+                        active_f = os.path.join(ag_store, "active")
                         curr = 1
                         if os.path.exists(active_f):
                             try:
@@ -760,13 +763,14 @@ class Handler(http.server.BaseHTTPRequestHandler):
                             except Exception:
                                 curr = 1
                         
-                        acc_dirs = [int(os.path.basename(p)) for p in glob.glob("/root/.antigravity-accounts/[0-9]*") if os.path.isfile(os.path.join(p, "antigravity-oauth-token"))]
+                        acc_dirs = [int(os.path.basename(p)) for p in glob.glob(os.path.join(ag_store, "[0-9]*")) if os.path.isfile(os.path.join(p, "antigravity-oauth-token"))]
                         acc_dirs = sorted(acc_dirs) or [1]
                         idx = acc_dirs.index(curr) if curr in acc_dirs else 0
                         nxt = acc_dirs[(idx + 1) % len(acc_dirs)]
 
                         import subprocess
-                        subprocess.run(["/usr/local/bin/antigravity-account-switch", str(nxt)], capture_output=True, text=True, timeout=15)
+                        switch_bin = os.environ.get("AG_SWITCH_BIN") or shutil.which("antigravity-account-switch") or "/usr/local/bin/antigravity-account-switch"
+                        subprocess.run([switch_bin, str(nxt)], capture_output=True, text=True, timeout=15)
                         print(f"[bridge] 429 encountered! Auto-switched AG Account from {curr} to {nxt}", file=sys.stderr)
                         # clear in-memory token cache to reload fresh token
                         _token_cache["access"] = None
