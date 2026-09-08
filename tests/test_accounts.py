@@ -131,7 +131,7 @@ if 'app-server' in args:
         self.assertTrue((store / '2/auth.json').is_file())
         self.assertNotEqual(self.run_cli('rm', '1').returncode, 0)
         self.assertEqual(self.run_cli('rm', '2').returncode, 0)
-        self.assertEqual(len(list((store / 'archive').iterdir())), 1)
+        self.assertFalse((store / '2').exists())
 
     def test_symlink_live_target_is_not_overwritten(self):
         shared = self.home / '.codex'

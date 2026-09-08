@@ -53,15 +53,59 @@ class DashboardManualSwitch(unittest.TestCase):
 
     def test_ui_switch_contract(self):
         server_py = (ROOT / 'dashboard/server.py').read_text()
-        # Verify switch buttons are hidden by default
-        self.assertIn('.account-switch-btn {\n            display: none !important;', server_py)
-        # Verify switch buttons are revealed on .selected
-        self.assertIn('.account-item-pill.selected .account-switch-btn {\n            display: inline-flex !important;', server_py)
-        # Verify clicking account does not trigger switchAccount
+        # Verify normal content is hidden when account is selected (all data disappears)
+        self.assertIn('.account-item-pill.selected .account-normal-content {', server_py)
+        self.assertIn('display: none !important;', server_py)
+        # Verify actions bar is revealed when selected with 50/50 equal split
+        self.assertIn('.account-item-pill.selected .account-actions-bar {', server_py)
+        self.assertIn('flex: 1 1 50%;', server_py)
+        # Verify clicking account does not trigger switchAccount directly
         self.assertNotIn('btn.click()', server_py)
         # Verify switchAccount updates DOM live immediately
         self.assertIn('// Live immediate DOM update: mark account active and refresh UI without reload', server_py)
         self.assertIn('renderAccountsList();', server_py)
+
+    def test_delete_account_backend_and_modal_contract(self):
+        with tempfile.TemporaryDirectory() as td:
+            ag_store = Path(td) / '.antigravity-accounts'
+            cdx_store = Path(td) / '.codex-accounts'
+            (ag_store / '1').mkdir(parents=True)
+            (ag_store / '2').mkdir(parents=True)
+            (ag_store / 'active').write_text('1\n')
+            (cdx_store / '1').mkdir(parents=True)
+            (cdx_store / 'active').write_text('1\n')
+
+            pm = PoolManager()
+            pm.ag_store = str(ag_store)
+            pm.codex_store = str(cdx_store)
+            pm._cached_ag = {'accounts': [{'account': 1, 'is_active': True}, {'account': 2, 'is_active': False}], 'pool_metrics': {'total_accounts': 2}}
+
+            # Reject without 'confirm'
+            ok, msg = pm.delete_account('antigravity', 2, 'wrong')
+            self.assertFalse(ok)
+            self.assertIn('confirm', msg)
+
+            # Reject active account
+            ok, msg = pm.delete_account('antigravity', 1, 'confirm')
+            self.assertFalse(ok)
+            self.assertIn('active account', msg)
+
+            # Success non-active account
+            with patch('subprocess.run') as mock_run:
+                mock_run.return_value = MagicMock(returncode=0, stdout='Account 2 archived', stderr='')
+                ok, msg = pm.delete_account('antigravity', 2, 'confirm')
+                self.assertTrue(ok)
+                self.assertIn('deleted successfully', msg)
+                self.assertEqual(len(pm._cached_ag['accounts']), 1)
+                self.assertEqual(pm._cached_ag['accounts'][0]['account'], 1)
+
+        server_py = (ROOT / 'dashboard/server.py').read_text()
+        # Verify delete modal HTML and input check
+        self.assertIn('id="delete-modal-overlay"', server_py)
+        self.assertIn('id="modal-delete-confirm-input"', server_py)
+        self.assertIn('id="modal-btn-confirm-delete"', server_py)
+        self.assertIn("confirmation.toLowerCase() !== 'confirm'", server_py)
+        self.assertIn("fetch(resolveApiUrl('/api/accounts/delete')", server_py)
 
     def test_settings_toggle_preserves_grid_layout(self):
         server_py = (ROOT / 'dashboard/server.py').read_text()

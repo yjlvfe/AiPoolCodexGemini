@@ -312,6 +312,41 @@ class PoolManager:
         detail = (res.stdout or '').strip() or (res.stderr or '').strip()
         return res.returncode == 0, detail or f'Switched to account {account_num}'
 
+    def delete_account(self, system: str, account_num: int, confirmation: str = "") -> tuple:
+        if confirmation.strip().lower() != 'confirm':
+            return False, 'Must type confirm to authorize account deletion.'
+        if system not in ('antigravity', 'codex') or not isinstance(account_num, int) or account_num < 1:
+            return False, 'Invalid system or account number.'
+        import sys
+        cmd = os.path.join(os.path.dirname(_CURRENT_DIR), 'cli', 'ag' if system == 'antigravity' else 'cx')
+        store = self.ag_store if system == 'antigravity' else self.codex_store
+        account_dir = os.path.join(store, str(account_num))
+        if not os.path.exists(account_dir):
+            return False, f'Account {account_num} does not exist on this device.'
+        active_file = os.path.join(store, 'active')
+        if os.path.exists(active_file):
+            try:
+                with open(active_file, 'r', encoding='utf-8') as f:
+                    if f.read().strip() == str(account_num):
+                        return False, f'Cannot delete active account {account_num}. Switch to another account first.'
+            except Exception:
+                pass
+        try:
+            res = subprocess.run([sys.executable, cmd, 'rm', str(account_num)], capture_output=True, text=True, timeout=60)
+        except subprocess.TimeoutExpired:
+            return False, 'Deletion timed out after 60s.'
+        if res.returncode != 0:
+            err = (res.stderr or res.stdout or '').strip()
+            return False, err or f'Failed to delete account {account_num}.'
+
+        threading.Thread(target=self._update_all_background, daemon=True).start()
+        with self._lock:
+            cached_data = self._cached_ag if system == 'antigravity' else self._cached_cdx
+            if cached_data and 'accounts' in cached_data:
+                cached_data['accounts'] = [acc for acc in cached_data['accounts'] if acc.get('account') != account_num]
+                cached_data['total_accounts'] = len(cached_data['accounts'])
+        return True, f'Account {account_num} deleted successfully.'
+
     def get_all_status(self) -> Dict[str, Any]:
         with self._lock:
             return {

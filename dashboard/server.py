@@ -561,39 +561,78 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             align-items: center;
             gap: 10px;
         }
-        .account-switch-btn {
+        .account-normal-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            gap: 12px;
+        }
+        .account-actions-bar {
             display: none !important;
-            background: rgba(56, 189, 248, 0.12);
-            border: 1px solid rgba(56, 189, 248, 0.35);
-            color: var(--accent-cyan);
-            border-radius: 6px;
-            padding: 5px 12px;
-            font-size: 11px;
+            width: 100%;
+            gap: 10px;
+            align-items: center;
+            justify-content: stretch;
+        }
+        .account-item-pill.selected .account-normal-content {
+            display: none !important;
+        }
+        .account-item-pill.selected .account-actions-bar {
+            display: flex !important;
+        }
+        .account-btn-switch, .account-btn-delete {
+            flex: 1 1 50%;
+            min-height: 38px;
+            border-radius: 8px;
+            font-size: 12px;
             font-weight: 700;
             font-family: inherit;
-            letter-spacing: 0.4px;
+            letter-spacing: 0.3px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
             cursor: pointer;
             transition: all 0.25s ease;
+            box-sizing: border-box;
+            border: 1px solid transparent;
+        }
+        .account-btn-switch {
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(2, 132, 199, 0.3));
+            border-color: rgba(56, 189, 248, 0.45);
+            color: #38bdf8;
+        }
+        .account-btn-switch:not(:disabled):hover {
+            background: linear-gradient(135deg, #0ea5e9, #0284c7);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.35);
+            transform: translateY(-1px);
+        }
+        .account-btn-delete {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.3));
+            border-color: rgba(239, 68, 68, 0.45);
+            color: #f87171;
+        }
+        .account-btn-delete:not(:disabled):hover {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+            transform: translateY(-1px);
+        }
+        .account-btn-switch:disabled, .account-btn-delete:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            transform: none;
+            filter: grayscale(0.6);
+        }
+        .account-switch-btn {
+            display: none !important;
         }
         .account-item-pill.selected {
             border-color: rgba(56, 189, 248, 0.45);
             background: rgba(56, 189, 248, 0.06);
-            box-shadow: 0 0 12px rgba(56, 189, 248, 0.1);
-        }
-        .account-item-pill.selected .account-switch-btn {
-            display: inline-flex !important;
-            align-items: center;
-        }
-        .account-switch-btn:hover {
-            background: rgba(56, 189, 248, 0.18);
-            border-color: var(--accent-cyan);
-            color: #fff;
-            transform: translateY(-1px);
-        }
-        .account-switch-btn:disabled {
-            opacity: 0.55;
-            cursor: wait;
-            transform: none;
+            box-shadow: 0 0 14px rgba(56, 189, 248, 0.12);
         }
         .acc-info-left {
             display: flex;
@@ -1007,6 +1046,113 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 width: 100%;
             }
         }
+
+        /* Delete Confirmation Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .modal-dialog {
+            width: 100%;
+            max-width: 420px;
+            background: rgba(15, 23, 42, 0.96);
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 24px rgba(239, 68, 68, 0.15);
+            border-radius: 16px;
+            padding: 22px;
+            box-sizing: border-box;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+        .modal-close-btn {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 22px;
+            cursor: pointer;
+            line-height: 1;
+            padding: 0 4px;
+        }
+        .modal-close-btn:hover {
+            color: #fff;
+        }
+        .modal-input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            padding: 11px 14px;
+            color: #fff;
+            font-size: 13px;
+            font-family: inherit;
+            box-sizing: border-box;
+            outline: none;
+            transition: var(--transition-smooth);
+        }
+        .modal-input:focus {
+            border-color: #ef4444;
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
+        }
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 18px;
+        }
+        .modal-btn-cancel {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #cbd5e1;
+            border-radius: 8px;
+            padding: 10px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .modal-btn-cancel:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+        }
+        .modal-btn-delete {
+            flex: 1;
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            border: none;
+            color: #fff;
+            border-radius: 8px;
+            padding: 10px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: var(--transition-smooth);
+        }
+        .modal-btn-delete:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            filter: grayscale(0.8);
+        }
+        .modal-btn-delete:not(:disabled):hover {
+            box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
+            transform: translateY(-1px);
+        }
     </style>
 </head>
 <body>
@@ -1015,6 +1161,33 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
     <div class="app-container">
         <div id="toast-notification">
             <span id="toast-text">Logs refreshed successfully</span>
+        </div>
+        <!-- Delete Account Confirmation Modal -->
+        <div id="delete-modal-overlay" class="modal-overlay" style="display: none;" onclick="closeDeleteModal(event)">
+            <div class="modal-dialog glass-card" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 20px;">🗑️</span>
+                        <span style="font-weight: 700; color: #fff; font-size: 15px;">Confirm Account Deletion</span>
+                    </div>
+                    <button class="modal-close-btn" onclick="closeDeleteModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p style="color: #cbd5e1; font-size: 13px; line-height: 1.5; margin-bottom: 12px;">
+                        Are you sure you want to delete <strong id="modal-del-account-label" style="color: #fff;">Account</strong>?
+                    </p>
+                    <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #fca5a5; margin-bottom: 14px;">
+                        ⚠️ This will permanently delete and purge the account credentials completely. Type <strong style="color: #ef4444; font-family: monospace;">confirm</strong> below to proceed:
+                    </div>
+                    <input type="text" id="modal-delete-confirm-input" class="modal-input" placeholder="Type confirm" autocomplete="off" oninput="validateDeleteInput()" />
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="modal-btn-cancel" onclick="closeDeleteModal()">Cancel</button>
+                    <button type="button" id="modal-btn-confirm-delete" class="modal-btn-delete" disabled onclick="executeAccountDelete()">
+                        🗑️ Permanent Delete
+                    </button>
+                </div>
+            </div>
         </div>
         <!-- Top Navigation Header -->
         <header class="top-navbar">
@@ -1643,35 +1816,133 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                     `;
                 }
 
+                const emailSafe = (acc.email || ('Account ' + acc.account)).replace(/'/g, "\\'");
                 div.innerHTML = `
-                    <div class="acc-info-left" style="display:flex; align-items:center; gap:8px;">
-                        <div class="acc-dot ${isActive ? 'active' : ''}"></div>
-                        <div style="text-align:left;">
-                            <div class="acc-email">${acc.email || ('Account ' + acc.account)}</div>
-                            ${isActive ? '<span style="font-size: 9px; background: rgba(16,185,129,0.2); color:#10b981; padding: 2px 7px; border-radius: 6px; font-weight: 800; font-family:monospace; letter-spacing:0.5px;">ACTIVE</span>' : ''}
+                    <div class="account-normal-content">
+                        <div class="acc-info-left" style="display:flex; align-items:center; gap:8px;">
+                            <div class="acc-dot ${isActive ? 'active' : ''}"></div>
+                            <div style="text-align:left;">
+                                <div class="acc-email">${acc.email || ('Account ' + acc.account)}</div>
+                                ${isActive ? '<span style="font-size: 9px; background: rgba(16,185,129,0.2); color:#10b981; padding: 2px 7px; border-radius: 6px; font-weight: 800; font-family:monospace; letter-spacing:0.5px;">ACTIVE</span>' : ''}
+                            </div>
+                        </div>
+                        <div class="account-metrics-view">
+                            ${metricsHtml}
                         </div>
                     </div>
-                    <div class="account-actions">
-                        ${metricsHtml}
-                        ${isActive ? '' : `<button class="account-switch-btn" onclick="event.stopPropagation(); switchAccount(${acc.account}, this)" title="Switch to Account #${acc.account}">Switch</button>`}
+                    <div class="account-actions-bar">
+                        ${isActive 
+                            ? `<button type="button" class="account-btn-switch" disabled style="opacity:0.5; cursor:not-allowed;">Active</button>`
+                            : `<button type="button" class="account-btn-switch" onclick="event.stopPropagation(); switchAccount(${acc.account}, this)" title="Switch to Account #${acc.account}">⚡ Switch</button>`
+                        }
+                        ${isActive
+                            ? `<button type="button" class="account-btn-delete" disabled style="opacity:0.4; cursor:not-allowed;" title="Cannot delete active account">Active (Protected)</button>`
+                            : `<button type="button" class="account-btn-delete" onclick="event.stopPropagation(); openDeleteModal(${acc.account}, '${emailSafe}')" title="Delete Account #${acc.account}">🗑️ Delete</button>`
+                        }
                     </div>
                 `;
-                if (!isActive) {
-                    div.style.cursor = 'pointer';
-                    div.title = 'Click to select and show Switch button';
-                    div.onclick = function(e) {
-                        if (e.target && e.target.closest && e.target.closest('.account-switch-btn')) return;
-                        const isAlreadySelected = this.classList.contains('selected');
-                        document.querySelectorAll('.account-item-pill.selected').forEach(el => {
-                            if (el !== this) el.classList.remove('selected');
-                        });
-                        if (!isAlreadySelected) {
-                            this.classList.add('selected');
-                        }
-                    };
-                }
+
+                div.style.cursor = 'pointer';
+                div.title = 'Click account to show actions';
+                div.onclick = function(e) {
+                    if (e.target && e.target.closest && (e.target.closest('.account-btn-switch') || e.target.closest('.account-btn-delete'))) return;
+                    const isAlreadySelected = this.classList.contains('selected');
+                    document.querySelectorAll('.account-item-pill.selected').forEach(el => {
+                        el.classList.remove('selected');
+                    });
+                    if (!isAlreadySelected) {
+                        this.classList.add('selected');
+                    }
+                };
                 container.appendChild(div);
             });
+        }
+
+        let pendingDeleteAccount = null;
+
+        function openDeleteModal(accountNum, emailLabel) {
+            pendingDeleteAccount = accountNum;
+            const labelEl = document.getElementById('modal-del-account-label');
+            if (labelEl) labelEl.innerText = `Account #${accountNum} (${emailLabel})`;
+            const inputEl = document.getElementById('modal-delete-confirm-input');
+            if (inputEl) {
+                inputEl.value = '';
+            }
+            const confirmBtn = document.getElementById('modal-btn-confirm-delete');
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+                confirmBtn.innerHTML = '🗑️ Delete Account';
+            }
+            const overlay = document.getElementById('delete-modal-overlay');
+            if (overlay) overlay.style.display = 'flex';
+            setTimeout(() => { if (inputEl) inputEl.focus(); }, 50);
+        }
+
+        function closeDeleteModal(e) {
+            if (e && e.target && e.target !== e.currentTarget && !e.target.classList.contains('modal-close-btn') && !e.target.classList.contains('modal-btn-cancel')) return;
+            const overlay = document.getElementById('delete-modal-overlay');
+            if (overlay) overlay.style.display = 'none';
+            pendingDeleteAccount = null;
+        }
+
+        function validateDeleteInput() {
+            const inputEl = document.getElementById('modal-delete-confirm-input');
+            const confirmBtn = document.getElementById('modal-btn-confirm-delete');
+            if (!inputEl || !confirmBtn) return;
+            confirmBtn.disabled = (inputEl.value.trim().toLowerCase() !== 'confirm');
+        }
+
+        async function executeAccountDelete() {
+            if (!pendingDeleteAccount) return;
+            const inputEl = document.getElementById('modal-delete-confirm-input');
+            const confirmation = inputEl ? inputEl.value.trim() : '';
+            if (confirmation.toLowerCase() !== 'confirm') return;
+
+            const confirmBtn = document.getElementById('modal-btn-confirm-delete');
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+                confirmBtn.innerHTML = '<span>⏳</span> Deleting...';
+            }
+
+            const system = currentProvider === 'Codex' ? 'codex' : 'antigravity';
+            const accNum = pendingDeleteAccount;
+
+            try {
+                const res = await fetch(resolveApiUrl('/api/accounts/delete'), {
+                    method: 'POST',
+                    headers: apiHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ system: system, account: accNum, confirmation: confirmation }),
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    closeDeleteModal();
+                    showToast(`Account #${accNum} deleted successfully`);
+
+                    // Live DOM update: remove account from cachedReportData immediately without reload
+                    const sysKey = system;
+                    if (cachedReportData && cachedReportData.status && cachedReportData.status[sysKey] && cachedReportData.status[sysKey].accounts) {
+                        cachedReportData.status[sysKey].accounts = cachedReportData.status[sysKey].accounts.filter(a => a.account !== accNum);
+                        if (cachedReportData.status[sysKey].pool_metrics) {
+                            cachedReportData.status[sysKey].pool_metrics.total_accounts = cachedReportData.status[sysKey].accounts.length;
+                        }
+                    }
+                    renderAccountsList();
+                    fetchLiveLogs(false);
+                } else {
+                    alert('Delete failed: ' + (data.message || 'Unknown error'));
+                    if (confirmBtn) {
+                        confirmBtn.disabled = false;
+                        confirmBtn.innerHTML = '🗑️ Delete Account';
+                    }
+                }
+            } catch (err) {
+                alert('Connection error: ' + err);
+                if (confirmBtn) {
+                    confirmBtn.disabled = false;
+                    confirmBtn.innerHTML = '🗑️ Delete Account';
+                }
+            }
         }
 
         let accountsVisible = false;
@@ -2132,6 +2403,32 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             ok, detail = pm.switch_account(system, account)
             if not ok:
                 self.send_json_response({"success": False, "message": detail or "Switch failed."}, status_code=502)
+                return
+            self.send_json_response({"success": True, "message": detail, "system": system, "account": account})
+            return
+
+        if path in ("/aipool/api/accounts/delete", "/api/accounts/delete"):
+            content_length = int(self.headers.get("Content-Length", 0))
+            body = self.rfile.read(content_length).decode("utf-8") if content_length > 0 else "{}"
+            try:
+                payload = json.loads(body)
+            except Exception:
+                payload = {}
+            system = payload.get("system", "")
+            try:
+                account = int(payload.get("account", 0))
+            except (TypeError, ValueError):
+                account = 0
+            confirmation = payload.get("confirmation", "")
+            if system not in ("antigravity", "codex") or account < 1:
+                self.send_json_response({"success": False, "message": "Invalid system or account number."}, status_code=400)
+                return
+            if str(confirmation).strip().lower() != "confirm":
+                self.send_json_response({"success": False, "message": "You must type confirm to verify deletion."}, status_code=400)
+                return
+            ok, detail = pm.delete_account(system, account, confirmation)
+            if not ok:
+                self.send_json_response({"success": False, "message": detail or "Delete failed."}, status_code=400)
                 return
             self.send_json_response({"success": True, "message": detail, "system": system, "account": account})
             return

@@ -277,7 +277,7 @@ class Manager:
                     seen[key] = n
                 except (ValueError, OSError):
                     print(f'Account {n}: invalid credential; left untouched')
-            print('Scan complete. Nothing deleted. Use rm N for a non-active slot (archived, not destroyed).')
+            print('Scan complete. Nothing deleted. Use rm N for a non-active slot (permanently deleted).')
 
     def remove(self, number):
         number = slot(number)
@@ -287,12 +287,9 @@ class Manager:
             source = self.store / number
             if source.is_symlink() or not source.exists():
                 raise ValueError('Account is missing or unsafe')
-            archive = self.store / 'archive'
-            private_dir(archive)
-            import time
-            target = archive / f'{number}-{time.time_ns()}'
-            os.replace(source, target)
-            print(f'Account {number} archived in {target}')
+            import shutil
+            shutil.rmtree(source)
+            print(f'Account {number} permanently deleted')
 
     def usage(self, selection=None, short=False):
         ids = [slot(selection)] if selection else self.ids()
