@@ -8,6 +8,7 @@ import json
 import time
 import os
 from http import cookies
+import subprocess
 from app import PoolManager, TokenAuthManager
 
 PORT = 8444
@@ -771,10 +772,14 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 <span>🟢</span>
                 <span>Gemini</span>
             </button>
+            <button class="provider-tab-btn" id="tab-settings" onclick="switchProvider('Settings')" style="background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);">
+                <span>⚙️</span>
+                <span>الإعدادات</span>
+            </button>
         </div>
 
         <!-- Model Deep-Dive Analytics Card -->
-        <section class="glass-card">
+        <section class="glass-card" id="pool-overview-section">
             <div class="pool-header-row">
                 <div class="pool-title-group">
                     <span id="pool-icon" style="font-size: 18px;">🟣</span>
@@ -848,7 +853,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
         </section>
 
         <!-- Real Stream Card -->
-        <section class="glass-card">
+        <section class="glass-card" id="stream-section">
             <div class="stream-header">
                 <div class="stream-title-text">
                     <span>⚡</span>
@@ -857,6 +862,75 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             </div>
             <div class="stream-list" id="activity-stream-list">
                 <!-- Activity Items Loaded Here -->
+            </div>
+        </section>
+
+        <!-- Settings View Section -->
+        <section id="settings-view-section" style="display: none; flex-direction: column; gap: 14px;">
+            <!-- Hermes Agent Integration Card -->
+            <div class="glass-card" style="padding: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <span style="font-size: 26px;">🤖</span>
+                        <div>
+                            <div style="font-size: 15px; font-weight: 700; color: #fff;">Hermes Agent Integration</div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">ربط بوابات الـ Pool تلقائياً في ~/.hermes/config.yaml</div>
+                        </div>
+                    </div>
+                    <span id="hermes-badge" class="badge" style="background: rgba(255,255,255,0.06); color: #94a3b8; font-size: 11px; padding: 4px 8px; border-radius: 6px;">فحص...</span>
+                </div>
+                <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #cbd5e1; margin-bottom: 12px; line-height: 1.6;">
+                    مسار التكوين: <code style="color: var(--accent-cyan);">~/.hermes/config.yaml</code><br>
+                    الموديلات: <span style="color: var(--accent-emerald);">gemini-3.8-flash-tiered</span>, <span style="color: var(--accent-purple);">gpt-6-astra</span>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="action-btn" id="btn-sync-hermes" onclick="triggerIntegration('hermes')" style="flex: 1; background: linear-gradient(135deg, #0ea5e9, #0284c7); color: #fff; border: none; padding: 10px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                        <span>⚡</span>
+                        <span>ربط Hermes تلقائياً الآن</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- OpenClaw Integration Card -->
+            <div class="glass-card" style="padding: 16px;">
+                <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 12px;">
+                    <div style="display: flex; gap: 12px; align-items: center;">
+                        <span style="font-size: 26px;">🦅</span>
+                        <div>
+                            <div style="font-size: 15px; font-weight: 700; color: #fff;">OpenClaw Integration</div>
+                            <div style="font-size: 12px; color: var(--text-secondary);">ربط بوابات gemini_pool و codex_pool في ~/.openclaw/openclaw.json</div>
+                        </div>
+                    </div>
+                    <span id="openclaw-badge" class="badge" style="background: rgba(255,255,255,0.06); color: #94a3b8; font-size: 11px; padding: 4px 8px; border-radius: 6px;">فحص...</span>
+                </div>
+                <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #cbd5e1; margin-bottom: 12px; line-height: 1.6;">
+                    مسار التكوين: <code style="color: var(--accent-cyan);">~/.openclaw/openclaw.json</code><br>
+                    المزودات: <span style="color: var(--accent-emerald);">gemini_pool</span>, <span style="color: var(--accent-purple);">codex_pool</span>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="action-btn" id="btn-sync-openclaw" onclick="triggerIntegration('openclaw')" style="flex: 1; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: #fff; border: none; padding: 10px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                        <span>⚡</span>
+                        <span>ربط OpenClaw تلقائياً الآن</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Danger Zone (Uninstall) -->
+            <div class="glass-card" style="padding: 16px; border: 1px solid rgba(239, 68, 68, 0.3); background: rgba(239, 68, 68, 0.03);">
+                <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px;">
+                    <span style="font-size: 26px;">⚠️</span>
+                    <div>
+                        <div style="font-size: 15px; font-weight: 700; color: #ef4444;">منطقة الخطر (Danger Zone)</div>
+                        <div style="font-size: 12px; color: var(--text-secondary);">إلغاء تثبيت المنظومة وإيقاف وتعطيل خدمات Systemd وحذف أدوات الـ CLI بالكامل</div>
+                    </div>
+                </div>
+                <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #cbd5e1; margin-bottom: 12px;">
+                    💡 ملاحظة: هذا الإجراء سيوقف الخدمات فوراً ويزيل الأوامر من النظام مع الحفاظ على ملفات الحسابات كنسخة احتياطية.
+                </div>
+                <button class="action-btn" onclick="confirmUninstall()" style="width: 100%; background: linear-gradient(135deg, #ef4444, #dc2626); color: #fff; border: none; padding: 12px 14px; border-radius: 8px; font-weight: 700; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px;">
+                    <span>🗑️</span>
+                    <span>إلغاء التثبيت وحذف الخدمات بالكامل</span>
+                </button>
             </div>
         </section>
     </div>
@@ -882,10 +956,34 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
         function switchProvider(prov) {
             currentProvider = prov;
             
-            // Update tab styles
             const tabCodex = document.getElementById('tab-codex');
             const tabAg = document.getElementById('tab-antigravity');
-            
+            const tabSet = document.getElementById('tab-settings');
+            const poolSec = document.getElementById('pool-overview-section');
+            const streamSec = document.getElementById('stream-section');
+            const settingsSec = document.getElementById('settings-view-section');
+
+            if (prov === 'Settings') {
+                tabCodex.className = 'provider-tab-btn codex-theme';
+                tabAg.className = 'provider-tab-btn antigravity-theme';
+                tabSet.className = 'provider-tab-btn active';
+                tabSet.style.background = 'linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(168, 85, 247, 0.3))';
+                tabSet.style.borderColor = 'rgba(168, 85, 247, 0.5)';
+                
+                poolSec.style.display = 'none';
+                streamSec.style.display = 'none';
+                settingsSec.style.display = 'flex';
+                fetchSettingsStatus();
+                return;
+            }
+
+            // Restore normal view
+            tabSet.style.background = 'rgba(255,255,255,0.05)';
+            tabSet.style.borderColor = 'rgba(255,255,255,0.1)';
+            poolSec.style.display = 'block';
+            streamSec.style.display = 'block';
+            settingsSec.style.display = 'none';
+
             if (prov === 'Codex') {
                 tabCodex.className = 'provider-tab-btn active codex-theme';
                 tabAg.className = 'provider-tab-btn antigravity-theme';
@@ -902,6 +1000,74 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             renderAccountsList();
             if (cachedReportData && cachedReportData.recent_requests) {
                 renderGeneralActivityStream(cachedReportData.recent_requests);
+            }
+        }
+
+        async function fetchSettingsStatus() {
+            try {
+                const res = await fetch('/api/settings/status');
+                if (!res.ok) return;
+                const data = await res.json();
+                
+                const hermesBadge = document.getElementById('hermes-badge');
+                if (data.hermes && data.hermes.connected) {
+                    hermesBadge.innerText = '🟢 متصل ومفعّل';
+                    hermesBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+                    hermesBadge.style.color = '#34d399';
+                } else {
+                    hermesBadge.innerText = '⚪ غير مربوط';
+                    hermesBadge.style.background = 'rgba(255, 255, 255, 0.08)';
+                    hermesBadge.style.color = '#94a3b8';
+                }
+
+                const openclawBadge = document.getElementById('openclaw-badge');
+                if (data.openclaw && data.openclaw.connected) {
+                    openclawBadge.innerText = '🟢 متصل ومفعّل';
+                    openclawBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+                    openclawBadge.style.color = '#34d399';
+                } else {
+                    openclawBadge.innerText = '⚪ غير مربوط';
+                    openclawBadge.style.background = 'rgba(255, 255, 255, 0.08)';
+                    openclawBadge.style.color = '#94a3b8';
+                }
+            } catch(e) { console.error(e); }
+        }
+
+        async function triggerIntegration(target) {
+            const btn = target === 'hermes' ? document.getElementById('btn-sync-hermes') : document.getElementById('btn-sync-openclaw');
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<span>⏳</span><span>جاري الربط...</span>';
+            btn.disabled = true;
+
+            try {
+                const endpoint = target === 'hermes' ? '/api/settings/integrate_hermes' : '/api/settings/integrate_openclaw';
+                const res = await fetch(endpoint, { method: 'POST' });
+                const data = await res.json();
+                if (data.success) {
+                    btn.innerHTML = '<span>✅</span><span>تم الربط بنجاح!</span>';
+                    fetchSettingsStatus();
+                } else {
+                    alert('خطأ في الربط: ' + (data.message || 'فشل'));
+                    btn.innerHTML = originalHtml;
+                }
+            } catch(e) {
+                alert('فشل الاتصال بالخادم: ' + e);
+                btn.innerHTML = originalHtml;
+            } finally {
+                btn.disabled = false;
+                setTimeout(() => { btn.innerHTML = originalHtml; }, 3000);
+            }
+        }
+
+        function confirmUninstall() {
+            if (confirm('هل أنت متأكد تماماً من رغبتك في إلغاء تثبيت المنظومة وحذف الخدمات؟\\n\\nسيتم إيقاف كافة الخدمات فوراً وإزالة أدوات الـ CLI من النظام.')) {
+                fetch('/api/settings/uninstall', { method: 'POST' })
+                    .then(res => res.json())
+                    .then(data => {
+                        alert(data.message || 'جاري إلغاء التثبيت الآن.');
+                        window.location.reload();
+                    })
+                    .catch(e => alert('خطأ: ' + e));
             }
         }
 
@@ -1168,6 +1334,50 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
 
 GLOBAL_POOL_MANAGER = PoolManager()
 
+def get_settings_status():
+    hermes_cfg = os.path.expanduser("~/.hermes/config.yaml")
+    hermes_connected = False
+    hermes_installed = os.path.exists(hermes_cfg)
+    if hermes_installed:
+        try:
+            import yaml
+            with open(hermes_cfg, "r", encoding="utf-8") as f:
+                y = yaml.safe_load(f) or {}
+            cp = y.get("custom_providers", {})
+            hermes_connected = bool("gemini" in cp or "codex" in cp)
+        except Exception:
+            pass
+
+    openclaw_cfg = os.path.expanduser("~/.openclaw/openclaw.json")
+    openclaw_connected = False
+    openclaw_installed = os.path.exists(openclaw_cfg)
+    if openclaw_installed:
+        try:
+            with open(openclaw_cfg, "r", encoding="utf-8") as f:
+                j = json.load(f) or {}
+            provs = j.get("models", {}).get("providers", {})
+            openclaw_connected = bool("gemini_pool" in provs or "codex_pool" in provs)
+        except Exception:
+            pass
+
+    return {
+        "hermes": {"installed": hermes_installed, "connected": hermes_connected},
+        "openclaw": {"installed": openclaw_installed, "connected": openclaw_connected}
+    }
+
+def execute_integration_script(script_name):
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    script_path = os.path.join(base_dir, script_name)
+    if not os.path.exists(script_path):
+        return False, f"الملف غير موجود: {script_path}"
+    try:
+        res = subprocess.run(["bash", script_path], capture_output=True, text=True, timeout=20)
+        if res.returncode == 0:
+            return True, res.stdout.strip()
+        return False, res.stderr.strip() or res.stdout.strip()
+    except Exception as e:
+        return False, str(e)
+
 class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self, format, *args):
         # Mute normal GET logs to prevent terminal spam
@@ -1254,6 +1464,11 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             self.send_json_response(pm.get_all_status())
             return
 
+        # API: settings status
+        if path in ("/aipool/api/settings/status", "/api/settings/status"):
+            self.send_json_response(get_settings_status())
+            return
+
         # Main view - inject initial data server-side so it renders 100% populated immediately with 0ms delay!
         initial_data = pm.get_usage_logs_report()
         initial_json = json.dumps(initial_data, ensure_ascii=False).replace("</script>", "<\\\\/script>")
@@ -1274,6 +1489,62 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             self.send_header("Set-Cookie", f"yj_aipool_session={new_session_id}; Path=/; Max-Age=86400; HttpOnly; SameSite=Lax; Secure")
         self.end_headers()
         self.wfile.write(body)
+
+    def do_POST(self):
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path
+
+        client_ip = self.headers.get("X-Forwarded-For") or self.headers.get("X-Real-IP") or self.client_address[0]
+        if "," in client_ip:
+            client_ip = client_ip.split(",")[0].strip()
+
+        # Check session if auth DB exists
+        cookie_header = self.headers.get("Cookie")
+        session_cookie = None
+        if cookie_header:
+            c = cookies.SimpleCookie()
+            try:
+                c.load(cookie_header)
+                if "yj_aipool_session" in c:
+                    session_cookie = c["yj_aipool_session"].value
+            except Exception:
+                pass
+
+        header_session = self.headers.get("X-Session-ID")
+        effective_session = session_cookie or header_session
+
+        auth_mgr = TokenAuthManager()
+        is_auth = False
+        if client_ip in ("127.0.0.1", "::1", "localhost"):
+            is_auth = True
+        elif effective_session and auth_mgr.validate_device(effective_session, client_ip):
+            is_auth = True
+
+        if not is_auth:
+            self.send_json_response({"error": "Unauthorized"}, status_code=401)
+            return
+
+        if path in ("/aipool/api/settings/integrate_hermes", "/api/settings/integrate_hermes"):
+            ok, msg = execute_integration_script("setup-hermes.sh")
+            self.send_json_response({"success": ok, "message": msg})
+            return
+
+        if path in ("/aipool/api/settings/integrate_openclaw", "/api/settings/integrate_openclaw"):
+            ok, msg = execute_integration_script("setup-openclaw.sh")
+            self.send_json_response({"success": ok, "message": msg})
+            return
+
+        if path in ("/aipool/api/settings/uninstall", "/api/settings/uninstall"):
+            base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+            uninstall_script = os.path.join(base_dir, "uninstall.sh")
+            if os.path.exists(uninstall_script):
+                subprocess.Popen(["bash", "-c", f"sleep 1 && {uninstall_script}"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                self.send_json_response({"success": True, "message": "تم إطلاق عملية إلغاء التثبيت وحذف الخدمات في الخلفية بنجاح."})
+            else:
+                self.send_json_response({"success": False, "message": "ملف uninstall.sh غير موجود."}, status_code=404)
+            return
+
+        self.send_json_response({"error": "Not Found"}, status_code=404)
 
 class ThreadedTCPServer(socketserver.ThreadingMixIn, socketserver.TCPServer):
     allow_reuse_address = True
