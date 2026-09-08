@@ -85,6 +85,52 @@ if [ "$cmd" = "switch" ]; then
     exec "$SWITCH_BIN" switch "$target_num"
 fi
 
+# Remove / Delete Account
+if [ "$cmd" = "rm" ] || [ "$cmd" = "remove" ] || [ "$cmd" = "del" ]; then
+    target_num="${2:-}"
+    if [ -z "$target_num" ]; then
+        echo "Error: Specify account number to remove. Example: cx rm 2"
+        exit 1
+    fi
+    if [ -d "$STORE_DIR/$target_num" ]; then
+        rm -rf "$STORE_DIR/$target_num"
+        echo "✓ Removed Codex account #$target_num"
+        if [ -f "$ACTIVE_FILE" ] && [ "$(cat "$ACTIVE_FILE" | tr -d '[:space:]')" = "$target_num" ]; then
+            rm -f "$ACTIVE_FILE"
+            echo "⚠️ Active account was removed. Please switch to another account: cx switch 1"
+        fi
+    else
+        echo "Account #$target_num does not exist."
+    fi
+    exit 0
+fi
+
+# Clean duplicates
+if [ "$cmd" = "clean" ]; then
+    echo "🧹 Scanning for duplicate Codex accounts..."
+    python3 -c "
+import os, json
+store = os.environ.get('CODEX_ACCOUNT_STORE', os.path.expanduser('~/.codex-accounts'))
+seen = {}
+for d in sorted(os.listdir(store), key=lambda x: int(x) if x.isdigit() else 999):
+    dp = os.path.join(store, d)
+    if not (os.path.isdir(dp) and d.isdigit()): continue
+    auth_p = os.path.join(dp, 'auth.json')
+    email = None
+    if os.path.exists(auth_p):
+        try: email = json.load(open(auth_p)).get('email')
+        except: pass
+    if email:
+        if email in seen:
+            print(f'Removing duplicate account #{d} ({email}) - original is #{seen[email]}')
+            import shutil; shutil.rmtree(dp)
+        else:
+            seen[email] = d
+print('✓ Duplicate cleanup complete.')
+"
+    exit 0
+fi
+
 # Add Account (or interactive login)
 if [ "$cmd" = "add" ]; then
     input_file="${2:-}"
@@ -98,9 +144,10 @@ if [ "$cmd" = "add" ]; then
     next=$((highest + 1))
     
     if [ -n "$input_file" ] && [ -f "$input_file" ]; then
-        target="$STORE_DIR/$next"
-        cp "$input_file" "$target"
-        chmod 600 "$target"
+        target_dir="$STORE_DIR/$next"
+        mkdir -p "$target_dir"
+        cp "$input_file" "$target_dir/auth.json"
+        chmod 600 "$target_dir/auth.json"
         echo "✓ Account data imported as Account #$next"
         echo "Activating..."
         exec "$SWITCH_BIN" switch "$next"

@@ -516,7 +516,15 @@ switch_account() {
   local raw=${1-} target current target_auth status info email health_status
   validate_account "$raw"
   target=$REPLY
-  [[ -n $CODEX_BIN && -x $CODEX_BIN ]] || die 'Codex CLI is not executable'
+  if [[ -z "$CODEX_BIN" || ! -x "$CODEX_BIN" ]]; then
+    for c in "$(command -v codex 2>/dev/null || true)" "$HOME/.local/bin/codex" "/usr/local/bin/codex" "/usr/bin/codex"; do
+      if [[ -n "$c" && -x "$c" ]]; then CODEX_BIN="$c"; break; fi
+    done
+  fi
+  [[ -n $CODEX_BIN && -x $CODEX_BIN ]] || die 'Codex CLI is not installed or executable. Install via npm install -g @openai/codex'
+  if [[ ! -d $SHARED_HOME && ! -L $SHARED_HOME ]]; then
+    install -d -m 700 -- "$SHARED_HOME"
+  fi
   [[ -d $SHARED_HOME && ! -L $SHARED_HOME ]] || die 'shared Codex home is missing or unsafe'
   ensure_private_store
 

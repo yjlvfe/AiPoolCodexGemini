@@ -84,6 +84,57 @@ if [ "$cmd" = "switch" ]; then
     exec "$SWITCH_BIN" "$target_num"
 fi
 
+# Remove / Delete Account
+if [ "$cmd" = "rm" ] || [ "$cmd" = "remove" ] || [ "$cmd" = "del" ]; then
+    target_num="${2:-}"
+    if [ -z "$target_num" ]; then
+        echo "Error: Specify account number to remove. Example: ag rm 2"
+        exit 1
+    fi
+    if [ -d "$STORE_DIR/$target_num" ]; then
+        rm -rf "$STORE_DIR/$target_num"
+        echo "✓ Removed Gemini account #$target_num"
+        if [ -f "$ACTIVE_FILE" ] && [ "$(cat "$ACTIVE_FILE" | tr -d '[:space:]')" = "$target_num" ]; then
+            rm -f "$ACTIVE_FILE"
+            echo "⚠️ Active account was removed. Please switch to another account: ag 1"
+        fi
+    else
+        echo "Account #$target_num does not exist."
+    fi
+    exit 0
+fi
+
+# Clean duplicates
+if [ "$cmd" = "clean" ]; then
+    echo "🧹 Scanning for duplicate Gemini accounts..."
+    python3 -c "
+import os, json
+store = os.environ.get('AG_ACCOUNT_STORE', os.path.expanduser('~/.antigravity-accounts'))
+seen = {}
+for d in sorted(os.listdir(store), key=lambda x: int(x) if x.isdigit() else 999):
+    dp = os.path.join(store, d)
+    if not (os.path.isdir(dp) and d.isdigit()): continue
+    meta_p = os.path.join(dp, 'metadata.json')
+    email = None
+    if os.path.exists(meta_p):
+        try: email = json.load(open(meta_p)).get('email')
+        except: pass
+    if not email:
+        tok_p = os.path.join(dp, 'antigravity-oauth-token')
+        if os.path.exists(tok_p):
+            try: email = json.load(open(tok_p)).get('token', {}).get('email')
+            except: pass
+    if email:
+        if email in seen:
+            print(f'Removing duplicate account #{d} ({email}) - original is #{seen[email]}')
+            import shutil; shutil.rmtree(dp)
+        else:
+            seen[email] = d
+print('✓ Duplicate cleanup complete.')
+"
+    exit 0
+fi
+
 # Add Account (or interactive login)
 if [ "$cmd" = "add" ]; then
     input_file="${2:-}"
