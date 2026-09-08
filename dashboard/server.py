@@ -177,79 +177,97 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             gap: 20px;
         }
 
-        /* Top Header */
+        /* Top Header - Pro Luxury Responsive */
         .top-navbar {
-            background: rgba(15, 20, 32, 0.55);
+            background: rgba(15, 20, 32, 0.65);
             backdrop-filter: blur(24px);
             -webkit-backdrop-filter: blur(24px);
             border: 1px solid rgba(255, 255, 255, 0.08);
-            border-top: 1px solid rgba(255, 255, 255, 0.18);
+            border-top: 1px solid rgba(255, 255, 255, 0.16);
             border-radius: var(--border-radius-xl);
-            padding: 16px 20px;
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: 0 16px 36px -10px rgba(0,0,0,0.5);
+            transition: var(--transition-smooth);
+        }
+        .header-main-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
-            box-shadow: 0 16px 36px -10px rgba(0,0,0,0.5);
-            transition: var(--transition-smooth);
+            width: 100%;
         }
         .brand-section {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 10px;
+            min-width: 0;
         }
         .brand-logo {
-            width: 44px;
-            height: 44px;
-            border-radius: 14px;
+            width: 38px;
+            height: 38px;
+            min-width: 38px;
+            border-radius: 12px;
             background: linear-gradient(135deg, #0ea5e9, #8b5cf6);
             display: flex;
             align-items: center;
             justify-content: center;
-            font-size: 22px;
-            box-shadow: 0 8px 16px -4px rgba(14, 165, 233, 0.35);
+            font-size: 19px;
+            box-shadow: 0 6px 14px -3px rgba(14, 165, 233, 0.4);
             border: 1px solid rgba(255,255,255,0.2);
+            flex-shrink: 0;
         }
         .brand-title {
-            font-size: 16px;
-            font-weight: 900;
-            letter-spacing: -0.3px;
+            font-size: 15px;
+            font-weight: 800;
+            letter-spacing: -0.2px;
             display: flex;
             align-items: center;
             gap: 6px;
+            white-space: nowrap;
         }
-        .brand-subtitle {
-            font-size: 11px;
-            color: var(--text-secondary);
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            font-weight: 600;
-        }
-        .device-badge {
-            background: rgba(16, 185, 129, 0.12);
-            border: 1px solid rgba(16, 185, 129, 0.25);
-            color: var(--accent-emerald);
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 700;
-            display: flex;
+        .live-pill {
+            background: rgba(14, 165, 233, 0.12);
+            border: 1px solid rgba(14, 165, 233, 0.3);
+            color: var(--accent-cyan);
+            font-size: 9px;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 10px;
+            letter-spacing: 0.5px;
+            display: inline-flex;
             align-items: center;
-            gap: 5px;
-            letter-spacing: -0.2px;
+            gap: 4px;
+            line-height: 1;
+        }
+        .live-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            box-shadow: 0 0 6px var(--accent-cyan);
+            animation: pulseGlow 2s infinite ease-in-out;
+        }
+        @keyframes pulseGlow {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.8); }
         }
         .settings-top-btn {
-            background: rgba(255, 255, 255, 0.06);
+            background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.12);
             color: var(--text-main);
             padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 11px;
+            border-radius: 14px;
+            font-size: 12px;
             font-weight: 700;
-            display: flex;
+            display: inline-flex;
             align-items: center;
             gap: 5px;
             cursor: pointer;
             transition: var(--transition-smooth);
             font-family: inherit;
+            flex-shrink: 0;
         }
         .settings-top-btn:hover {
             background: rgba(255, 255, 255, 0.12);
@@ -261,6 +279,37 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             border-color: rgba(168, 85, 247, 0.6);
             color: #fff;
             box-shadow: 0 4px 12px rgba(168, 85, 247, 0.25);
+        }
+        .header-sub-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            padding-top: 4px;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+            font-size: 11px;
+        }
+        .brand-subtitle {
+            color: var(--text-tertiary);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .device-badge {
+            background: rgba(16, 185, 129, 0.1);
+            border: 1px solid rgba(16, 185, 129, 0.2);
+            color: var(--accent-emerald);
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 10px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            letter-spacing: -0.2px;
+            flex-shrink: 0;
         }
 
         /* Provider Segmented Pill Selector */
@@ -772,25 +821,25 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
         </div>
         <!-- Top Navigation Header -->
         <header class="top-navbar">
-            <div class="brand-section">
-                <div class="brand-logo">⚡</div>
-                <div>
+            <div class="header-main-row">
+                <div class="brand-section">
+                    <div class="brand-logo">⚡</div>
                     <div class="brand-title">
                         <span>AI Pool Guardian</span>
-                        <span style="color: var(--accent-cyan); font-size: 10px; letter-spacing: 0.5px;">● LIVE</span>
+                        <span class="live-pill"><span class="live-dot"></span>LIVE</span>
                     </div>
-                    <div class="brand-subtitle">Autonomous Failover Architecture</div>
-                </div>
-            </div>
-            <div style="display: flex; align-items: center; gap: 10px;">
-                <div class="device-badge" title="Authenticated Device Session">
-                    <span>🔒</span>
-                    <span>Verified</span>
                 </div>
                 <button id="settings-toggle-btn" class="settings-top-btn" onclick="toggleSettingsView()">
                     <span id="settings-btn-icon">⚙️</span>
                     <span id="settings-btn-text">Settings</span>
                 </button>
+            </div>
+            <div class="header-sub-row">
+                <div class="brand-subtitle">Autonomous Failover Architecture</div>
+                <div class="device-badge" title="Authenticated Device Session">
+                    <span>🔒</span>
+                    <span>24h Verified</span>
+                </div>
             </div>
         </header>
 
