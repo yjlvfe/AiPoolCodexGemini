@@ -325,6 +325,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
         }
         .provider-tab-btn {
+            width: 100%;
             background: transparent;
             border: none;
             color: var(--text-secondary);
@@ -1172,7 +1173,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 btn.classList.remove('active');
                 btnIcon.innerText = '⚙️';
                 btnText.innerText = 'Settings';
-                providerBar.style.display = 'flex';
+                providerBar.style.display = '';
                 poolSec.style.display = 'block';
                 streamSec.style.display = 'block';
                 settingsSec.style.display = 'none';

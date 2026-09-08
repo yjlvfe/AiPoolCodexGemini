@@ -63,6 +63,12 @@ class DashboardManualSwitch(unittest.TestCase):
         self.assertIn('// Live immediate DOM update: mark account active and refresh UI without reload', server_py)
         self.assertIn('renderAccountsList();', server_py)
 
+    def test_settings_toggle_preserves_grid_layout(self):
+        server_py = (ROOT / 'dashboard/server.py').read_text()
+        # Ensure providerBar display reset does not force 'flex' which breaks the 2-column grid
+        self.assertNotIn("providerBar.style.display = 'flex'", server_py)
+        self.assertIn("providerBar.style.display = '';", server_py)
+
 
 if __name__ == '__main__':
     unittest.main()
