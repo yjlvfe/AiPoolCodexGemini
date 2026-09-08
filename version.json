@@ -1,4 +1,4 @@
 {
-  "version": "1.6.0",
-  "release_name": "Dashboard Manual Switch & Resilient Agent Injection"
+  "version": "1.6.1",
+  "release_name": "Resilient Offline Dependency Bootstrapping & Legacy Tolerant Integrations"
 }

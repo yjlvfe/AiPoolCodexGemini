@@ -67,32 +67,89 @@ def ensure_dependencies():
     runtime = ROOT / '.venv/bin/python'
     if not runtime.is_file():
         try:
-            subprocess.run([sys.executable, '-m', 'venv', str(ROOT / '.venv')], check=True)
+            subprocess.run([sys.executable, '-m', 'venv', '--system-site-packages', str(ROOT / '.venv')], check=True)
         except subprocess.CalledProcessError:
-            subprocess.run([sys.executable, '-m', 'venv', '--without-pip', str(ROOT / '.venv')], check=True)
+            try:
+                subprocess.run([sys.executable, '-m', 'venv', str(ROOT / '.venv')], check=True)
+            except subprocess.CalledProcessError:
+                subprocess.run([sys.executable, '-m', 'venv', '--without-pip', str(ROOT / '.venv')], check=True)
 
     # 1. Check if dependencies are already available in .venv
     test_import = subprocess.run([str(runtime), '-c', 'import yaml, json5'], capture_output=True)
     if test_import.returncode == 0:
         return runtime
 
-    # 2. Check if pip is available in .venv, if not try ensurepip
+    # Find venv site-packages directory
+    sp_dirs = list((ROOT / '.venv/lib').glob('python*/site-packages'))
+    venv_sp = sp_dirs[0] if sp_dirs else None
+
+    # 2. Add host python site-packages to venv via .pth fallback
+    if venv_sp and venv_sp.is_dir():
+        try:
+            res = subprocess.run([sys.executable, '-c', 'import site; print("\\n".join(site.getsitepackages()))'], capture_output=True, text=True)
+            if res.returncode == 0 and res.stdout.strip():
+                pth_file = venv_sp / 'system-fallback.pth'
+                pth_file.write_text(res.stdout.strip() + '\n')
+                if subprocess.run([str(runtime), '-c', 'import yaml, json5'], capture_output=True).returncode == 0:
+                    return runtime
+        except Exception:
+            pass
+
+    # 3. Try to copy or link packages from host python if host has them
+    if venv_sp and venv_sp.is_dir():
+        for pkg in ('yaml', 'json5'):
+            try:
+                res = subprocess.run([sys.executable, '-c', f'import {pkg}; print({pkg}.__file__)'], capture_output=True, text=True)
+                if res.returncode == 0 and res.stdout.strip():
+                    init_path = Path(res.stdout.strip())
+                    pkg_path = init_path.parent if init_path.name == '__init__.py' else init_path
+                    dest = venv_sp / pkg_path.name
+                    if not dest.exists():
+                        try:
+                            dest.symlink_to(pkg_path)
+                        except OSError:
+                            if pkg_path.is_dir():
+                                shutil.copytree(pkg_path, dest)
+                            else:
+                                shutil.copy2(pkg_path, dest)
+            except Exception:
+                pass
+        if subprocess.run([str(runtime), '-c', 'import yaml, json5'], capture_output=True).returncode == 0:
+            return runtime
+
+    # 4. Check if pip is available in .venv, if not try ensurepip
     has_pip = subprocess.run([str(runtime), '-m', 'pip', '--version'], capture_output=True).returncode == 0
     if not has_pip:
         subprocess.run([str(runtime), '-m', 'ensurepip', '--default-pip'], capture_output=True)
         has_pip = subprocess.run([str(runtime), '-m', 'pip', '--version'], capture_output=True).returncode == 0
 
-    # 3. If pip is available, install requirements
+    # 5. If pip is available in venv, install requirements
     if has_pip:
         subprocess.run([str(runtime), '-m', 'pip', 'install', '--disable-pip-version-check', '-r', str(ROOT / 'requirements.txt')], capture_output=True)
+        if subprocess.run([str(runtime), '-c', 'import yaml, json5'], capture_output=True).returncode == 0:
+            return runtime
 
-    # 4. Check if dependencies are satisfied now
+    # 6. Try installing using host python pip with --target
+    if venv_sp and venv_sp.is_dir():
+        pip_cmds = [
+            [sys.executable, '-m', 'pip', 'install', '--disable-pip-version-check', '--target', str(venv_sp), '-r', str(ROOT / 'requirements.txt')],
+            ['pip3', 'install', '--disable-pip-version-check', '--target', str(venv_sp), '-r', str(ROOT / 'requirements.txt')],
+            ['pip', 'install', '--disable-pip-version-check', '--target', str(venv_sp), '-r', str(ROOT / 'requirements.txt')]
+        ]
+        for cmd in pip_cmds:
+            try:
+                subprocess.run(cmd, capture_output=True)
+                if subprocess.run([str(runtime), '-c', 'import yaml, json5'], capture_output=True).returncode == 0:
+                    return runtime
+            except Exception:
+                continue
+
+    # 7. Final check
     verify_import = subprocess.run([str(runtime), '-c', 'import yaml, json5'], capture_output=True)
     if verify_import.returncode != 0:
-        # Check if the host python already has them, or try to copy/symlink them
         raise ValueError(
             'Missing dependencies (PyYAML, json5) in .venv and pip is unavailable or failed.\n'
-            'Please install them by running: pip install -r requirements.txt (or sudo apt install python3-pip python3-yaml)'
+            'Please install them on the host system: sudo apt install python3-yaml python3-pip (or pip install -r requirements.txt)'
         )
     return runtime
 
