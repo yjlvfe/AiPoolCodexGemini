@@ -1,0 +1,14 @@
+[Unit]
+Description=AI Suite - Multi-Account Pool Telegram Bot Service
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/Projects/AiPoolCodexGemini/dashboard
+ExecStart=/usr/bin/python3 /root/Projects/AiPoolCodexGemini/dashboard/bot_service.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=default.target

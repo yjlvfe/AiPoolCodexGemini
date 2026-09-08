@@ -1,0 +1,35 @@
+# ==============================================================================
+# Hermes Agent Configuration Snippet for AI Pool Suite
+# أضف هذه الإعدادات في ملف /root/.hermes/config.yaml
+# ==============================================================================
+
+# مزود Gemini / Antigravity Gateway (Port 8123)
+custom_providers:
+  gemini:
+    base_url: "http://127.0.0.1:8123/v1"
+    api_key: "any-dummy-key"
+    models:
+      - id: "gemini-3.8-flash-tiered"
+        display_name: "Gemini 3.8 Flash (Auto-Account Pool)"
+        context_window: 1048576
+      - id: "claude-sonnet-4-6"
+        display_name: "Claude Sonnet 4.6 (Via Gemini Pool)"
+        context_window: 200000
+      - id: "claude-opus-4-6-thinking"
+        display_name: "Claude Opus 4.6 Thinking (Via Gemini Pool)"
+        context_window: 200000
+
+  # مزود Codex / ChatGPT Gateway (Port 8124)
+  codex:
+    base_url: "http://127.0.0.1:8124/v1"
+    api_key: "any-dummy-key"
+    models:
+      - id: "gpt-6-astra"
+        display_name: "GPT-6 Astra (Auto-Account Pool)"
+        context_window: 128000
+      - id: "gpt-5.6-luna"
+        display_name: "GPT-5.6 Luna (Auto-Account Pool)"
+        context_window: 128000
+      - id: "gpt-5.6-sol"
+        display_name: "GPT-5.6 Sol (Auto-Account Pool)"
+        context_window: 128000

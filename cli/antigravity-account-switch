@@ -1,0 +1,326 @@
+#!/usr/bin/env python3
+import contextlib, datetime, fcntl, importlib.util, io, json, os, shutil, signal, subprocess, sys, tempfile, time
+import urllib.parse, urllib.request
+from pathlib import Path
+
+STORE = Path(os.environ.get("AG_ACCOUNT_STORE", "/root/.antigravity-accounts"))
+CLI_AUTH = Path(os.environ.get("AG_CLI_AUTH", "/root/.gemini/antigravity-cli/antigravity-oauth-token"))
+HERMES_AUTH = Path(os.environ.get("AG_HERMES_AUTH", "/root/.hermes/.antigravity_oauth.json"))
+AGY = os.environ.get("AGY_BIN", "/root/.local/bin/agy")
+SYSTEMCTL = os.environ.get("AG_SYSTEMCTL", "systemctl")
+TOKEN_URL = "https://oauth2.googleapis.com/token"
+USERINFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo?alt=json"
+
+def oauth_client():
+    bridge_path=Path(os.environ.get("AG_BRIDGE_SOURCE", "/root/Projects/AiPoolCodexGemini/bridges/gemini_bridge.py"))
+    spec=importlib.util.spec_from_file_location("_ag_bridge_config",bridge_path)
+    module=importlib.util.module_from_spec(spec); spec.loader.exec_module(module)
+    return module.CLIENT_ID,module.CLIENT_SECRET
+
+def discover_project(access):
+    plugin_src=os.environ.get("AG_PLUGIN_SRC", "/root/.hermes/plugins/antigravity-provider/src")
+    if plugin_src not in sys.path: sys.path.insert(0,plugin_src)
+    from antigravity_provider.cloudcode import load_or_onboard_project
+    return load_or_onboard_project(access)
+
+def die(msg):
+    print(f"antigravity-account-switch: {msg}", file=sys.stderr)
+    raise SystemExit(1)
+
+def atomic_json(path, data):
+    path.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd, name = tempfile.mkstemp(prefix=f".{path.name}.", dir=path.parent)
+    try:
+        os.fchmod(fd, 0o600)
+        with os.fdopen(fd, "w") as f:
+            json.dump(data, f, indent=2, sort_keys=True)
+            f.write("\n"); f.flush(); os.fsync(f.fileno())
+        os.replace(name, path); os.chmod(path, 0o600)
+    finally:
+        try: os.unlink(name)
+        except FileNotFoundError: pass
+
+def atomic_copy(src, dst):
+    dst.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    fd, name = tempfile.mkstemp(prefix=f".{dst.name}.", dir=dst.parent)
+    try:
+        with open(src, "rb") as r, os.fdopen(fd, "wb") as w:
+            shutil.copyfileobj(r, w); w.flush(); os.fsync(w.fileno())
+        os.chmod(name, 0o600); os.replace(name, dst); os.chmod(dst, 0o600)
+    finally:
+        try: os.unlink(name)
+        except FileNotFoundError: pass
+
+def load_cli(path):
+    try: data=json.loads(path.read_text())
+    except Exception: die("credential file is missing or invalid")
+    token=data.get("token") if isinstance(data,dict) else None
+    if not isinstance(token,dict) or not token.get("refresh_token"):
+        die("credential does not contain a refresh token")
+    return data, token
+
+def validate_and_sync(cli_path):
+    data, token = load_cli(cli_path)
+    client_id,client_secret=oauth_client()
+    body=urllib.parse.urlencode({"client_id":client_id,"client_secret":client_secret,
+        "grant_type":"refresh_token","refresh_token":token["refresh_token"]}).encode()
+    try:
+        req=urllib.request.Request(TOKEN_URL,data=body,headers={"Content-Type":"application/x-www-form-urlencoded"})
+        with urllib.request.urlopen(req,timeout=30) as r: fresh=json.load(r)
+        access=fresh.get("access_token")
+        if not access: raise ValueError("missing access token")
+        req=urllib.request.Request(USERINFO_URL,headers={"Authorization":f"Bearer {access}"})
+        with urllib.request.urlopen(req,timeout=20) as r: info=json.load(r)
+        email=str(info.get("email") or "").strip()
+        if not email: raise ValueError("missing account identity")
+        project_id=discover_project(access)
+    except Exception as e:
+        die(f"authentication validation failed ({type(e).__name__})")
+    token["access_token"]=access
+    token["refresh_token"]=fresh.get("refresh_token") or token["refresh_token"]
+    token["token_type"]=fresh.get("token_type") or token.get("token_type") or "Bearer"
+    token["expiry"]=int((time.time()+int(fresh.get("expires_in",3599)))*1000)
+    hermes={"access_token":access,"refresh_token":token["refresh_token"],
+        "token_type":token["token_type"],"expires_at":token["expiry"]/1000,
+        "email":email,"project_id":project_id}
+    return data, hermes, email
+
+def bridge_service(restart=True):
+    if os.environ.get("AG_SKIP_SERVICES") == "1": return
+    action="restart" if restart else "is-active"
+    svc = "ai-gemini-bridge.service"
+    try:
+        subprocess.run([SYSTEMCTL,"--user",action,svc],check=True,
+                       stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+    except Exception:
+        try:
+            subprocess.run([SYSTEMCTL,"--user",action,"antigravity-bridge.service"],check=True,
+                           stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
+        except Exception:
+            pass
+    if restart:
+        for _ in range(30):
+            try:
+                with urllib.request.urlopen("http://127.0.0.1:8123/health",timeout=2) as r:
+                    if r.status == 200: return
+            except Exception: time.sleep(.25)
+        die("bridge did not become healthy")
+
+def credential_fingerprint(path):
+    try:
+        _,token=load_cli(path)
+        return __import__("hashlib").sha256(str(token["refresh_token"]).encode()).digest()
+    except SystemExit:
+        return None
+
+def ensure_unique_account(n,email,target):
+    target_fp=credential_fingerprint(target)
+    for other in accounts():
+        if other==n: continue
+        other_path=STORE/other/"antigravity-oauth-token"
+        duplicate_credential=target_fp is not None and target_fp==credential_fingerprint(other_path)
+        duplicate_email=metadata_email(other).casefold()==email.casefold()
+        if duplicate_credential or duplicate_email:
+            die(f"this Google account is already registered as ag{other}; choose a different Google account")
+
+def accounts():
+    return sorted((p.name for p in STORE.iterdir() if p.is_dir() and p.name.isdigit()
+                   and str(int(p.name))==p.name and int(p.name)>0
+                   and (p/"antigravity-oauth-token").is_file()),key=int)
+
+def ensure_wrapper(number):
+    wrapper=Path("/usr/local/bin")/f"ag{number}"
+    if wrapper.is_symlink() or not wrapper.exists():
+        try: wrapper.unlink()
+        except FileNotFoundError: pass
+        wrapper.symlink_to("/usr/local/bin/antigravity-account-switch")
+
+def inspect_account(n, usage=False):
+    path=STORE/n/"antigravity-oauth-token"
+    if not path.is_file(): return {"status":"NOT REGISTERED","email":"-"}
+    try:
+        with contextlib.redirect_stderr(io.StringIO()): cli,hermes,email=validate_and_sync(path)
+        atomic_json(path,cli)
+        atomic_json(STORE/n/"metadata.json",{"email":email,"status":"OK"})
+        result={"status":"OK","email":email}
+        if usage:
+            headers={"Authorization":f"Bearer {hermes['access_token']}","Content-Type":"application/json",
+                     "User-Agent":"antigravity/hub/2.1.4 linux/amd64"}
+            req=urllib.request.Request("https://daily-cloudcode-pa.googleapis.com/v1internal:retrieveUserQuotaSummary",
+                data=json.dumps({"project":hermes["project_id"]}).encode(),headers=headers,method="POST")
+            with urllib.request.urlopen(req,timeout=30) as r: result["usage"]=json.load(r)
+        return result
+    except SystemExit: return {"status":"CHECK FAILED","email":metadata_email(n)}
+    except Exception: return {"status":"CHECK FAILED","email":metadata_email(n)}
+
+def metadata_email(n):
+    try: return str(json.loads((STORE/n/"metadata.json").read_text()).get("email") or "-")
+    except Exception: return "-"
+
+def show_list():
+    active=(STORE/"active").read_text().strip() if (STORE/"active").is_file() else ""
+    print("Antigravity Accounts\n")
+    for n in accounts():
+        info=inspect_account(n)
+        print(f"{'●' if n==active else ' '} {n}  {info['email']}  {info['status']}")
+
+def bar(pct):
+    pct=max(0,min(100,int(round(pct)))); filled=round(pct/5)
+    raw="█"*filled+"-"*(20-filled)
+    if not sys.stdout.isatty() or "NO_COLOR" in os.environ: return f"[{raw}]"
+    color=46 if pct>=80 else 118 if pct>=60 else 226 if pct>=40 else 208 if pct>=20 else 196
+    return f"[\033[38;5;{color}m{'█'*filled}\033[0m\033[38;5;88m{'-'*(20-filled)}\033[0m]"
+
+def reset_in(value):
+    if not value: return "N/A"
+    try:
+        end=datetime.datetime.fromisoformat(value.replace("Z","+00:00")); sec=max(0,int((end-datetime.datetime.now(datetime.timezone.utc)).total_seconds()))
+        d,sec=divmod(sec,86400); h,sec=divmod(sec,3600); m=sec//60
+        return (f"{d}d {h}h" if d else f"{h}h {m}m" if h else f"{m}m")
+    except Exception: return "N/A"
+
+def usage_groups(data):
+    out=[]
+    for group in data.get("groups") or []:
+        buckets={b.get("window"):b for b in group.get("buckets") or [] if isinstance(b,dict)}
+        out.append((str(group.get("displayName") or "Models"),buckets))
+    return out
+
+def show_usage(selection=None, short=False):
+    ids=accounts()
+    if selection:
+        if selection not in ids: die(f"account {selection} is not registered")
+        ids=[selection]
+    if not short: print("Antigravity Usage\n")
+    for n in ids:
+        info=inspect_account(n,usage=True)
+        if short:
+            chunks=[n,info["email"]]
+            for name,buckets in usage_groups(info.get("usage",{})):
+                five=buckets.get("5h",{}); week=buckets.get("weekly",{})
+                chunks.append(f"{name}: 5h {round(float(five.get('remainingFraction',0))*100)}% week {round(float(week.get('remainingFraction',0))*100)}%")
+            if info["status"]!="OK": chunks.append(info["status"])
+            print("  ".join(chunks)); continue
+        active_num = (STORE/"active").read_text().strip() if (STORE/"active").is_file() else "1"; active_str = " [ACTIVE]" if str(n) == active_num else ""
+        print(f"Account {n}{active_str}\nEmail: {info['email']}\nStatus: {info['status']}")
+        for name,buckets in usage_groups(info.get("usage",{})):
+            print(name)
+            for window,label in (("5h","5-hour"),("weekly","Weekly")):
+                b=buckets.get(window,{})
+                pct=round(float(b.get("remainingFraction",0))*100)
+                print(f"{label}: {bar(pct)} {pct}% left\nReset in: {reset_in(b.get('resetTime'))}")
+        print()
+
+def show_help():
+    print("""Antigravity Account Manager
+
+Accounts
+agN            Switch/login Antigravity account
+aglist         Check and show linked accounts
+
+Usage
+agusage        Show usage for all accounts
+agusage N      Show usage for account N
+agusage --short Compact usage
+
+Integration
+Antigravity CLI, Hermes credentials, bridge, and Hermes gateway switch together""")
+
+def enroll(n, target):
+    with tempfile.TemporaryDirectory(prefix=f"antigravity-login-{n}-") as home:
+        homep=Path(home); cli_dir=homep/".gemini/antigravity-cli"
+        cli_dir.mkdir(parents=True,mode=0o700)
+        settings=CLI_AUTH.parent/"settings.json"
+        if settings.is_file(): atomic_copy(settings,cli_dir/"settings.json")
+        print(f"Registering Antigravity account {n}. Complete Google OAuth; setup will continue automatically.")
+        env={**os.environ,"HOME":home,"AG_SESSION_TOKEN_FILE":str(cli_dir/"antigravity-oauth-token")}
+        candidate=cli_dir/"antigravity-oauth-token"
+        proc=subprocess.Popen([AGY],env=env)
+        deadline=time.monotonic()+900
+        try:
+            while time.monotonic()<deadline:
+                if candidate.is_file():
+                    try:
+                        load_cli(candidate)
+                        break
+                    except SystemExit:
+                        pass
+                rc=proc.poll()
+                if rc is not None: die("login exited before producing a valid credential")
+                time.sleep(.25)
+            else: die("login timed out before producing a valid credential")
+        finally:
+            if proc.poll() is None:
+                proc.send_signal(signal.SIGTERM)
+                try: proc.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    proc.kill(); proc.wait()
+        print("Antigravity login captured; completing account setup.")
+        atomic_copy(candidate,target)
+
+def main():
+    invoked=Path(sys.argv[0]).name
+    raw=sys.argv[1:]
+    if invoked=="aglist": command,args="list",raw
+    elif invoked=="agusage": command,args="usage",raw
+    elif invoked=="aghelp": command,args="help",raw
+    elif invoked.startswith("ag") and invoked[2:].isdigit() and not raw: command,args="switch",[invoked[2:]]
+    elif raw and raw[0] in {"list","usage","help","switch"}: command,args=raw[0],raw[1:]
+    else: command,args="switch",raw
+    os.umask(0o077); STORE.mkdir(parents=True,exist_ok=True,mode=0o700)
+    if command=="help" and not args: show_help(); return
+    if command=="list" and not args: show_list(); return
+    if command=="usage":
+        short="--short" in args; selected=next((x for x in args if x!="--short"),None)
+        if selected is not None and (not selected.isdigit() or int(selected)<1): die("usage: agusage [N|--short]")
+        show_usage(selected,short); return
+    if len(args)!=1 or not args[0].isdigit() or int(args[0])<1 or str(int(args[0]))!=args[0]:
+        die("usage: agN (N is a positive integer)")
+    n=args[0]
+    lock=open(STORE/"switch.lock","a+"); os.chmod(STORE/"switch.lock",0o600)
+    fcntl.flock(lock,fcntl.LOCK_EX)
+    active=STORE/"active"; old=active.read_text().strip() if active.is_file() else ""
+    target_dir=STORE/n; target=target_dir/"antigravity-oauth-token"
+    target_dir.mkdir(parents=True,exist_ok=True,mode=0o700)
+    # Enrol the current live identity as account 1 on first installation.
+    if not active.exists() and n=="1" and CLI_AUTH.is_file(): atomic_copy(CLI_AUTH,target)
+    old_master=STORE/old/"antigravity-oauth-token" if old.isdigit() else None
+    if (old_master is not None and old_master.is_file() and CLI_AUTH.is_file()
+            and credential_fingerprint(old_master)==credential_fingerprint(CLI_AUTH)):
+        atomic_copy(CLI_AUTH,old_master)
+    old_cli=CLI_AUTH.read_bytes() if CLI_AUTH.is_file() else None
+    old_hermes=HERMES_AUTH.read_bytes() if HERMES_AUTH.is_file() else None
+    old_target=target.read_bytes() if target.is_file() else None
+    try:
+        if not target.is_file(): enroll(n,target)
+        cli,hermes,email=validate_and_sync(target)
+        ensure_unique_account(n,email,target)
+        atomic_json(target,cli); atomic_copy(target,CLI_AUTH); atomic_json(HERMES_AUTH,hermes)
+        bridge_service()
+        atomic_json(target_dir/"metadata.json",{"email":email,"status":"OK"})
+        fd,tmp=tempfile.mkstemp(prefix=".active.",dir=STORE)
+        with os.fdopen(fd,"w") as f: f.write(n+"\n"); f.flush(); os.fsync(f.fileno())
+        os.chmod(tmp,0o600); os.replace(tmp,active)
+        if str(STORE)=="/root/.antigravity-accounts":
+            ensure_wrapper(n)
+            ensure_wrapper(str(int(n)+1))
+    except BaseException:
+        for path,blob in ((CLI_AUTH,old_cli),(HERMES_AUTH,old_hermes),(target,old_target)):
+            if blob is None:
+                try: path.unlink()
+                except FileNotFoundError: pass
+            else:
+                path.parent.mkdir(parents=True,exist_ok=True)
+                fd,tmp=tempfile.mkstemp(prefix=f".{path.name}.rollback.",dir=path.parent)
+                with os.fdopen(fd,"wb") as f: f.write(blob); f.flush(); os.fsync(f.fileno())
+                os.chmod(tmp,0o600); os.replace(tmp,path)
+        if old: active.write_text(old+"\n"); os.chmod(active,0o600)
+        try: target_dir.rmdir()
+        except OSError: pass
+        try: bridge_service()
+        except BaseException: pass
+        raise
+    print(f"Active Antigravity account: {n}")
+    print(f"Email: {email}")
+
+if __name__ == "__main__": main()

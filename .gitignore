@@ -1,0 +1,20 @@
+# Secrets and sensitive configurations
+config.env
+.env
+*.key
+*.pem
+
+# Live account storage and credentials
+accounts_backup/
+auth.db
+*.db
+*.sqlite3
+
+# Logs and runtime caches
+logs/
+*.log
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.DS_Store

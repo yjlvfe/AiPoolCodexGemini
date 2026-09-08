@@ -1,0 +1,16 @@
+[Unit]
+Description=AI Suite - Codex / ChatGPT Gateway Bridge (Port 8124)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/Projects/AiPoolCodexGemini/bridges
+ExecStart=/usr/bin/python3 /root/Projects/AiPoolCodexGemini/bridges/codex_bridge.py
+Restart=always
+RestartSec=3
+Environment=CODEX_BRIDGE_HOST=127.0.0.1
+Environment=CODEX_BRIDGE_PORT=8124
+
+[Install]
+WantedBy=default.target

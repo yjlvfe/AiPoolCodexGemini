@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# ag - Unified Gemini / Antigravity Multi-Account CLI
+# ==============================================================================
+set -euo pipefail
+
+STORE_DIR="${AG_ACCOUNT_STORE:-$HOME/.antigravity-accounts}"
+ACTIVE_FILE="$STORE_DIR/active"
+SWITCH_BIN="/usr/local/bin/antigravity-account-switch"
+
+list_accounts() {
+    echo "=========================================================="
+    echo " 🟢 حسابات Gemini / Antigravity المسجلة:"
+    echo "=========================================================="
+    active_acc=""
+    if [ -f "$ACTIVE_FILE" ]; then
+        active_acc=$(cat "$ACTIVE_FILE" | tr -d '[:space:]')
+    fi
+    found=0
+    for d in "$STORE_DIR"/*; do
+        if [ -d "$d" ]; then
+            num=$(basename "$d")
+            if [[ "$num" =~ ^[0-9]+$ ]]; then
+                found=1
+                email="Unknown"
+                meta="$d/metadata.json"
+                if [ -f "$meta" ]; then
+                    email=$(python3 -c "import json; print(json.load(open('$meta')).get('email','Unknown'))" 2>/dev/null || echo "Unknown")
+                fi
+                if [ "$num" = "$active_acc" ]; then
+                    echo -e "  [#$num] $email \033[1;32m(نشط الآن ✓)\033[0m"
+                else
+                    echo -e "  [#$num] $email"
+                fi
+            fi
+        fi
+    done
+    if [ "$found" -eq 0 ]; then
+        echo "  لا توجد حسابات مسجلة بعد في $STORE_DIR"
+    fi
+    echo "=========================================================="
+    echo "للتبديل: ag <رقم> (مثال: ag 2) | للفحص: agusage"
+    echo "=========================================================="
+}
+
+cmd="${1:-}"
+
+# If no args or list
+if [ -z "$cmd" ] || [ "$cmd" = "list" ] || [ "$cmd" = "-l" ] || [ "$cmd" = "--list" ]; then
+    list_accounts
+    exit 0
+fi
+
+# Usage
+if [ "$cmd" = "usage" ] || [ "$cmd" = "-u" ] || [ "$cmd" = "--usage" ]; then
+    "$SWITCH_BIN" --usage 2>/dev/null || true
+    exit 0
+fi
+
+# Number switch (e.g. 'ag 2')
+if [[ "$cmd" =~ ^[0-9]+$ ]]; then
+    exec "$SWITCH_BIN" "$cmd"
+fi
+
+# Switch subcommand
+if [ "$cmd" = "switch" ]; then
+    target_num="${2:-}"
+    if [ -z "$target_num" ]; then
+        echo "Error: Specify account number. Example: ag switch 2"
+        exit 1
+    fi
+    exec "$SWITCH_BIN" "$target_num"
+fi
+
+# Add Account
+if [ "$cmd" = "add" ]; then
+    input_file="${2:-}"
+    if [ -z "$input_file" ] || [ ! -f "$input_file" ]; then
+        echo "Error: Please provide a valid JSON credential file."
+        echo "Usage: ag add /path/to/credentials.json"
+        exit 1
+    fi
+    highest=0
+    for f in "$STORE_DIR"/*; do
+        b=$(basename "$f")
+        if [[ "$b" =~ ^[0-9]+$ ]] && [ "$b" -gt "$highest" ]; then
+            highest=$b
+        fi
+    done
+    next=$((highest + 1))
+    target_dir="$STORE_DIR/$next"
+    mkdir -p "$target_dir"
+    cp "$input_file" "$target_dir/antigravity-oauth-token"
+    chmod 600 "$target_dir/antigravity-oauth-token"
+    echo "✓ Added new Gemini account as Account #$next"
+    echo "Activating..."
+    exec "$SWITCH_BIN" "$next"
+fi
+
+exec "$SWITCH_BIN" "$@"

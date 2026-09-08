@@ -1,0 +1,262 @@
+#!/usr/bin/env python3
+"""Query safe Codex account fields through the local App Server protocol."""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import select
+import subprocess
+import sys
+import time
+from typing import Any
+
+
+try:
+    TIMEOUT_SECONDS = float(os.environ.get("CODEX_ACCOUNT_QUERY_TIMEOUT", "15"))
+except (TypeError, ValueError):
+    TIMEOUT_SECONDS = 15.0
+TIMEOUT_SECONDS = min(20.0, max(0.1, TIMEOUT_SECONDS))
+SERVER_INVALIDATED_MARKERS = (
+    "refresh_token_invalidated",
+    "refresh token already used",
+    "refresh token has already been used",
+    "refresh token has been revoked",
+)
+SIGNED_OUT_MARKERS = (
+    "unauthorized",
+    "not authenticated",
+    "login required",
+    "sign in again",
+    "signed out",
+)
+
+
+class AppServerError(RuntimeError):
+    def __init__(self, error: Any) -> None:
+        self.error = error
+        super().__init__("app server request failed")
+
+    def classification(self) -> str:
+        try:
+            text = json.dumps(self.error, separators=(",", ":")).lower()
+        except (TypeError, ValueError):
+            return "CHECK FAILED"
+        if any(marker in text for marker in SERVER_INVALIDATED_MARKERS):
+            return "SERVER INVALIDATED"
+        if any(marker in text for marker in SIGNED_OUT_MARKERS):
+            return "SIGNED OUT"
+        return "CHECK FAILED"
+
+
+def auth_file_is_structurally_valid(path: str) -> bool:
+    try:
+        with open(path, "r", encoding="utf-8") as handle:
+            value = json.load(handle)
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return False
+    if not isinstance(value, dict):
+        return False
+    if isinstance(value.get("OPENAI_API_KEY"), str) and value["OPENAI_API_KEY"]:
+        return True
+    token_sets = [value, value.get("tokens")]
+    for tokens in token_sets:
+        if not isinstance(tokens, dict):
+            continue
+        if any(
+            isinstance(tokens.get(key), str) and bool(tokens[key])
+            for key in ("access_token", "refresh_token", "id_token")
+        ):
+            return True
+    return False
+
+
+def safe_text(value: Any, maximum: int) -> str | None:
+    if not isinstance(value, str) or not value or len(value) > maximum:
+        return None
+    if any(ord(char) < 32 or ord(char) == 127 for char in value):
+        return None
+    return value
+
+
+def safe_email(value: Any) -> str | None:
+    email = safe_text(value, 320)
+    if email is None:
+        return None
+    if not re.fullmatch(
+        r"[A-Za-z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,63}",
+        email,
+    ):
+        return None
+    return email
+
+
+class AppServer:
+    def __init__(self, codex_bin: str) -> None:
+        self.process = subprocess.Popen(
+            [codex_bin, "app-server", "--stdio"],
+            stdin=subprocess.PIPE,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            bufsize=1,
+            env=os.environ.copy(),
+        )
+        self.next_id = 1
+        self.deadline = time.monotonic() + TIMEOUT_SECONDS
+
+    def send(self, payload: dict[str, Any]) -> None:
+        if self.process.stdin is None:
+            raise RuntimeError("app server stdin unavailable")
+        self.process.stdin.write(json.dumps(payload, separators=(",", ":")) + "\n")
+        self.process.stdin.flush()
+
+    def request(self, method: str, params: Any) -> dict[str, Any]:
+        request_id = self.next_id
+        self.next_id += 1
+        self.send({"id": request_id, "method": method, "params": params})
+        deadline = self.deadline
+        if self.process.stdout is None:
+            raise RuntimeError("app server stdout unavailable")
+
+        while time.monotonic() < deadline:
+            remaining = max(0.0, deadline - time.monotonic())
+            ready, _, _ = select.select([self.process.stdout], [], [], remaining)
+            if not ready:
+                break
+            line = self.process.stdout.readline()
+            if not line:
+                break
+            try:
+                message = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if message.get("id") != request_id:
+                continue
+            if "error" in message:
+                raise AppServerError(message.get("error"))
+            if not isinstance(message.get("result"), dict):
+                raise RuntimeError("app server request failed")
+            return message["result"]
+        raise TimeoutError("app server request timed out")
+
+    def close(self) -> None:
+        if self.process.stdin is not None:
+            self.process.stdin.close()
+        try:
+            self.process.wait(timeout=2)
+        except subprocess.TimeoutExpired:
+            self.process.terminate()
+            try:
+                self.process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                self.process.kill()
+                self.process.wait(timeout=2)
+
+
+def collect_windows(rate_result: dict[str, Any]) -> list[dict[str, int | None]]:
+    snapshot: dict[str, Any] = {}
+    by_limit = rate_result.get("rateLimitsByLimitId")
+    if isinstance(by_limit, dict) and isinstance(by_limit.get("codex"), dict):
+        snapshot = by_limit["codex"]
+    elif isinstance(rate_result.get("rateLimits"), dict):
+        snapshot = rate_result["rateLimits"]
+
+    windows: list[dict[str, int | None]] = []
+    seen: set[tuple[int | None, int, int | None]] = set()
+    for value in snapshot.values():
+        if not isinstance(value, dict):
+            continue
+        used = value.get("usedPercent")
+        duration = value.get("windowDurationMins")
+        reset = value.get("resetsAt")
+        if isinstance(used, bool) or not isinstance(used, int):
+            continue
+        if used < 0 or used > 100:
+            continue
+        if isinstance(duration, bool) or not isinstance(duration, int):
+            duration = None
+        if isinstance(reset, bool) or not isinstance(reset, int):
+            reset = None
+        key = (duration, used, reset)
+        if key in seen:
+            continue
+        seen.add(key)
+        windows.append(
+            {
+                "windowDurationMins": duration,
+                "usedPercent": used,
+                "resetsAt": reset,
+            }
+        )
+    return windows
+
+
+def main() -> int:
+    mode = sys.argv[1] if len(sys.argv) == 2 else ""
+    if mode not in {"account", "health", "usage"}:
+        print("codex-account-query: usage: codex-account-query {account|health|usage}", file=sys.stderr)
+        return 64
+
+    if mode in {"health", "usage"} and not auth_file_is_structurally_valid(
+        os.path.join(os.environ.get("CODEX_HOME", ""), "auth.json")
+    ):
+        print(json.dumps({"status": "INVALID AUTH"}, separators=(",", ":")))
+        return 0
+
+    codex_bin = os.environ.get("CODEX_BIN", "/usr/local/bin/codex")
+    server = AppServer(codex_bin)
+    try:
+        server.request(
+            "initialize",
+            {
+                "clientInfo": {"name": "codex-account-tools", "version": "1.0.0"},
+                "capabilities": {"experimentalApi": True},
+            },
+        )
+        server.send({"method": "initialized"})
+        account_result = server.request(
+            "account/read", {"refreshToken": False}
+        )
+        account = account_result.get("account")
+        requires_auth = account_result.get("requiresOpenaiAuth") is True
+        if not isinstance(account, dict):
+            if mode in {"health", "usage"}:
+                status = "SIGNED OUT" if account is None and requires_auth else "CHECK FAILED"
+                print(json.dumps({"status": status}, separators=(",", ":")))
+                return 0
+            account = {}
+
+        output: dict[str, Any] = {
+            "status": "OK",
+            "accountType": safe_text(account.get("type"), 64),
+            "email": safe_email(account.get("email")),
+            "planType": safe_text(account.get("planType"), 64),
+            "windows": [],
+        }
+        if mode == "usage":
+            rate_result = server.request("account/rateLimits/read", None)
+            output["windows"] = collect_windows(rate_result)
+
+        print(json.dumps(output, separators=(",", ":"), sort_keys=True))
+        return 0
+    except AppServerError as error:
+        if mode in {"health", "usage"}:
+            status = error.classification()
+            print(json.dumps({"status": status}, separators=(",", ":")))
+            return 0
+        print("codex-account-query: safe account query failed", file=sys.stderr)
+        return 1
+    except (OSError, RuntimeError, TimeoutError, ValueError):
+        if mode in {"health", "usage"}:
+            print(json.dumps({"status": "CHECK FAILED"}, separators=(",", ":")))
+            return 0
+        print("codex-account-query: safe account query failed", file=sys.stderr)
+        return 1
+    finally:
+        server.close()
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

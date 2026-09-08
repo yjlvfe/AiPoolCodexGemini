@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+# ==============================================================================
+# cx - Unified Codex / ChatGPT Multi-Account CLI
+# ==============================================================================
+set -euo pipefail
+
+STORE_DIR="${CODEX_ACCOUNT_STORE:-$HOME/.codex-accounts}"
+ACTIVE_FILE="$STORE_DIR/active"
+SWITCH_BIN="/usr/local/bin/codex-account-switch"
+
+list_accounts() {
+    echo "=========================================================="
+    echo " 🟣 حسابات Codex / ChatGPT المسجلة:"
+    echo "=========================================================="
+    active_acc=""
+    if [ -f "$ACTIVE_FILE" ]; then
+        active_acc=$(cat "$ACTIVE_FILE" | tr -d '[:space:]')
+    fi
+    found=0
+    for d in "$STORE_DIR"/*; do
+        b=$(basename "$d")
+        if [[ "$b" =~ ^[0-9]+$ ]]; then
+            found=1
+            email="Unknown"
+            auth_file="$d"
+            if [ -d "$d" ] && [ -f "$d/auth.json" ]; then
+                auth_file="$d/auth.json"
+            fi
+            if [ -f "$auth_file" ]; then
+                email=$(python3 -c "import json; print(json.load(open('$auth_file')).get('email', json.load(open('$auth_file')).get('user', 'Account #$b')))" 2>/dev/null || echo "Account #$b")
+            fi
+            if [ "$b" = "$active_acc" ]; then
+                echo -e "  [#$b] $email \033[1;32m(نشط الآن ✓)\033[0m"
+            else
+                echo -e "  [#$b] $email"
+            fi
+        fi
+    done
+    if [ "$found" -eq 0 ]; then
+        echo "  لا توجد حسابات مسجلة بعد في $STORE_DIR"
+    fi
+    echo "=========================================================="
+    echo "للتبديل: cx <رقم> (مثال: cx 3) | للفحص: cusage"
+    echo "=========================================================="
+}
+
+cmd="${1:-}"
+
+# If no args or list
+if [ -z "$cmd" ] || [ "$cmd" = "list" ] || [ "$cmd" = "-l" ] || [ "$cmd" = "--list" ]; then
+    list_accounts
+    exit 0
+fi
+
+# Usage
+if [ "$cmd" = "usage" ] || [ "$cmd" = "-u" ] || [ "$cmd" = "--usage" ]; then
+    "$SWITCH_BIN" --usage 2>/dev/null || true
+    exit 0
+fi
+
+# Number switch (e.g. 'cx 3')
+if [[ "$cmd" =~ ^[0-9]+$ ]]; then
+    exec "$SWITCH_BIN" "$cmd"
+fi
+
+# Switch subcommand
+if [ "$cmd" = "switch" ]; then
+    target_num="${2:-}"
+    if [ -z "$target_num" ]; then
+        echo "Error: Specify account number. Example: cx switch 3"
+        exit 1
+    fi
+    exec "$SWITCH_BIN" "$target_num"
+fi
+
+# Add Account
+if [ "$cmd" = "add" ]; then
+    input_file="${2:-}"
+    if [ -z "$input_file" ] || [ ! -f "$input_file" ]; then
+        echo "Error: Please provide a valid auth.json file."
+        echo "Usage: cx add /path/to/auth.json"
+        exit 1
+    fi
+    highest=0
+    for f in "$STORE_DIR"/*; do
+        b=$(basename "$f")
+        if [[ "$b" =~ ^[0-9]+$ ]] && [ "$b" -gt "$highest" ]; then
+            highest=$b
+        fi
+    done
+    next=$((highest + 1))
+    target="$STORE_DIR/$next"
+    cp "$input_file" "$target"
+    chmod 600 "$target"
+    echo "✓ Added new Codex account as Account #$next"
+    echo "Activating..."
+    exec "$SWITCH_BIN" "$next"
+fi
+
+exec "$SWITCH_BIN" "$@"
