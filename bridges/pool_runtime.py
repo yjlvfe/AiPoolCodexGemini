@@ -180,7 +180,7 @@ def report(path):
                 entry['total_tokens'] += (r['t'] or 0)
             else:
                 p['models'][m_name] = {'model':m_name,'provider':r['pool'],'requests_count':r['calls'],'prompt_tokens':r['p'] or 0,'completion_tokens':r['c'] or 0,'total_tokens':r['t'] or 0,'last_used':time.strftime('%m/%d %H:%M',time.localtime(r['ts']))}
-        for r in conn.execute("SELECT * FROM request_events WHERE pool IN ('Codex','Antigravity') ORDER BY id DESC LIMIT 100"):
+        for r in conn.execute("SELECT * FROM request_events WHERE pool IN ('Codex','Antigravity') ORDER BY id DESC LIMIT 500"):
             recent.append({'model':clean_model_name(r['model']),'provider':r['pool'],'pool':r['pool'],'prompt':r['prompt_tokens'],'completion':r['completion_tokens'],'tokens':r['total_tokens'],'time_formatted':r['time_formatted'],'status':r['status'] or 'LEGACY','account':r['account'],'usage_known':r['usage_known']})
     models = [v for p in providers.values() for v in p['models'].values()]
     return {'providers':providers,'total_pool_tokens':sum(p['total_tokens'] for p in providers.values()),'top_model':max(models,key=lambda x:x['total_tokens'])['model'] if models else 'None','recent_requests':recent}
