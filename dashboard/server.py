@@ -286,7 +286,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             align-items: center;
             justify-content: space-between;
             width: 100%;
-            padding-top: 4px;
+            padding-top: 5px;
             border-top: 1px solid rgba(255, 255, 255, 0.04);
             font-size: 11px;
         }
@@ -298,18 +298,19 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             overflow: hidden;
             text-overflow: ellipsis;
         }
-        .device-badge {
-            background: rgba(16, 185, 129, 0.1);
-            border: 1px solid rgba(16, 185, 129, 0.2);
-            color: var(--accent-emerald);
+        .version-badge {
+            background: rgba(99, 102, 241, 0.12);
+            border: 1px solid rgba(99, 102, 241, 0.25);
+            color: #a5b4fc;
             padding: 2px 8px;
-            border-radius: 10px;
-            font-size: 10px;
+            border-radius: 8px;
+            font-size: 11px;
             font-weight: 700;
+            font-family: 'JetBrains Mono', monospace;
             display: inline-flex;
             align-items: center;
             gap: 4px;
-            letter-spacing: -0.2px;
+            letter-spacing: 0.2px;
             flex-shrink: 0;
         }
 
@@ -1363,10 +1364,8 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             </div>
             <div class="header-sub-row">
                 <div class="brand-subtitle">Autonomous Failover Architecture</div>
-                <div class="device-badge" title="Authenticated Device Session">
-                    <span>🔒</span>
-                    <span>24h Verified</span>
-                    <span id="system-version-pill" style="font-family:monospace;color:#a5b4fc">Loading version…</span>
+                <div class="version-badge" title="Active Release Version">
+                    <span id="system-version-pill">v1.9.1</span>
                 </div>
             </div>
         </header>
