@@ -812,25 +812,52 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             border: 1px solid rgba(6, 182, 212, 0.3);
         }
 
-        /* Refresh Floating Button */
+        /* Refresh Interactive Button (Luxury Glass & Micro-Animations) */
         .refresh-btn {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            color: var(--text-secondary);
-            border-radius: 12px;
-            padding: 6px 12px;
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #cbd5e1;
+            border-radius: 10px;
+            padding: 5px 12px;
             font-size: 11px;
-            font-weight: 700;
+            font-weight: 600;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
-            gap: 5px;
-            transition: var(--transition-smooth);
+            gap: 6px;
+            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            font-family: inherit;
         }
         .refresh-btn:hover {
-            color: #fff;
-            border-color: rgba(255, 255, 255, 0.25);
-            background: rgba(255, 255, 255, 0.08);
+            color: #ffffff;
+            border-color: rgba(56, 189, 248, 0.4);
+            background: rgba(56, 189, 248, 0.08);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(56, 189, 248, 0.15);
+        }
+        .refresh-btn.refreshing {
+            background: rgba(14, 165, 233, 0.15) !important;
+            border-color: #38bdf8 !important;
+            color: #38bdf8 !important;
+            cursor: wait;
+        }
+        .refresh-btn.refresh-success {
+            background: rgba(16, 185, 129, 0.15) !important;
+            border-color: #10b981 !important;
+            color: #34d399 !important;
+            box-shadow: 0 0 14px rgba(16, 185, 129, 0.3) !important;
+        }
+        .refresh-icon-spin {
+            display: inline-block;
+            transition: transform 0.3s ease;
+        }
+        .refresh-btn.refreshing .refresh-icon-spin {
+            animation: spinRefresh 0.8s linear infinite;
+        }
+        @keyframes spinRefresh {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
         }
 
         /* Accounts Toggle Button */
@@ -1392,7 +1419,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             </div>
             <div class="header-sub-row">
                 <div class="brand-subtitle">Autonomous Failover Architecture</div>
-                <span class="version-badge" id="system-version-pill" title="Active Release Version">v1.9.1</span>
+                <span class="version-badge" id="system-version-pill" title="Active Release Version">v1.9.2</span>
             </div>
         </header>
 
@@ -1415,9 +1442,9 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                     <span id="pool-icon" style="font-size: 18px;">🟣</span>
                     <span class="pool-title" id="pool-title-label">ChatGPT Pool</span>
                 </div>
-                <button class="refresh-btn" onclick="fetchLiveLogs(true)">
-                    <span>🔄</span>
-                    <span>Refresh</span>
+                <button class="refresh-btn" id="main-refresh-btn" onclick="fetchLiveLogs(true)" title="Refresh live activity and metrics">
+                    <span class="refresh-icon-spin" id="main-refresh-icon">🔄</span>
+                    <span id="main-refresh-text">Refresh</span>
                 </button>
             </div>
 
@@ -2322,8 +2349,15 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
         }
 
         async function fetchLiveLogs(force = false) {
-            const btn = document.querySelector('.refresh-btn');
-            if (btn) btn.classList.add('rotating');
+            const btn = document.getElementById('main-refresh-btn') || document.querySelector('.refresh-btn');
+            const icon = document.getElementById('main-refresh-icon');
+            const text = document.getElementById('main-refresh-text');
+            
+            if (btn) {
+                btn.classList.remove('refresh-success');
+                btn.classList.add('refreshing');
+                if (text && force) text.textContent = 'Refreshing…';
+            }
             try {
                 const path = force ? '/api/refresh' : '/api/logs_data';
                 const res = await fetch(resolveApiUrl(path), {
@@ -2336,20 +2370,33 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 const data = await res.json();
                 cachedReportData = data;
                 
-                // Update logs and general provider stats exclusively (no account quota calls)
+                // Update logs and general provider stats exclusively
                 updateProviderStatsAndModels();
                 renderAccountsList();
                 renderGeneralActivityStream(data.recent_requests || []);
-                if (force) {
-                    showToast('✓ Logs refreshed successfully');
+                
+                // Micro-interaction: green checkmark on button (no popup alert)
+                if (btn && force) {
+                    btn.classList.remove('refreshing');
+                    btn.classList.add('refresh-success');
+                    if (icon) icon.textContent = '✅';
+                    if (text) text.textContent = 'Refreshed';
                 }
             } catch (err) {
                 console.error('Failed to load logs:', err);
-                if (force) {
-                    showToast('⚠️ Unable to refresh logs');
+                if (btn && force) {
+                    btn.classList.remove('refreshing');
+                    if (icon) icon.textContent = '⚠️';
+                    if (text) text.textContent = 'Failed';
                 }
             } finally {
-                if (btn) setTimeout(() => btn.classList.remove('rotating'), 500);
+                if (btn) {
+                    setTimeout(() => {
+                        btn.classList.remove('refreshing', 'refresh-success');
+                        if (icon) icon.textContent = '🔄';
+                        if (text) text.textContent = 'Refresh';
+                    }, 2200);
+                }
             }
         }
 
