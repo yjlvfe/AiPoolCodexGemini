@@ -1,137 +1,121 @@
-# AiPoolCodexGemini 🚀
+# AiPoolCodexGemini
 
-بوابة وحافظة ذكية لإدارة حسابات الذكاء الاصطناعي المتعددة (ChatGPT/Codex و Google Gemini/Antigravity) محلياً، تدعم التبديل الآلي الفوري بين الحسابات عند انتهاء الكوتا دون فقدان السياق أو تغيير النموذج، مع واجهة تحكم موحدة وسجلات متكاملة.
-
----
-
-## ✨ المميزات الرئيسية
-
-- **🔄 تدوير الحسابات الفوري (Instant Failover):** عند نفاد رصيد أو كوتا أي حساب (429 / Quota Exceeded)، يتم الانتقال فورياً وتلقائياً للحساب التالي لنفس النموذج بدقة دون تغيير الموديل المطلوب.
-- **⚡ تطابق الموديلات 1:1:** توافق كامل مع النماذج الرسمية لـ ChatGPT (`gpt-6-astra`, `gpt-5.6-luna`, `gpt-5.6-sol`, `gpt-5.5`...) ونماذج Gemini الرسمية النظيفة (`gemini-3.8-flash`, `gemini-3.1-pro`...) مع نافذة سياق ضخمة تصل إلى **1,000,000 توكن**.
-- **📊 لوحة تحكم وسجلات موحدة (Dashboard & Unified Logs):** واجهة ويب تفاعلية وسلسة تعرض حالة الحسابات ومجمع استهلاك التوكنات، وسجل عمليات زمني مشترك وموحد لكافة الطلبات.
-- **🔒 حماية وأمان متقدم:** تسجيل دخول للوحة التحكم بروابط ماجيك مشفرة (Magic Link) مؤقتة عبر بوت تيليجرام مخصص ومحمي.
-- **🤖 ربط مباشر وسهل مع الوكلاء:** دعم التكامل المباشر والسريع مع **Hermes Agent** و **OpenClaw** كمزودات أساسية.
+A high-performance, local multi-account proxy gateway and dashboard for OpenAI Codex/ChatGPT and Google Gemini/Antigravity APIs. Features instant same-model quota failover, unified token usage tracking, and 1,000,000 token context window support.
 
 ---
 
-## 🛠️ متطلبات التشغيل
+## Features
 
-- **نظام التشغيل:** Linux (Ubuntu/Debian) أو Windows عبر WSL2 (مع تفعيل systemd).
-- **البيئة:** Python 3.10+ مع `python3-venv` و `git`.
-- **Node.js:** مطلوب فقط في حال استخدام أدوات سطر أوامر Codex الرسمية.
+- **Instant Same-Model Failover**: Automatically rotates to the next available account when quota is exhausted (HTTP 429 / Quota Exceeded) without altering the requested model or losing conversational state.
+- **1:1 Native Model Compatibility**:
+  - **Codex / ChatGPT**: Full support for official models (`gpt-6-astra`, `gpt-5.6-luna`, `gpt-5.6-sol`, `gpt-5.6-terra`, `gpt-5.5`, `gpt-5.4-mini`).
+  - **Gemini / Antigravity**: Clean official identifiers (`gemini-3.8-flash`, `gemini-3.7-flash`, `gemini-3.1-pro`, `claude-opus-4-6`, `claude-sonnet-4-6`).
+  - Full **1,000,000 token context window** across all models.
+- **Unified Web Dashboard**: Live responsive interface showing account statuses, aggregated pool metrics, and a shared chronological request stream.
+- **Security & Authentication**: Secured access via temporary 30-minute Telegram Magic Links via dedicated bot integration.
+- **Native Agent Integration**: Ready-to-use setup scripts for **Hermes Agent** and **OpenClaw**.
 
 ---
 
-## 🚀 خطوات التثبيت والتشغيل الصحيحة
+## Default Endpoints
 
-### 1. تثبيت الحزم الأساسية للنظام
+| Service | Address & Port | Protocol / Purpose |
+| :--- | :--- | :--- |
+| **Web Dashboard** | `http://127.0.0.1:8444` | Management UI, Token Analytics, Request Logs |
+| **Gemini Bridge** | `http://127.0.0.1:8123/v1` | OpenAI-compatible Chat Completions API |
+| **Codex Bridge** | `http://127.0.0.1:8124/v1` | OpenAI-compatible Chat Completions API |
+
+---
+
+## Installation
+
+### 1. Prerequisites (Ubuntu / Debian)
 ```bash
 sudo apt update
 sudo apt install -y git python3 python3-venv python3-pip
 ```
 
-### 2. استنساخ المستودع والدخول للمجلد
+### 2. Clone Repository
 ```bash
 git clone https://github.com/yjlvfe/AiPoolCodexGemini.git
 cd AiPoolCodexGemini
 ```
 
-### 3. إعداد ملف البيئة (اختياري)
+### 3. Environment Configuration (Optional)
 ```bash
 cp config.env.example config.env
-# قم بتعديل config.env لإضافة إعدادات تيليجرام أو المنافذ إن أردت
+# Configure Telegram Bot credentials and custom ports if needed
 ```
 
-### 4. تشغيل سكريبت التثبيت الآلي
+### 4. Run Installer
 ```bash
 bash install.sh
 ```
-*يقوم السكريبت تلقائياً بإنشاء البيئة الافتراضية `.venv` وتثبيت الاعتماديات وإعداد خدمات systemd وإضافتها للتشغيل التلقائي.*
+*The installer automatically configures the local `.venv`, installs dependencies, and deploys systemd user services.*
 
-### 5. التحقق من حالة الخدمات
+### 5. Verify Services
 ```bash
 systemctl --user status ai-codex-bridge ai-gemini-bridge ai-dashboard
 ```
 
 ---
 
-## 🌐 المنافذ ونقاط النهاية الافتراضية (Default Endpoints)
+## Account Management
 
-| الخدمة | العنوان والمنفذ | الوظيفة |
-| :--- | :--- | :--- |
-| **لوحة التحكم (Dashboard)** | `http://127.0.0.1:8444` | إدارة الحسابات، الإحصائيات، والسجلات |
-| **بوابة Gemini** | `http://127.0.0.1:8123/v1` | متوافقة مع OpenAI API لـ Gemini Flash / Pro |
-| **بوابة ChatGPT / Codex** | `http://127.0.0.1:8124/v1` | متوافقة مع Chat Completions لـ Codex Models |
-
----
-
-## 🔑 إدارة وإضافة الحسابات (Account Management)
-
-### إضافة حساب جديد:
+### Add Accounts
 ```bash
-# إضافة حساب ChatGPT / Codex
+# Add ChatGPT / Codex Account
 c add
 
-# إضافة حساب Google Gemini / Antigravity
+# Add Gemini / Antigravity Account
 ag add
 ```
 
-### أوامر الاستخدام والتبديل السريع:
+### Quick Commands
 ```bash
-# عرض قائمة الحسابات وحالتها
+# List accounts and status
 clist
 aglist
 
-# فحص كوتا واستهلاك الحسابات
+# Check quota and token usage
 cusage
 agusage
 
-# التبديل اليدوي السريع بين الحسابات
-c1       # التبديل للحساب رقم 1 في كودكس
-c2       # التبديل للحساب رقم 2 في كودكس
-ag1      # التبديل للحساب رقم 1 في جيميني
-ag2      # التبديل للحساب رقم 2 في جيميني
+# Switch active account manually
+c1       # Switch to Codex Account #1
+c2       # Switch to Codex Account #2
+ag1      # Switch to Gemini Account #1
+ag2      # Switch to Gemini Account #2
 ```
 
 ---
 
-## 🤖 ربط الوكلاء (Agents Integration)
+## Agent Integration
 
-يمكنك ربط الوكلاء بسهولة عبر أوامر التجهيز الآلية:
+Integrate directly with autonomous agents using the provided automation scripts:
 
 ```bash
-# ربط وتجهيز Hermes Agent بمزودي Gemini و ChatGPT
+# Register Gemini & ChatGPT providers with Hermes Agent
 python3 scripts/setup-hermes.py
 
-# ربط وتجهيز OpenClaw
+# Register with OpenClaw
 python3 scripts/setup-openclaw.py
 ```
 
 ---
 
-## 🔄 التحديث (Updating)
+## Updates
 
-لتحديث المشروع بأمان وجلب آخر الميزات والإصلاحات:
+Update to the latest release seamlessly:
 ```bash
 bash update.sh
 ```
-*أو يمكنك التحديث بضغطة زر واحدة مباشرة من تبويب الإعدادات داخل لوحة التحكم.*
+*Or update directly via the Web Dashboard under **Settings → Update Suite from GitHub**.*
 
 ---
 
-## 🧪 فحص واختبار النظام (Verification & Tests)
+## License
 
-للتأكد من سلامة جميع أجزاء النظام ومطابقة الاختبارات:
-```bash
-.venv/bin/python -m unittest discover -s tests -v
-```
+This project is licensed under the **MIT License**.
 
----
-
-## 📄 الترخيص وحقوق الملكية (License)
-
-هذا المشروع مرخص تحت رخصة **MIT License**.
-
-جميع الحقوق محفوظة ومملوكة للمبرمج:
-**يوسف القحطاني — Youssef Al-Qahtany** ([@YJLVFE](https://github.com/yjlvfe))  
-Telegram: [@YJLVFE](https://t.me/YJLVFE)
+Copyright (c) 2026 **Youssef Al-Qahtany** ([@YJLVFE](https://github.com/yjlvfe)). All rights reserved.
