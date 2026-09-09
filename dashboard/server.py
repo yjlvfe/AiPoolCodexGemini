@@ -871,16 +871,20 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             to { transform: rotate(360deg); }
         }
         .refresh-btn.refresh-success {
-            background: linear-gradient(180deg, rgba(16, 185, 129, 0.22) 0%, rgba(16, 185, 129, 0.08) 100%) !important;
-            border-color: #10b981 !important;
-            color: #34d399 !important;
-            box-shadow: 0 0 16px rgba(16, 185, 129, 0.4) !important;
-            animation: refreshSuccessPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            background: rgba(16, 185, 129, 0.12) !important;
+            border-color: rgba(16, 185, 129, 0.5) !important;
+            color: #10b981 !important;
+            box-shadow: 0 2px 10px rgba(16, 185, 129, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
         }
-        @keyframes refreshSuccessPop {
-            0% { transform: scale(0.95); }
-            50% { transform: scale(1.04); }
-            100% { transform: scale(1); }
+        /* Apple / Vercel style draw-in checkmark */
+        .check-draw-path {
+            stroke-dasharray: 24;
+            stroke-dashoffset: 24;
+            animation: checkStrokeDraw 0.45s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+        }
+        @keyframes checkStrokeDraw {
+            to { stroke-dashoffset: 0; }
         }
 
         /* Accounts Toggle Button */
@@ -2381,7 +2385,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             const text = document.getElementById('main-refresh-text');
             
             const originalSvg = '<svg class="refresh-svg" id="main-refresh-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>';
-            const checkSvg = '<svg class="refresh-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#10b981" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+            const checkSvg = '<svg class="refresh-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#10b981" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline class="check-draw-path" points="20 6 9 17 4 12"></polyline></svg>';
             const alertSvg = '<svg class="refresh-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#ef4444" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>';
 
             if (btn) {
@@ -2407,7 +2411,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                     btn.classList.remove('refreshing');
                     btn.classList.add('refresh-success');
                     if (iconWrap) iconWrap.innerHTML = checkSvg;
-                    if (text) text.textContent = 'Synced';
+                    if (text) text.textContent = 'Up to Date';
                 }
             } catch (err) {
                 console.error('Failed to sync logs:', err);
