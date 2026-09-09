@@ -43,7 +43,7 @@ class DashboardManualSwitch(unittest.TestCase):
         (self.ag_store / '2').mkdir()
         with patch.dict(os.environ, {'AG_ACCOUNT_STORE': str(self.ag_store), 'CODEX_ACCOUNT_STORE': str(self.cx_store)}):
             pm = PoolManager()
-            with patch('subprocess.run') as mock_run:
+            with patch('subprocess.run') as mock_run, patch.object(pm, '_update_all_background'):
                 mock_run.return_value = MagicMock(returncode=0, stdout='Local switch (no Google round-trip)\nActive Antigravity account: 2', stderr='')
                 ok, msg = pm.switch_account('antigravity', 2)
                 self.assertTrue(ok)
