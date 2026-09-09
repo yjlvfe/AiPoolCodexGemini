@@ -1151,19 +1151,21 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 padding: 14px 14px 10px 14px;
             }
             .header-sub-row {
-                flex-direction: column;
-                align-items: flex-start;
-                gap: 6px;
+                flex-direction: row !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+                gap: 8px;
             }
             .brand-subtitle {
-                white-space: normal;
-                overflow: visible;
-                text-overflow: unset;
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
                 font-size: 11px;
-                line-height: 1.4;
+                line-height: 1.2;
             }
             .version-badge {
-                align-self: flex-start;
+                align-self: center !important;
+                flex-shrink: 0;
             }
             .provider-tab-btn {
                 font-size: 13px;
