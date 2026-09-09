@@ -127,35 +127,57 @@ async function verifyRunningBuild(target) {
     throw new Error('Files may be installed, but the new dashboard process was not verified. Check service status; no success has been assumed.');
 }
 async function triggerUpdate() {
-    if (!confirm('Fetch origin/main, install the new build and verify the running dashboard? Local edits will never be discarded.')) return;
+    // Direct interactive button flow without modal popups
     const button = document.getElementById('btn-update-suite');
     const updateText = document.getElementById('update-btn-text');
     const updateIcon = document.getElementById('update-btn-icon');
+    
+    if (button.disabled) return;
     button.disabled = true;
+    
+    // Interactive pulse & spinning state
+    button.classList.remove('update-success', 'update-error');
+    button.classList.add('updating');
     if (updateIcon) updateIcon.className = 'spin-icon';
     if (updateText) updateText.innerHTML = 'Updating <span class="bouncing-dots" style="color: currentColor;"><span></span><span></span><span></span></span>';
-    updateMessage('Fetching and installing build…', 'Pulling changes and rebuilding services; live telemetry will confirm active execution.', 'info', true);
+    
     try {
         const response = await fetch('/aipool/api/settings/update', {method:'POST', credentials:'same-origin'});
-        if (!response.ok) throw new Error(`Update request returned HTTP ${response.status}`);
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const result = await response.json();
-        if (!result.success) {
-            updateMessage('Update failed — not completed', result.message || 'Unknown error', 'error', false);
-            return;
+        if (!result.success) throw new Error(result.message || 'Update failed');
+        
+        if (result.version_after && result.version_after.commit) {
+            await verifyRunningBuild(result.version_after.commit);
         }
-        const before = buildLabel(result.version_before);
-        const after = buildLabel(result.version_after);
-        updateMessage('Files installed; verifying the running build…', `${before} → ${after}\n${result.message || ''}`, 'info', true);
-        await verifyRunningBuild(result.version_after.commit);
-        updateMessage(result.updated ? 'Update completed and running build verified' : 'Already up to date — no new version was installed', `${before} → ${after}\n${result.message || ''}`, 'success', false);
-        if (updateText) updateText.textContent = result.updated ? 'Update verified' : 'Already up to date';
         await loadBuildInfo();
+        
+        // Interactive checkmark and emerald success glow
+        button.classList.remove('updating');
+        button.classList.add('update-success');
+        if (updateIcon) {
+            updateIcon.className = '';
+            updateIcon.textContent = '✅';
+        }
+        if (updateText) updateText.textContent = result.updated ? 'Updated' : 'Already Up to Date';
     } catch (error) {
-        updateMessage('Update result not confirmed', `${error.message}\nConnection loss is not evidence of success. Use Re-check version to inspect the running build and last update status.`, 'error', false);
+        button.classList.remove('updating');
+        button.classList.add('update-error');
+        if (updateIcon) {
+            updateIcon.className = '';
+            updateIcon.textContent = '⚠️';
+        }
+        if (updateText) updateText.textContent = 'Update Failed';
     } finally {
-        button.disabled = false;
-        if (updateIcon) updateIcon.className = '';
-        if (updateText && updateText.innerHTML.includes('Updating')) updateText.textContent = 'Update from GitHub';
+        setTimeout(() => {
+            button.classList.remove('updating', 'update-success', 'update-error');
+            button.disabled = false;
+            if (updateIcon) {
+                updateIcon.className = '';
+                updateIcon.textContent = '⚡';
+            }
+            if (updateText) updateText.textContent = 'Update from GitHub';
+        }, 3500);
     }
 }
 loadBuildInfo();

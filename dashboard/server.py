@@ -1022,12 +1022,11 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
         }
         .update-cta-btn {
             width: 100%;
-            background: linear-gradient(135deg, #0284c7, #6366f1, #a855f7);
-            background-size: 200% 200%;
-            color: #fff;
-            border: none;
-            padding: 12px 16px;
-            border-radius: 10px;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(168, 85, 247, 0.18));
+            border: 1px solid rgba(168, 85, 247, 0.4);
+            color: #e0e7ff;
+            padding: 11px 16px;
+            border-radius: 12px;
             font-weight: 700;
             font-size: 13px;
             cursor: pointer;
@@ -1035,17 +1034,47 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             align-items: center;
             justify-content: center;
             gap: 8px;
-            box-shadow: 0 4px 16px rgba(99, 102, 241, 0.25);
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
             transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
         }
         .update-cta-btn:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 24px rgba(99, 102, 241, 0.45);
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(168, 85, 247, 0.3));
+            border-color: rgba(168, 85, 247, 0.7);
+            color: #ffffff;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(168, 85, 247, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+        .update-cta-btn.updating {
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(99, 102, 241, 0.25)) !important;
+            border-color: #38bdf8 !important;
+            color: #38bdf8 !important;
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.3) !important;
+            cursor: wait;
+            transform: scale(0.99);
+        }
+        .update-cta-btn.update-success {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.25), rgba(5, 150, 105, 0.25)) !important;
+            border-color: #10b981 !important;
+            color: #34d399 !important;
+            box-shadow: 0 0 22px rgba(16, 185, 129, 0.4) !important;
+            transform: scale(1.01);
+            animation: pulseGlowSuccess 1.5s ease-in-out infinite;
+        }
+        .update-cta-btn.update-error {
+            background: rgba(239, 68, 68, 0.2) !important;
+            border-color: #ef4444 !important;
+            color: #f87171 !important;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.3) !important;
+        }
+        @keyframes pulseGlowSuccess {
+            0%, 100% { box-shadow: 0 0 14px rgba(16, 185, 129, 0.3); }
+            50% { box-shadow: 0 0 25px rgba(16, 185, 129, 0.6); }
         }
         .update-cta-btn:disabled {
-            opacity: 0.6;
+            opacity: 0.85;
             cursor: wait;
-            transform: none;
         }
         /* Creative Animated Bouncing Dots & Loaders */
         .bouncing-dots {
