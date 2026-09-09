@@ -812,52 +812,75 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             border: 1px solid rgba(6, 182, 212, 0.3);
         }
 
-        /* Refresh Interactive Button (Luxury Glass & Micro-Animations) */
+        /* Refresh Interactive Button (High-End Fintech/SaaS Glassmorphism) */
         .refresh-btn {
-            background: rgba(255, 255, 255, 0.04);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            color: #cbd5e1;
-            border-radius: 10px;
-            padding: 5px 12px;
+            position: relative;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.14);
+            color: #f1f5f9;
+            border-radius: 9px;
+            padding: 5px 11px;
             font-size: 11px;
             font-weight: 600;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
             gap: 6px;
-            box-shadow: 0 2px 6px rgba(0, 0, 0, 0.2);
-            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+            transition: all 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
             font-family: inherit;
+            letter-spacing: -0.1px;
         }
         .refresh-btn:hover {
             color: #ffffff;
-            border-color: rgba(56, 189, 248, 0.4);
-            background: rgba(56, 189, 248, 0.08);
+            border-color: rgba(56, 189, 248, 0.5);
+            background: linear-gradient(180deg, rgba(56, 189, 248, 0.15) 0%, rgba(56, 189, 248, 0.05) 100%);
             transform: translateY(-1px);
-            box-shadow: 0 4px 12px rgba(56, 189, 248, 0.15);
+            box-shadow: 0 4px 14px rgba(14, 165, 233, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.25);
+        }
+        .refresh-btn:active {
+            transform: translateY(0);
+            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+        }
+        .refresh-icon-wrap {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 14px;
+            height: 14px;
+        }
+        .refresh-svg {
+            display: block;
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .refresh-btn:hover .refresh-svg {
+            transform: rotate(45deg);
         }
         .refresh-btn.refreshing {
-            background: rgba(14, 165, 233, 0.15) !important;
+            background: linear-gradient(180deg, rgba(14, 165, 233, 0.2) 0%, rgba(14, 165, 233, 0.08) 100%) !important;
             border-color: #38bdf8 !important;
             color: #38bdf8 !important;
+            box-shadow: 0 0 16px rgba(56, 189, 248, 0.35) !important;
             cursor: wait;
         }
-        .refresh-btn.refresh-success {
-            background: rgba(16, 185, 129, 0.15) !important;
-            border-color: #10b981 !important;
-            color: #34d399 !important;
-            box-shadow: 0 0 14px rgba(16, 185, 129, 0.3) !important;
+        .refresh-btn.refreshing .refresh-svg {
+            animation: spinRefreshSvg 0.75s linear infinite;
         }
-        .refresh-icon-spin {
-            display: inline-block;
-            transition: transform 0.3s ease;
-        }
-        .refresh-btn.refreshing .refresh-icon-spin {
-            animation: spinRefresh 0.8s linear infinite;
-        }
-        @keyframes spinRefresh {
+        @keyframes spinRefreshSvg {
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
+        }
+        .refresh-btn.refresh-success {
+            background: linear-gradient(180deg, rgba(16, 185, 129, 0.22) 0%, rgba(16, 185, 129, 0.08) 100%) !important;
+            border-color: #10b981 !important;
+            color: #34d399 !important;
+            box-shadow: 0 0 16px rgba(16, 185, 129, 0.4) !important;
+            animation: refreshSuccessPop 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+        @keyframes refreshSuccessPop {
+            0% { transform: scale(0.95); }
+            50% { transform: scale(1.04); }
+            100% { transform: scale(1); }
         }
 
         /* Accounts Toggle Button */
@@ -1442,9 +1465,13 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                     <span id="pool-icon" style="font-size: 18px;">🟣</span>
                     <span class="pool-title" id="pool-title-label">ChatGPT Pool</span>
                 </div>
-                <button class="refresh-btn" id="main-refresh-btn" onclick="fetchLiveLogs(true)" title="Refresh live activity and metrics">
-                    <span class="refresh-icon-spin" id="main-refresh-icon">🔄</span>
-                    <span id="main-refresh-text">Refresh</span>
+                <button class="refresh-btn" id="main-refresh-btn" onclick="fetchLiveLogs(true)" title="Sync real-time metrics and stream">
+                    <span class="refresh-icon-wrap" id="main-refresh-icon-wrap">
+                        <svg class="refresh-svg" id="main-refresh-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
+                            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
+                        </svg>
+                    </span>
+                    <span id="main-refresh-text">Sync Live</span>
                 </button>
             </div>
 
@@ -2350,13 +2377,17 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
 
         async function fetchLiveLogs(force = false) {
             const btn = document.getElementById('main-refresh-btn') || document.querySelector('.refresh-btn');
-            const icon = document.getElementById('main-refresh-icon');
+            const iconWrap = document.getElementById('main-refresh-icon-wrap');
             const text = document.getElementById('main-refresh-text');
             
+            const originalSvg = '<svg class="refresh-svg" id="main-refresh-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>';
+            const checkSvg = '<svg class="refresh-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#10b981" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>';
+            const alertSvg = '<svg class="refresh-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#ef4444" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>';
+
             if (btn) {
                 btn.classList.remove('refresh-success');
                 btn.classList.add('refreshing');
-                if (text && force) text.textContent = 'Refreshing…';
+                if (text && force) text.textContent = 'Syncing…';
             }
             try {
                 const path = force ? '/api/refresh' : '/api/logs_data';
@@ -2364,38 +2395,36 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                     headers: apiHeaders(),
                     credentials: 'same-origin'
                 });
-                if (!res.ok) {
-                    throw new Error('HTTP ' + res.status);
-                }
+                if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 cachedReportData = data;
                 
-                // Update logs and general provider stats exclusively
                 updateProviderStatsAndModels();
                 renderAccountsList();
                 renderGeneralActivityStream(data.recent_requests || []);
                 
-                // Micro-interaction: green checkmark on button (no popup alert)
                 if (btn && force) {
                     btn.classList.remove('refreshing');
                     btn.classList.add('refresh-success');
-                    if (icon) icon.textContent = '✅';
-                    if (text) text.textContent = 'Refreshed';
+                    if (iconWrap) iconWrap.innerHTML = checkSvg;
+                    if (text) text.textContent = 'Synced';
                 }
             } catch (err) {
-                console.error('Failed to load logs:', err);
+                console.error('Failed to sync logs:', err);
                 if (btn && force) {
                     btn.classList.remove('refreshing');
-                    if (icon) icon.textContent = '⚠️';
+                    if (iconWrap) iconWrap.innerHTML = alertSvg;
                     if (text) text.textContent = 'Failed';
                 }
             } finally {
-                if (btn) {
+                if (btn && force) {
                     setTimeout(() => {
                         btn.classList.remove('refreshing', 'refresh-success');
-                        if (icon) icon.textContent = '🔄';
-                        if (text) text.textContent = 'Refresh';
+                        if (iconWrap) iconWrap.innerHTML = originalSvg;
+                        if (text) text.textContent = 'Sync Live';
                     }, 2200);
+                } else if (btn) {
+                    btn.classList.remove('refreshing');
                 }
             }
         }
