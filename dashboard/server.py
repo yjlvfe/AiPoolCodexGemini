@@ -1165,7 +1165,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 font-size: 11px;
                 line-height: 1.4;
             }
-            .device-badge {
+            .version-badge {
                 align-self: flex-start;
             }
             .provider-tab-btn {
