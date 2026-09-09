@@ -281,19 +281,13 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             color: #fff;
             box-shadow: 0 4px 12px rgba(168, 85, 247, 0.25);
         }
-        .header-actions-col {
-            display: flex;
-            flex-direction: column;
-            align-items: flex-end;
-            gap: 3px;
-        }
         .header-sub-row {
             display: flex;
             align-items: center;
             justify-content: space-between;
             width: 100%;
-            padding-top: 5px;
-            border-top: 1px solid rgba(255, 255, 255, 0.04);
+            padding-top: 6px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
             font-size: 11px;
         }
         .brand-subtitle {
@@ -1360,16 +1354,14 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                         <span class="live-pill"><span class="live-dot"></span>LIVE</span>
                     </div>
                 </div>
-                <div class="header-actions-col">
-                    <button id="settings-toggle-btn" class="settings-top-btn" onclick="toggleSettingsView()">
-                        <span id="settings-btn-icon">⚙️</span>
-                        <span id="settings-btn-text">Settings</span>
-                    </button>
-                    <span class="version-badge" id="system-version-pill" title="Active Release Version">v1.9.1</span>
-                </div>
+                <button id="settings-toggle-btn" class="settings-top-btn" onclick="toggleSettingsView()">
+                    <span id="settings-btn-icon">⚙️</span>
+                    <span id="settings-btn-text">Settings</span>
+                </button>
             </div>
             <div class="header-sub-row">
                 <div class="brand-subtitle">Autonomous Failover Architecture</div>
+                <span class="version-badge" id="system-version-pill" title="Active Release Version">v1.9.1</span>
             </div>
         </header>
 
