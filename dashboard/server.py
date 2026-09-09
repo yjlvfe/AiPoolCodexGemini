@@ -281,6 +281,12 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             color: #fff;
             box-shadow: 0 4px 12px rgba(168, 85, 247, 0.25);
         }
+        .header-actions-col {
+            display: flex;
+            flex-direction: column;
+            align-items: flex-end;
+            gap: 3px;
+        }
         .header-sub-row {
             display: flex;
             align-items: center;
@@ -299,19 +305,16 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             text-overflow: ellipsis;
         }
         .version-badge {
-            background: rgba(99, 102, 241, 0.12);
-            border: 1px solid rgba(99, 102, 241, 0.25);
-            color: #a5b4fc;
-            padding: 2px 8px;
-            border-radius: 8px;
-            font-size: 11px;
-            font-weight: 700;
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            color: #818cf8;
+            padding: 1px 6px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 600;
             font-family: 'JetBrains Mono', monospace;
-            display: inline-flex;
-            align-items: center;
-            gap: 4px;
             letter-spacing: 0.2px;
-            flex-shrink: 0;
+            line-height: 1.2;
         }
 
         /* Provider Segmented Pill Selector */
@@ -1357,16 +1360,16 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                         <span class="live-pill"><span class="live-dot"></span>LIVE</span>
                     </div>
                 </div>
-                <button id="settings-toggle-btn" class="settings-top-btn" onclick="toggleSettingsView()">
-                    <span id="settings-btn-icon">⚙️</span>
-                    <span id="settings-btn-text">Settings</span>
-                </button>
+                <div class="header-actions-col">
+                    <button id="settings-toggle-btn" class="settings-top-btn" onclick="toggleSettingsView()">
+                        <span id="settings-btn-icon">⚙️</span>
+                        <span id="settings-btn-text">Settings</span>
+                    </button>
+                    <span class="version-badge" id="system-version-pill" title="Active Release Version">v1.9.1</span>
+                </div>
             </div>
             <div class="header-sub-row">
                 <div class="brand-subtitle">Autonomous Failover Architecture</div>
-                <div class="version-badge" title="Active Release Version">
-                    <span id="system-version-pill">v1.9.1</span>
-                </div>
             </div>
         </header>
 
