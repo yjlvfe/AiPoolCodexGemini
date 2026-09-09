@@ -812,35 +812,51 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             border: 1px solid rgba(6, 182, 212, 0.3);
         }
 
-        /* Refresh Interactive Button (High-End Fintech/SaaS Glassmorphism) */
+        /* Refresh Button: uiverse.io/xueyuantan/rotten-pig-19 Pill Style Adapted for Dark Theme */
         .refresh-btn {
             position: relative;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.02) 100%);
-            border: 1px solid rgba(255, 255, 255, 0.14);
-            color: #f1f5f9;
-            border-radius: 9px;
-            padding: 5px 11px;
-            font-size: 11px;
-            font-weight: 600;
+            background: #1e293b;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #f8fafc;
+            border-radius: 30em;
+            padding: 6px 16px;
+            font-size: 11.5px;
+            font-weight: 700;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
+            justify-content: center;
             gap: 6px;
-            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.15);
-            transition: all 0.22s cubic-bezier(0.2, 0.8, 0.2, 1);
+            overflow: hidden;
+            z-index: 1;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+            transition: all 0.35s ease;
             font-family: inherit;
-            letter-spacing: -0.1px;
+        }
+        .refresh-btn::before {
+            content: '';
+            width: 0;
+            height: 100%;
+            border-radius: 30em;
+            position: absolute;
+            top: 0;
+            left: 0;
+            background-image: linear-gradient(to right, #0fd850 0%, #f9f047 100%);
+            transition: .45s ease;
+            display: block;
+            z-index: -1;
+        }
+        .refresh-btn:hover::before {
+            width: 100%;
         }
         .refresh-btn:hover {
-            color: #ffffff;
-            border-color: rgba(56, 189, 248, 0.5);
-            background: linear-gradient(180deg, rgba(56, 189, 248, 0.15) 0%, rgba(56, 189, 248, 0.05) 100%);
+            color: #052e16 !important;
+            border-color: transparent;
+            box-shadow: 0 6px 18px rgba(15, 216, 80, 0.4);
             transform: translateY(-1px);
-            box-shadow: 0 4px 14px rgba(14, 165, 233, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.25);
         }
         .refresh-btn:active {
-            transform: translateY(0);
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+            transform: scale(0.96);
         }
         .refresh-icon-wrap {
             display: inline-flex;
@@ -848,20 +864,21 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             justify-content: center;
             width: 14px;
             height: 14px;
+            transition: all 0.3s ease;
         }
         .refresh-svg {
             display: block;
-            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-        }
-        .refresh-btn:hover .refresh-svg {
-            transform: rotate(45deg);
+            transition: transform 0.3s ease;
         }
         .refresh-btn.refreshing {
-            background: linear-gradient(180deg, rgba(14, 165, 233, 0.2) 0%, rgba(14, 165, 233, 0.08) 100%) !important;
+            background: #0f172a !important;
             border-color: #38bdf8 !important;
             color: #38bdf8 !important;
             box-shadow: 0 0 16px rgba(56, 189, 248, 0.35) !important;
             cursor: wait;
+        }
+        .refresh-btn.refreshing::before {
+            width: 0 !important;
         }
         .refresh-btn.refreshing .refresh-svg {
             animation: spinRefreshSvg 0.75s linear infinite;
@@ -870,21 +887,38 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             from { transform: rotate(0deg); }
             to { transform: rotate(360deg); }
         }
-        .refresh-btn.refresh-success {
-            background: rgba(16, 185, 129, 0.12) !important;
-            border-color: rgba(16, 185, 129, 0.5) !important;
-            color: #10b981 !important;
-            box-shadow: 0 2px 10px rgba(16, 185, 129, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1) !important;
-            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1) !important;
+        /* Green Done Phase */
+        .refresh-btn.refresh-done {
+            background: #052e16 !important;
+            border-color: #10b981 !important;
+            color: #34d399 !important;
+            box-shadow: 0 0 18px rgba(16, 185, 129, 0.5) !important;
+            transform: scale(1.02);
         }
-        /* Apple / Vercel style draw-in checkmark */
+        .refresh-btn.refresh-done::before {
+            width: 0 !important;
+        }
         .check-draw-path {
             stroke-dasharray: 24;
             stroke-dashoffset: 24;
-            animation: checkStrokeDraw 0.45s cubic-bezier(0.65, 0, 0.45, 1) forwards;
+            animation: checkStrokeDraw 0.4s cubic-bezier(0.65, 0, 0.45, 1) forwards;
         }
         @keyframes checkStrokeDraw {
             to { stroke-dashoffset: 0; }
+        }
+        /* Restored Return State (Fresh Color Accent) */
+        .refresh-btn.refreshed-idle {
+            background: #1e1b4b;
+            border-color: rgba(129, 140, 248, 0.4);
+            color: #c7d2fe;
+            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.25);
+        }
+        .refresh-btn.refreshed-idle::before {
+            background-image: linear-gradient(to right, #6366f1 0%, #a855f7 100%);
+        }
+        .refresh-btn.refreshed-idle:hover {
+            color: #ffffff !important;
+            box-shadow: 0 6px 20px rgba(168, 85, 247, 0.45);
         }
 
         /* Accounts Toggle Button */
@@ -2409,9 +2443,9 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 
                 if (btn && force) {
                     btn.classList.remove('refreshing');
-                    btn.classList.add('refresh-success');
+                    btn.classList.add('refresh-done');
                     if (iconWrap) iconWrap.innerHTML = checkSvg;
-                    if (text) text.textContent = 'Up to Date';
+                    if (text) text.textContent = 'Done';
                 }
             } catch (err) {
                 console.error('Failed to sync logs:', err);
@@ -2423,10 +2457,11 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             } finally {
                 if (btn && force) {
                     setTimeout(() => {
-                        btn.classList.remove('refreshing', 'refresh-success');
+                        btn.classList.remove('refreshing', 'refresh-done');
+                        btn.classList.add('refreshed-idle');
                         if (iconWrap) iconWrap.innerHTML = originalSvg;
                         if (text) text.textContent = 'Sync Live';
-                    }, 2200);
+                    }, 1800);
                 } else if (btn) {
                     btn.classList.remove('refreshing');
                 }
