@@ -858,8 +858,9 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             cursor: wait;
         }
         .refresh-btn.filling .fill-progress {
-            transition: width 0.7s cubic-bezier(0.1, 0.7, 0.1, 1);
-            width: 85%;
+            /* Smoothly fills up to 99% during the fetch request */
+            width: 99% !important;
+            transition: width 0.7s cubic-bezier(0.2, 0.8, 0.25, 1) !important;
         }
         .refresh-btn.done-state {
             border-color: #10b981;
@@ -869,7 +870,7 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
         }
         .refresh-btn.done-state .fill-progress {
             width: 100% !important;
-            transition: width 0.2s ease-out;
+            transition: width 0.15s ease-out !important;
         }
         /* Discrete Loading Spinner for text */
         .sync-spin-icon {
@@ -2374,6 +2375,8 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             }
         }
 
+        let syncResetTimer = null;
+
         async function fetchLiveLogs(force = false) {
             const btn = document.getElementById('main-refresh-btn') || document.querySelector('.refresh-btn');
             const progress = document.getElementById('main-refresh-progress');
@@ -2381,7 +2384,20 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             const text = document.getElementById('main-refresh-text');
 
             if (btn && force) {
-                btn.classList.remove('done-state');
+                // Clear any pending reset from a previous click so multiple clicks behave consistently
+                if (syncResetTimer) {
+                    clearTimeout(syncResetTimer);
+                    syncResetTimer = null;
+                }
+                // Instant clean reset of progress before filling starts
+                btn.classList.remove('done-state', 'filling');
+                if (progress) {
+                    progress.style.transition = 'none';
+                    progress.style.width = '0%';
+                    // Force browser reflow so width: 0% applies immediately
+                    void progress.offsetWidth;
+                    progress.style.transition = '';
+                }
                 btn.classList.add('filling');
                 if (spinner) spinner.style.display = 'inline-block';
                 if (text) text.textContent = 'Syncing…';
@@ -2401,8 +2417,10 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 renderGeneralActivityStream(data.recent_requests || []);
                 
                 if (btn && force) {
+                    // Snap progress to 100% full green
                     btn.classList.remove('filling');
                     btn.classList.add('done-state');
+                    if (progress) progress.style.width = '100%';
                     if (spinner) spinner.style.display = 'none';
                     if (text) text.textContent = 'Done';
                 }
@@ -2415,13 +2433,17 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 }
             } finally {
                 if (btn && force) {
-                    setTimeout(() => {
+                    syncResetTimer = setTimeout(() => {
                         btn.classList.remove('filling', 'done-state');
-                        if (progress) progress.style.width = '0%';
+                        if (progress) {
+                            progress.style.transition = 'none';
+                            progress.style.width = '0%';
+                        }
                         if (spinner) spinner.style.display = 'none';
                         if (text) text.textContent = 'Sync';
-                    }, 1600);
-                } else if (btn) {
+                        syncResetTimer = null;
+                    }, 1400);
+                } else if (btn && !btn.classList.contains('done-state')) {
                     btn.classList.remove('filling');
                 }
             }
