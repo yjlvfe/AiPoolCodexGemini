@@ -812,113 +812,77 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
             border: 1px solid rgba(6, 182, 212, 0.3);
         }
 
-        /* Refresh Button: uiverse.io/xueyuantan/rotten-pig-19 Pill Style Adapted for Dark Theme */
+        /* Clean Linear Progress Fill Refresh Button */
         .refresh-btn {
             position: relative;
-            background: #1e293b;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            color: #f8fafc;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #ffffff;
             border-radius: 30em;
-            padding: 6px 16px;
+            padding: 6px 18px;
             font-size: 11.5px;
-            font-weight: 700;
+            font-weight: 600;
             cursor: pointer;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            gap: 7px;
             overflow: hidden;
             z-index: 1;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-            transition: all 0.35s ease;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            transition: border-color 0.25s ease, transform 0.15s ease, background 0.3s ease;
             font-family: inherit;
         }
-        .refresh-btn::before {
-            content: '';
-            width: 0;
-            height: 100%;
-            border-radius: 30em;
+        /* Green fill bar that sweeps from left to right */
+        .refresh-btn .fill-progress {
             position: absolute;
             top: 0;
             left: 0;
-            background-image: linear-gradient(to right, #0fd850 0%, #f9f047 100%);
-            transition: .45s ease;
-            display: block;
+            bottom: 0;
+            width: 0%;
+            background: linear-gradient(90deg, #10b981 0%, #059669 100%);
             z-index: -1;
-        }
-        .refresh-btn:hover::before {
-            width: 100%;
+            transition: width 0.15s ease-out;
+            pointer-events: none;
         }
         .refresh-btn:hover {
-            color: #052e16 !important;
-            border-color: transparent;
-            box-shadow: 0 6px 18px rgba(15, 216, 80, 0.4);
+            border-color: rgba(255, 255, 255, 0.35);
+            background: rgba(255, 255, 255, 0.08);
             transform: translateY(-1px);
         }
         .refresh-btn:active {
-            transform: scale(0.96);
+            transform: scale(0.97);
         }
-        .refresh-icon-wrap {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            width: 14px;
-            height: 14px;
-            transition: all 0.3s ease;
-        }
-        .refresh-svg {
-            display: block;
-            transition: transform 0.3s ease;
-        }
-        .refresh-btn.refreshing {
-            background: #0f172a !important;
-            border-color: #38bdf8 !important;
-            color: #38bdf8 !important;
-            box-shadow: 0 0 16px rgba(56, 189, 248, 0.35) !important;
+        .refresh-btn.filling {
+            border-color: #10b981;
             cursor: wait;
         }
-        .refresh-btn.refreshing::before {
-            width: 0 !important;
+        .refresh-btn.filling .fill-progress {
+            transition: width 0.7s cubic-bezier(0.1, 0.7, 0.1, 1);
+            width: 85%;
         }
-        .refresh-btn.refreshing .refresh-svg {
-            animation: spinRefreshSvg 0.75s linear infinite;
+        .refresh-btn.done-state {
+            border-color: #10b981;
+            background: #059669;
+            color: #ffffff;
+            box-shadow: 0 0 16px rgba(16, 185, 129, 0.4);
         }
-        @keyframes spinRefreshSvg {
-            from { transform: rotate(0deg); }
+        .refresh-btn.done-state .fill-progress {
+            width: 100% !important;
+            transition: width 0.2s ease-out;
+        }
+        /* Discrete Loading Spinner for text */
+        .sync-spin-icon {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #ffffff;
+            border-radius: 50%;
+            animation: syncSpin 0.7s linear infinite;
+        }
+        @keyframes syncSpin {
             to { transform: rotate(360deg); }
-        }
-        /* Green Done Phase */
-        .refresh-btn.refresh-done {
-            background: #052e16 !important;
-            border-color: #10b981 !important;
-            color: #34d399 !important;
-            box-shadow: 0 0 18px rgba(16, 185, 129, 0.5) !important;
-            transform: scale(1.02);
-        }
-        .refresh-btn.refresh-done::before {
-            width: 0 !important;
-        }
-        .check-draw-path {
-            stroke-dasharray: 24;
-            stroke-dashoffset: 24;
-            animation: checkStrokeDraw 0.4s cubic-bezier(0.65, 0, 0.45, 1) forwards;
-        }
-        @keyframes checkStrokeDraw {
-            to { stroke-dashoffset: 0; }
-        }
-        /* Restored Return State (Fresh Color Accent) */
-        .refresh-btn.refreshed-idle {
-            background: #1e1b4b;
-            border-color: rgba(129, 140, 248, 0.4);
-            color: #c7d2fe;
-            box-shadow: 0 4px 14px rgba(99, 102, 241, 0.25);
-        }
-        .refresh-btn.refreshed-idle::before {
-            background-image: linear-gradient(to right, #6366f1 0%, #a855f7 100%);
-        }
-        .refresh-btn.refreshed-idle:hover {
-            color: #ffffff !important;
-            box-shadow: 0 6px 20px rgba(168, 85, 247, 0.45);
         }
 
         /* Accounts Toggle Button */
@@ -1504,12 +1468,9 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                     <span class="pool-title" id="pool-title-label">ChatGPT Pool</span>
                 </div>
                 <button class="refresh-btn" id="main-refresh-btn" onclick="fetchLiveLogs(true)" title="Sync real-time metrics and stream">
-                    <span class="refresh-icon-wrap" id="main-refresh-icon-wrap">
-                        <svg class="refresh-svg" id="main-refresh-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round">
-                            <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/>
-                        </svg>
-                    </span>
-                    <span id="main-refresh-text">Sync Live</span>
+                    <div class="fill-progress" id="main-refresh-progress"></div>
+                    <span id="main-refresh-spinner" style="display:none;" class="sync-spin-icon"></span>
+                    <span id="main-refresh-text">Sync</span>
                 </button>
             </div>
 
@@ -2415,17 +2376,15 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
 
         async function fetchLiveLogs(force = false) {
             const btn = document.getElementById('main-refresh-btn') || document.querySelector('.refresh-btn');
-            const iconWrap = document.getElementById('main-refresh-icon-wrap');
+            const progress = document.getElementById('main-refresh-progress');
+            const spinner = document.getElementById('main-refresh-spinner');
             const text = document.getElementById('main-refresh-text');
-            
-            const originalSvg = '<svg class="refresh-svg" id="main-refresh-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>';
-            const checkSvg = '<svg class="refresh-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#10b981" stroke-width="2.8" stroke-linecap="round" stroke-linejoin="round"><polyline class="check-draw-path" points="20 6 9 17 4 12"></polyline></svg>';
-            const alertSvg = '<svg class="refresh-svg" viewBox="0 0 24 24" width="13" height="13" fill="none" stroke="#ef4444" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="12"></line><line x1="12" y1="16" x2="12.01" y2="16"></line></svg>';
 
-            if (btn) {
-                btn.classList.remove('refresh-success');
-                btn.classList.add('refreshing');
-                if (text && force) text.textContent = 'Syncing…';
+            if (btn && force) {
+                btn.classList.remove('done-state');
+                btn.classList.add('filling');
+                if (spinner) spinner.style.display = 'inline-block';
+                if (text) text.textContent = 'Syncing…';
             }
             try {
                 const path = force ? '/api/refresh' : '/api/logs_data';
@@ -2442,28 +2401,28 @@ HTML_LOGS_TEMPLATE = """<!DOCTYPE html>
                 renderGeneralActivityStream(data.recent_requests || []);
                 
                 if (btn && force) {
-                    btn.classList.remove('refreshing');
-                    btn.classList.add('refresh-done');
-                    if (iconWrap) iconWrap.innerHTML = checkSvg;
+                    btn.classList.remove('filling');
+                    btn.classList.add('done-state');
+                    if (spinner) spinner.style.display = 'none';
                     if (text) text.textContent = 'Done';
                 }
             } catch (err) {
                 console.error('Failed to sync logs:', err);
                 if (btn && force) {
-                    btn.classList.remove('refreshing');
-                    if (iconWrap) iconWrap.innerHTML = alertSvg;
+                    btn.classList.remove('filling');
+                    if (spinner) spinner.style.display = 'none';
                     if (text) text.textContent = 'Failed';
                 }
             } finally {
                 if (btn && force) {
                     setTimeout(() => {
-                        btn.classList.remove('refreshing', 'refresh-done');
-                        btn.classList.add('refreshed-idle');
-                        if (iconWrap) iconWrap.innerHTML = originalSvg;
-                        if (text) text.textContent = 'Sync Live';
-                    }, 1800);
+                        btn.classList.remove('filling', 'done-state');
+                        if (progress) progress.style.width = '0%';
+                        if (spinner) spinner.style.display = 'none';
+                        if (text) text.textContent = 'Sync';
+                    }, 1600);
                 } else if (btn) {
-                    btn.classList.remove('refreshing');
+                    btn.classList.remove('filling');
                 }
             }
         }
