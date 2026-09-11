@@ -1,0 +1,3063 @@
+<!DOCTYPE html>
+<html lang="en" dir="ltr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>AI Pools • Analytics & Control</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-base: #07090e;
+            --card-glass: rgba(15, 20, 32, 0.65);
+            --card-border: rgba(255, 255, 255, 0.08);
+            --card-border-hover: rgba(255, 255, 255, 0.18);
+            --accent-primary: #6366f1; /* Luxury Indigo */
+            --accent-primary-glow: rgba(99, 102, 241, 0.25);
+            --accent-cyan: #38bdf8;
+            --accent-purple: #a855f7;
+            --accent-emerald: #10b981;
+            --text-main: #f8fafc;
+            --text-secondary: #94a3b8;
+            --text-tertiary: #64748b;
+            --border-radius-xl: 22px;
+            --border-radius-lg: 14px;
+            --border-radius-md: 10px;
+            --transition-smooth: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+        body {
+            background-color: #030712;
+            color: var(--text-main);
+            font-family: 'Plus Jakarta Sans', -apple-system, sans-serif;
+            min-height: 100vh;
+            padding: 16px 14px 40px;
+            line-height: 1.5;
+            position: relative;
+            overflow-x: hidden;
+        }
+        /* True luminous ambient spheres */
+        .ambient-glow-1 {
+            position: fixed;
+            top: -100px;
+            right: -80px;
+            width: 320px;
+            height: 320px;
+            background: radial-gradient(circle, rgba(99, 102, 241, 0.28) 0%, rgba(99, 102, 241, 0) 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 0;
+            filter: blur(40px);
+        }
+        .ambient-glow-2 {
+            position: fixed;
+            top: 40%;
+            left: -120px;
+            width: 360px;
+            height: 360px;
+            background: radial-gradient(circle, rgba(168, 85, 247, 0.22) 0%, rgba(168, 85, 247, 0) 70%);
+            border-radius: 50%;
+            pointer-events: none;
+            z-index: 0;
+            filter: blur(50px);
+        }
+        .app-container {
+            position: relative;
+            z-index: 1;
+            max-width: 580px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        /* Top Header - Pro Luxury Responsive */
+        .top-navbar {
+            background: rgba(15, 20, 32, 0.65);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-top: 1px solid rgba(255, 255, 255, 0.16);
+            border-radius: var(--border-radius-xl);
+            padding: 14px 16px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            box-shadow: 0 16px 36px -10px rgba(0,0,0,0.5);
+            transition: var(--transition-smooth);
+        }
+        .header-main-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+        }
+        .brand-section {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            min-width: 0;
+        }
+        .brand-logo {
+            width: 38px;
+            height: 38px;
+            min-width: 38px;
+            border-radius: 12px;
+            background: linear-gradient(135deg, #0ea5e9, #8b5cf6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 19px;
+            box-shadow: 0 6px 14px -3px rgba(14, 165, 233, 0.4);
+            border: 1px solid rgba(255,255,255,0.2);
+            flex-shrink: 0;
+        }
+        .brand-title {
+            font-size: 15px;
+            font-weight: 800;
+            letter-spacing: -0.2px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+        }
+        .live-pill {
+            background: rgba(14, 165, 233, 0.12);
+            border: 1px solid rgba(14, 165, 233, 0.3);
+            color: var(--accent-cyan);
+            font-size: 9px;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 10px;
+            letter-spacing: 0.5px;
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            line-height: 1;
+        }
+        .live-dot {
+            width: 5px;
+            height: 5px;
+            border-radius: 50%;
+            background: var(--accent-cyan);
+            box-shadow: 0 0 6px var(--accent-cyan);
+            animation: pulseGlow 2s infinite ease-in-out;
+        }
+        @keyframes pulseGlow {
+            0%, 100% { opacity: 1; transform: scale(1); }
+            50% { opacity: 0.4; transform: scale(0.8); }
+        }
+        .settings-top-btn {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: var(--text-main);
+            padding: 6px 12px;
+            border-radius: 14px;
+            font-size: 12px;
+            font-weight: 700;
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            font-family: inherit;
+            flex-shrink: 0;
+        }
+        .settings-top-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.25);
+            transform: translateY(-1px);
+        }
+        .settings-top-btn.active {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.35), rgba(168, 85, 247, 0.35));
+            border-color: rgba(168, 85, 247, 0.6);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(168, 85, 247, 0.25);
+        }
+        .header-sub-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            padding-top: 6px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            font-size: 11px;
+        }
+        .brand-subtitle {
+            color: var(--text-tertiary);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-weight: 500;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .version-badge {
+            background: rgba(99, 102, 241, 0.1);
+            border: 1px solid rgba(99, 102, 241, 0.2);
+            color: #818cf8;
+            padding: 1px 6px;
+            border-radius: 6px;
+            font-size: 10px;
+            font-weight: 600;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 0.2px;
+            line-height: 1.2;
+        }
+
+        /* Provider Segmented Pill Selector */
+        .provider-segmented-wrap {
+            background: rgba(11, 15, 25, 0.8);
+            border: 1px solid var(--card-border);
+            border-radius: 18px;
+            padding: 4px;
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.4);
+            max-width: 100%;
+        }
+        .provider-tab-btn {
+            width: 100%;
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            padding: 14px 20px;
+            border-radius: 14px;
+            font-size: 15px;
+            font-weight: 800;
+            font-family: 'Cairo', sans-serif;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+        }
+        .provider-tab-btn.active {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+            color: #fff;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 8px 20px -6px rgba(0,0,0,0.6);
+        }
+        .provider-tab-btn.active.codex-theme {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.25), rgba(139, 92, 246, 0.1));
+            border-color: rgba(139, 92, 246, 0.4);
+            color: #d8b4fe;
+            box-shadow: 0 8px 20px -6px rgba(139, 92, 246, 0.3);
+        }
+        .provider-tab-btn.active.antigravity-theme {
+            background: linear-gradient(135deg, rgba(6, 182, 212, 0.25), rgba(6, 182, 212, 0.1));
+            border-color: rgba(6, 182, 212, 0.4);
+            color: #67e8f9;
+            box-shadow: 0 8px 20px -6px rgba(6, 182, 212, 0.3);
+        }
+        /* Glass Cards */
+        .glass-card {
+            background: rgba(255, 255, 255, 0.035);
+            backdrop-filter: blur(28px);
+            -webkit-backdrop-filter: blur(28px);
+            border: 1px solid rgba(255, 255, 255, 0.09);
+            border-top: 1px solid rgba(255, 255, 255, 0.22);
+            border-radius: var(--border-radius-xl);
+            padding: 20px 16px;
+            box-shadow: 0 20px 48px -12px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            position: relative;
+            overflow: hidden;
+        }
+        .glass-card:hover {
+            border-color: var(--card-border-hover);
+        }
+        .glass-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.12), transparent);
+        }
+
+        /* Pool Header Inside Card */
+        .pool-header-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+        .pool-title-group {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .pool-title {
+            font-size: 15px;
+            font-weight: 800;
+        }
+        .pool-badge {
+            padding: 3px 8px;
+            border-radius: 8px;
+            font-size: 10px;
+            font-weight: 800;
+            font-family: 'JetBrains Mono', monospace;
+        }
+
+        /* CUSTOM LUXURY ANIMATED DROPDOWN */
+        .custom-select-wrapper {
+            position: relative;
+            width: 100%;
+            margin-bottom: 16px;
+            user-select: none;
+            z-index: 50;
+        }
+        .custom-select-trigger {
+            background: rgba(11, 15, 25, 0.9);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-radius: var(--border-radius-lg);
+            padding: 12px 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            box-shadow: 0 4px 14px rgba(0,0,0,0.3);
+        }
+        .custom-select-trigger:hover, .custom-select-wrapper.open .custom-select-trigger {
+            border-color: var(--accent-cyan);
+            box-shadow: 0 0 0 3px var(--accent-cyan-glow);
+        }
+        .custom-select-trigger .selected-model-text {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13px;
+            font-weight: 600;
+            color: #f3f4f6;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .custom-select-trigger .chevron-icon {
+            font-size: 12px;
+            color: var(--text-secondary);
+            transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .custom-select-wrapper.open .chevron-icon {
+            transform: rotate(180deg);
+            color: var(--accent-cyan);
+        }
+        .custom-select-options {
+            position: absolute;
+            top: calc(100% + 6px);
+            left: 0;
+            right: 0;
+            background: #0d1322;
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: var(--border-radius-lg);
+            overflow: hidden;
+            box-shadow: 0 20px 40px -8px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.05);
+            opacity: 0;
+            visibility: hidden;
+            transform: translateY(-8px) scale(0.98);
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            max-height: 260px;
+            overflow-y: auto;
+            backdrop-filter: blur(24px);
+        }
+        .custom-select-wrapper.open .custom-select-options {
+            opacity: 1;
+            visibility: visible;
+            transform: translateY(0) scale(1);
+        }
+        .custom-option {
+            padding: 12px 16px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            color: #d1d5db;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            transition: background 0.15s ease, color 0.15s ease;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+        }
+        .custom-option:last-child { border-bottom: none; }
+        .custom-option:hover {
+            background: rgba(6, 182, 212, 0.12);
+            color: #fff;
+        }
+        .custom-option.selected {
+            background: rgba(6, 182, 212, 0.2);
+            color: var(--accent-cyan);
+            font-weight: 700;
+        }
+
+        /* Pool data cards: the reference layout is one row of three cards. */
+        .stats-summary-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 8px;
+            margin-bottom: 14px;
+        }
+        .stat-tri-card {
+            min-width: 0;
+            overflow: hidden;
+            background: rgba(11, 15, 25, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: var(--border-radius-md);
+            padding: 10px 12px;
+            text-align: center;
+            transition: var(--transition-smooth);
+        }
+        .stat-tri-card:hover {
+            background: rgba(255, 255, 255, 0.03);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        .stat-tri-label {
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            font-size: 10.5px;
+            color: var(--text-secondary);
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+        .stat-tri-val {
+            display: block;
+            min-width: 0;
+            overflow: visible;
+            padding-inline: 5px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 13.5px;
+            line-height: 1.35;
+            font-weight: 800;
+            color: #fff;
+            letter-spacing: -0.3px;
+            white-space: nowrap;
+            text-overflow: clip;
+            transition: font-size 120ms ease;
+        }
+
+        /* Accounts Strip */
+        .accounts-strip {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+        .account-item-pill {
+            background: rgba(15, 20, 32, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: var(--border-radius-md);
+            padding: 12px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            direction: ltr; /* Strict Left to Right: Email/Dot on Left, Metrics on Right */
+        }
+        .account-item-pill.active {
+            border-color: rgba(16, 185, 129, 0.35);
+            background: rgba(16, 185, 129, 0.08);
+            box-shadow: inset 0 0 16px rgba(16, 185, 129, 0.06);
+        }
+        .account-actions {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .account-normal-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            gap: 12px;
+        }
+        .account-actions-bar {
+            display: none !important;
+            width: 100%;
+            gap: 10px;
+            align-items: center;
+            justify-content: stretch;
+        }
+        .account-item-pill.selected .account-normal-content {
+            display: none !important;
+        }
+        .account-item-pill.selected .account-actions-bar {
+            display: flex !important;
+        }
+        .account-btn-switch, .account-btn-delete {
+            flex: 1 1 50%;
+            min-height: 38px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 700;
+            font-family: inherit;
+            letter-spacing: 0.3px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: all 0.25s ease;
+            box-sizing: border-box;
+            border: 1px solid transparent;
+        }
+        .account-btn-switch {
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(2, 132, 199, 0.3));
+            border-color: rgba(56, 189, 248, 0.45);
+            color: #38bdf8;
+        }
+        .account-btn-switch:not(:disabled):hover {
+            background: linear-gradient(135deg, #0ea5e9, #0284c7);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(14, 165, 233, 0.35);
+            transform: translateY(-1px);
+        }
+        .account-btn-delete {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.3));
+            border-color: rgba(239, 68, 68, 0.45);
+            color: #f87171;
+        }
+        .account-btn-delete:not(:disabled):hover {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: #fff;
+            box-shadow: 0 4px 12px rgba(239, 68, 68, 0.35);
+            transform: translateY(-1px);
+        }
+        .account-btn-switch:disabled, .account-btn-delete:disabled {
+            opacity: 0.45;
+            cursor: not-allowed;
+            transform: none;
+            filter: grayscale(0.6);
+        }
+        .account-switch-btn {
+            display: none !important;
+        }
+        .account-item-pill.selected {
+            border-color: rgba(56, 189, 248, 0.45);
+            background: rgba(56, 189, 248, 0.06);
+            box-shadow: 0 0 14px rgba(56, 189, 248, 0.12);
+        }
+        .acc-info-left {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .acc-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-tertiary);
+        }
+        .acc-dot.active {
+            background: var(--accent-emerald);
+            box-shadow: 0 0 8px var(--accent-emerald);
+        }
+        .acc-email {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: #e5e7eb;
+        }
+        .acc-metrics {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--text-secondary);
+        }
+
+        /* Activity Stream Header & Items */
+        .stream-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 12px;
+        }
+        .stream-title-text {
+            font-size: 14px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .stream-badge {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-weight: 600;
+        }
+        .stream-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 520px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        .stream-list::-webkit-scrollbar { width: 4px; }
+        .stream-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+        
+        /* Activity Stream Header & Items (Approved Luxury Cards) */
+        .stream-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 14px;
+        }
+        .stream-title-text {
+            font-size: 14px;
+            font-weight: 800;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .stream-badge {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            padding: 4px 10px;
+            border-radius: 20px;
+            font-size: 11px;
+            color: var(--text-secondary);
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            font-weight: 600;
+        }
+        .stream-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            max-height: 520px;
+            overflow-y: auto;
+            padding-right: 4px;
+        }
+        .stream-list::-webkit-scrollbar { width: 4px; }
+        .stream-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
+
+        .stream-card-item {
+            background: rgba(15, 20, 32, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: var(--border-radius-md);
+            padding: 12px 14px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            direction: ltr; /* Strict Left to Right */
+            text-align: left;
+        }
+        .stream-card-top {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            direction: ltr;
+        }
+        .stream-card-bottom {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            direction: ltr;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10.5px;
+            border-top: 1px solid rgba(255, 255, 255, 0.04);
+            padding-top: 6px;
+            gap: 6px;
+            flex-wrap: nowrap;
+            overflow-x: auto;
+            scrollbar-width: none;
+        }
+        .stream-card-bottom::-webkit-scrollbar { display: none; }
+        .stream-tok-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            font-weight: 800;
+            padding: 2px 6px;
+            border-radius: 5px;
+            letter-spacing: -0.3px;
+            white-space: nowrap;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+        .stream-tok-badge.codex {
+            background: rgba(139, 92, 246, 0.15);
+            color: #c084fc;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+        .stream-tok-badge.antigravity {
+            background: rgba(6, 182, 212, 0.15);
+            color: #67e8f9;
+            border: 1px solid rgba(6, 182, 212, 0.3);
+        }
+        .stream-model-name {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 700;
+            color: #fff;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }
+        .stream-time-text {
+            font-size: 10px;
+            color: var(--text-tertiary);
+            font-family: 'JetBrains Mono', monospace;
+        }
+        .stream-tok-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            font-weight: 800;
+            padding: 4px 10px;
+            border-radius: 8px;
+            letter-spacing: -0.3px;
+        }
+        .stream-tok-badge.codex {
+            background: rgba(139, 92, 246, 0.15);
+            color: #c084fc;
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+        .stream-tok-badge.antigravity {
+            background: rgba(6, 182, 212, 0.15);
+            color: #67e8f9;
+            border: 1px solid rgba(6, 182, 212, 0.3);
+        }
+
+        /* Clean Linear Progress Fill Refresh Button */
+        .refresh-btn {
+            position: relative;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #ffffff;
+            border-radius: 30em;
+            padding: 6px 18px;
+            font-size: 11.5px;
+            font-weight: 600;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 7px;
+            overflow: hidden;
+            z-index: 1;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            transition: border-color 0.25s ease, transform 0.15s ease, background 0.3s ease;
+            font-family: inherit;
+        }
+        /* Green fill bar that sweeps from left to right */
+        .refresh-btn .fill-progress {
+            position: absolute;
+            top: 0;
+            left: 0;
+            bottom: 0;
+            width: 0%;
+            background: linear-gradient(90deg, #10b981 0%, #059669 100%);
+            z-index: -1;
+            transition: width 0.15s ease-out;
+            pointer-events: none;
+        }
+        .refresh-btn:hover {
+            border-color: rgba(255, 255, 255, 0.35);
+            background: rgba(255, 255, 255, 0.08);
+            transform: translateY(-1px);
+        }
+        .refresh-btn:active {
+            transform: scale(0.97);
+        }
+        .refresh-btn.filling {
+            border-color: #10b981;
+            cursor: wait;
+        }
+        .refresh-btn.filling .fill-progress {
+            /* Smoothly fills up to 99% during the fetch request */
+            width: 99% !important;
+            transition: width 0.7s cubic-bezier(0.2, 0.8, 0.25, 1) !important;
+        }
+        .refresh-btn.done-state {
+            border-color: #10b981;
+            background: #059669;
+            color: #ffffff;
+            box-shadow: 0 0 16px rgba(16, 185, 129, 0.4);
+        }
+        .refresh-btn.done-state .fill-progress {
+            width: 100% !important;
+            transition: width 0.15s ease-out !important;
+        }
+        /* Discrete Loading Spinner for text */
+        .sync-spin-icon {
+            display: inline-block;
+            width: 12px;
+            height: 12px;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            border-top-color: #ffffff;
+            border-radius: 50%;
+            animation: syncSpin 0.7s linear infinite;
+        }
+        @keyframes syncSpin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Accounts Toggle Button */
+        .accounts-toggle-btn {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 8px;
+            color: var(--text-secondary);
+            font-size: 11px;
+            font-weight: 600;
+            padding: 4px 10px;
+            cursor: pointer;
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            transition: all 0.25s ease;
+            font-family: inherit;
+        }
+        .accounts-toggle-btn:hover {
+            background: rgba(255, 255, 255, 0.09);
+            color: #fff;
+            border-color: var(--accent-cyan);
+            transform: translateY(-1px);
+        }
+        .accounts-strip.collapsed {
+            display: none !important;
+        }
+
+        /* Toast notification */
+        #toast-notification {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%) translateY(-60px);
+            background: rgba(16, 185, 129, 0.95);
+            backdrop-filter: blur(12px);
+            color: #fff;
+            padding: 8px 18px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 700;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 16px rgba(16, 185, 129, 0.3);
+            z-index: 9999;
+            opacity: 0;
+            transition: all 0.35s cubic-bezier(0.16, 1, 0.3, 1);
+            pointer-events: none;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        #toast-notification.show {
+            opacity: 1;
+            transform: translateX(-50%) translateY(0);
+        }
+        .refresh-btn svg { width: 14px; height: 14px; transition: transform 0.4s ease; }
+        .refresh-btn.rotating svg { transform: rotate(360deg); }
+        .refresh-btn:hover svg { transform: rotate(180deg); }
+
+        /* Unified Badges */
+        .badge {
+            white-space: nowrap !important;
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            padding: 4px 8px;
+            letter-spacing: 0.2px;
+            background: rgba(255, 255, 255, 0.06);
+            color: #94a3b8;
+        }
+
+        /* Settings Card Structure */
+        .settings-card {
+            padding: 16px;
+        }
+        .settings-card-header {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            margin-bottom: 14px;
+            width: 100%;
+        }
+        .settings-card-top-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+            gap: 10px;
+        }
+        .settings-card-title-group {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            min-width: 0;
+        }
+        .settings-card-icon {
+            font-size: 24px;
+            flex-shrink: 0;
+        }
+        .settings-card-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #fff;
+            white-space: nowrap;
+        }
+        .settings-card-sub {
+            font-size: 12px;
+            color: var(--text-secondary);
+            line-height: 1.4;
+            padding-left: 34px;
+        }
+        .settings-info-box {
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            padding: 10px 12px;
+            font-size: 12px;
+            color: #cbd5e1;
+            margin-bottom: 12px;
+            line-height: 1.6;
+            overflow-wrap: anywhere;
+        }
+        .recheck-btn {
+            white-space: nowrap !important;
+            flex-shrink: 0;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            color: #cbd5e1;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 11px;
+            font-weight: 600;
+            font-family: inherit;
+            cursor: pointer;
+            transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+        }
+        .recheck-btn:hover {
+            background: rgba(56, 189, 248, 0.15);
+            border-color: rgba(56, 189, 248, 0.35);
+            color: #38bdf8;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+        .bento-update-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+            margin-bottom: 12px;
+        }
+        .bento-update-cell {
+            background: rgba(0, 0, 0, 0.35);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 10px;
+            padding: 10px 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .bento-cell-label {
+            font-size: 10px;
+            font-weight: 700;
+            letter-spacing: 0.5px;
+            color: var(--text-tertiary);
+            text-transform: uppercase;
+        }
+        .bento-cell-value {
+            font-size: 12px;
+            color: #f1f5f9;
+            font-weight: 600;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+        .commit-log-box {
+            background: rgba(0, 0, 0, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-left: 3px solid #6366f1;
+            border-radius: 8px;
+            padding: 8px 12px;
+            font-size: 11px;
+            color: #94a3b8;
+            line-height: 1.5;
+            margin-bottom: 12px;
+        }
+        .update-cta-btn {
+            width: 100%;
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.18), rgba(168, 85, 247, 0.18));
+            border: 1px solid rgba(168, 85, 247, 0.4);
+            color: #e0e7ff;
+            padding: 11px 16px;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            box-shadow: 0 4px 14px rgba(0, 0, 0, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+            transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            position: relative;
+            overflow: hidden;
+        }
+        .update-cta-btn:hover {
+            background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(168, 85, 247, 0.3));
+            border-color: rgba(168, 85, 247, 0.7);
+            color: #ffffff;
+            transform: translateY(-1px);
+            box-shadow: 0 6px 20px rgba(168, 85, 247, 0.35), inset 0 1px 0 rgba(255, 255, 255, 0.2);
+        }
+        .update-cta-btn.updating {
+            background: linear-gradient(135deg, rgba(14, 165, 233, 0.2), rgba(99, 102, 241, 0.25)) !important;
+            border-color: #38bdf8 !important;
+            color: #38bdf8 !important;
+            box-shadow: 0 0 20px rgba(56, 189, 248, 0.3) !important;
+            cursor: wait;
+            transform: scale(0.99);
+        }
+        .update-cta-btn.update-success {
+            background: linear-gradient(135deg, rgba(16, 185, 129, 0.25), rgba(5, 150, 105, 0.25)) !important;
+            border-color: #10b981 !important;
+            color: #34d399 !important;
+            box-shadow: 0 0 22px rgba(16, 185, 129, 0.4) !important;
+            transform: scale(1.01);
+            animation: pulseGlowSuccess 1.5s ease-in-out infinite;
+        }
+        .update-cta-btn.update-error {
+            background: rgba(239, 68, 68, 0.2) !important;
+            border-color: #ef4444 !important;
+            color: #f87171 !important;
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.3) !important;
+        }
+        @keyframes pulseGlowSuccess {
+            0%, 100% { box-shadow: 0 0 14px rgba(16, 185, 129, 0.3); }
+            50% { box-shadow: 0 0 25px rgba(16, 185, 129, 0.6); }
+        }
+        .update-cta-btn:disabled {
+            opacity: 0.85;
+            cursor: wait;
+        }
+        /* Creative Animated Bouncing Dots & Loaders */
+        .bouncing-dots {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+        }
+        .bouncing-dots span {
+            width: 5px;
+            height: 5px;
+            background-color: currentColor;
+            border-radius: 50%;
+            display: inline-block;
+            animation: dotBounce 1.4s infinite ease-in-out both;
+        }
+        .bouncing-dots span:nth-child(1) { animation-delay: -0.32s; }
+        .bouncing-dots span:nth-child(2) { animation-delay: -0.16s; }
+        .bouncing-dots span:nth-child(3) { animation-delay: 0s; }
+        @keyframes dotBounce {
+            0%, 80%, 100% { transform: scale(0.2); opacity: 0.3; }
+            40% { transform: scale(1.1); opacity: 1; }
+        }
+        .spin-icon {
+            display: inline-block;
+            animation: spinAnim 1s linear infinite;
+        }
+        @keyframes spinAnim {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
+        /* Secondary Check Updates Action Button */
+        .check-update-btn {
+            background: rgba(56, 189, 248, 0.1);
+            border: 1px solid rgba(56, 189, 248, 0.25);
+            color: #38bdf8;
+            padding: 10px 14px;
+            border-radius: 10px;
+            font-size: 12px;
+            font-weight: 600;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: all 0.25s ease;
+        }
+        .check-update-btn:hover {
+            background: rgba(56, 189, 248, 0.2);
+            border-color: rgba(56, 189, 248, 0.5);
+            transform: translateY(-1px);
+        }
+        .check-update-btn:disabled {
+            opacity: 0.6;
+            cursor: wait;
+            transform: none;
+        }
+        .update-action-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr 1fr;
+            gap: 10px;
+            margin-top: 4px;
+        }
+        @media (max-width: 640px) {
+            .update-action-row {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+        }
+        .cli-tool-item {
+            background: rgba(0, 0, 0, 0.25);
+            border: 1px solid rgba(255, 255, 255, 0.06);
+            border-radius: 8px;
+            padding: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: 12px;
+        }
+        .agent-config-detail-box {
+            font-size: 11px;
+            font-family: 'JetBrains Mono', monospace;
+            overflow-wrap: anywhere;
+            color: #94a3b8;
+            margin-top: 10px;
+            padding: 8px 10px;
+            background: rgba(0, 0, 0, 0.28);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 6px;
+            line-height: 1.5;
+        }
+
+        /* Responsive Mobile Styles */
+        @media (max-width: 640px) {
+            .app-container {
+                padding: 12px 10px 40px 10px;
+                gap: 12px;
+            }
+            .glass-card {
+                padding: 16px 14px !important;
+                border-radius: 14px;
+            }
+            .top-navbar {
+                padding: 14px 14px 10px 14px;
+            }
+            .header-sub-row {
+                flex-direction: row !important;
+                align-items: center !important;
+                justify-content: space-between !important;
+                gap: 8px;
+            }
+            .brand-subtitle {
+                white-space: nowrap;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                font-size: 11px;
+                line-height: 1.2;
+            }
+            .version-badge {
+                align-self: center !important;
+                flex-shrink: 0;
+            }
+            .provider-tab-btn {
+                font-size: 13px;
+                padding: 8px 10px;
+            }
+            .settings-card-title {
+                font-size: 14px;
+            }
+            .settings-card-sub {
+                padding-left: 0;
+                font-size: 11px;
+            }
+            .settings-card-top-row {
+                gap: 8px;
+            }
+            .bento-update-grid {
+                grid-template-columns: 1fr;
+                gap: 8px;
+            }
+            .cli-tool-item {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 10px;
+            }
+            .cli-tool-item button {
+                width: 100%;
+            }
+            .account-item-pill {
+                flex-direction: column;
+                align-items: stretch;
+                gap: 8px;
+            }
+            .account-actions {
+                justify-content: space-between;
+                width: 100%;
+            }
+        }
+
+        /* Delete Confirmation Modal */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(8px);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 16px;
+        }
+        .modal-dialog {
+            width: 100%;
+            max-width: 420px;
+            background: rgba(15, 23, 42, 0.96);
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 24px rgba(239, 68, 68, 0.15);
+            border-radius: 16px;
+            padding: 22px;
+            box-sizing: border-box;
+        }
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 14px;
+        }
+        .modal-close-btn {
+            background: none;
+            border: none;
+            color: #94a3b8;
+            font-size: 22px;
+            cursor: pointer;
+            line-height: 1;
+            padding: 0 4px;
+        }
+        .modal-close-btn:hover {
+            color: #fff;
+        }
+        .modal-input {
+            width: 100%;
+            background: rgba(0, 0, 0, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            border-radius: 8px;
+            padding: 11px 14px;
+            color: #fff;
+            font-size: 13px;
+            font-family: inherit;
+            box-sizing: border-box;
+            outline: none;
+            transition: var(--transition-smooth);
+        }
+        .modal-input:focus {
+            border-color: #ef4444;
+            box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
+        }
+        .modal-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 18px;
+        }
+        .modal-btn-cancel {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #cbd5e1;
+            border-radius: 8px;
+            padding: 10px;
+            font-weight: 600;
+            font-size: 13px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+        }
+        .modal-btn-cancel:hover {
+            background: rgba(255, 255, 255, 0.15);
+            color: #fff;
+        }
+        .modal-btn-delete {
+            flex: 1;
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            border: none;
+            color: #fff;
+            border-radius: 8px;
+            padding: 10px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            transition: var(--transition-smooth);
+        }
+        .modal-btn-delete:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            filter: grayscale(0.8);
+        }
+        .modal-btn-delete:not(:disabled):hover {
+            box-shadow: 0 4px 14px rgba(239, 68, 68, 0.4);
+            transform: translateY(-1px);
+        }
+    </style>
+<style>
+.request-detail-trigger{margin-top:10px;padding:7px 12px;border:1px solid #334155;border-radius:8px;background:rgba(56,189,248,.08);color:#7dd3fc;cursor:pointer;font:600 11.5px inherit;display:block;width:100%;text-align:center}.request-detail-trigger:hover{border-color:#38bdf8}
+#request-inspector{color:#e2e8f0;background:#0f172a;border:1px solid #334155;border-radius:16px;width:calc(100vw - 24px);max-width:640px;max-height:86dvh;padding:0;box-shadow:0 24px 80px #000a;margin:auto;box-sizing:border-box}
+#request-inspector::backdrop{background:#020617c4;backdrop-filter:blur(6px)}
+.ri-header{position:sticky;top:0;background:#0f172a;padding:14px 16px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid #334155;z-index:2;box-sizing:border-box}
+.ri-header h2{margin:0;font-size:15px;font-weight:700}
+.ri-header button{border:1px solid #475569;border-radius:50%;background:transparent;color:white;width:30px;height:30px;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:13px;flex-shrink:0}
+.ri-body{padding:14px;display:grid;gap:12px;box-sizing:border-box;overflow-y:auto;max-height:calc(86dvh - 65px)}
+.ri-section{border:1px solid #293548;border-radius:10px;padding:12px;background:#111c2e;box-sizing:border-box}
+.ri-section h3{margin:0 0 10px;color:#7dd3fc;font-size:11.5px;text-transform:uppercase;letter-spacing:.05em}
+.ri-row{display:grid;grid-template-columns:110px 1fr;gap:10px;font-size:11.5px;padding:6px 0;border-bottom:1px solid #ffffff08}
+.ri-row span:first-child{color:#94a3b8}
+.ri-row span:last-child{white-space:pre-wrap;overflow-wrap:anywhere;min-width:0}
+.ri-prompt{display:block;width:100%;box-sizing:border-box;white-space:pre-wrap;overflow-wrap:anywhere;font:11.5px/1.6 monospace;margin:0;min-height:220px;max-height:320px;resize:vertical;overflow:auto;background:rgba(0,0,0,0.25);border:1px solid #334155;padding:10px;border-radius:8px;color:#e2e8f0}
+.ri-note{color:#94a3b8;font-size:11px;line-height:1.5;margin:0}
+
+@media (max-width: 480px) {
+    #request-inspector {
+        width: calc(100vw - 16px);
+        max-height: 90dvh;
+        border-radius: 14px;
+    }
+    .ri-header { padding: 12px 14px; }
+    .ri-body { padding: 12px; gap: 10px; max-height: calc(90dvh - 60px); }
+    .ri-section { padding: 10px; }
+    .ri-row { grid-template-columns: 85px 1fr; gap: 8px; font-size: 11px; }
+    .crm-item-card.stack-on-mobile {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 8px;
+    }
+    .crm-item-card.stack-on-mobile select {
+        width: 100%;
+    }
+}
+</style></head>
+<body>
+    <div class="ambient-glow-1"></div>
+    <div class="ambient-glow-2"></div>
+    <div class="app-container">
+        <div id="toast-notification">
+            <span id="toast-text">Logs refreshed successfully</span>
+        </div>
+        <!-- Delete Account Confirmation Modal -->
+        <div id="delete-modal-overlay" class="modal-overlay" style="display: none;" onclick="closeDeleteModal(event)">
+            <div class="modal-dialog glass-card" onclick="event.stopPropagation()">
+                <div class="modal-header">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 20px;">🗑️</span>
+                        <span style="font-weight: 700; color: #fff; font-size: 15px;">Confirm Account Deletion</span>
+                    </div>
+                    <button class="modal-close-btn" onclick="closeDeleteModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p style="color: #cbd5e1; font-size: 13px; line-height: 1.5; margin-bottom: 12px;">
+                        Are you sure you want to delete <strong id="modal-del-account-label" style="color: #fff;">Account</strong>?
+                    </p>
+                    <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #fca5a5; margin-bottom: 14px;">
+                        ⚠️ This will permanently delete and purge the account credentials completely. Type <strong style="color: #ef4444; font-family: monospace;">confirm</strong> below to proceed:
+                    </div>
+                    <input type="text" id="modal-delete-confirm-input" class="modal-input" placeholder="Type confirm" autocomplete="off" oninput="validateDeleteInput()" />
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="modal-btn-cancel" onclick="closeDeleteModal()">Cancel</button>
+                    <button type="button" id="modal-btn-confirm-delete" class="modal-btn-delete" disabled onclick="executeAccountDelete()">
+                        🗑️ Permanent Delete
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Top Navigation Header -->
+        <header class="top-navbar">
+            <div class="header-main-row">
+                <div class="brand-section">
+                    <div class="brand-logo">⚡</div>
+                    <div class="brand-title">
+                        <span>AI Pool Guardian</span>
+                        <span class="live-pill"><span class="live-dot"></span>LIVE</span>
+                    </div>
+                </div>
+                <div style="display: flex; align-items: center; gap: 8px;">
+                    <button id="api-page-toggle-btn" class="settings-top-btn" onclick="toggleApiView()" style="background: linear-gradient(135deg, rgba(0, 242, 254, 0.15), rgba(157, 78, 221, 0.15)); border-color: rgba(0, 242, 254, 0.3); color: #fff;">
+                        <span>🌐</span>
+                        <span>Public API</span>
+                    </button>
+                    <button id="settings-toggle-btn" class="settings-top-btn" onclick="toggleSettingsView()">
+                        <span id="settings-btn-icon">⚙️</span>
+                        <span id="settings-btn-text">Settings</span>
+                    </button>
+                </div>
+            </div>
+            <div class="header-sub-row">
+                <div class="brand-subtitle">Autonomous Failover Architecture</div>
+                <span class="version-badge" id="system-version-pill" title="Active Release Version">v2.1.6</span>
+            </div>
+        </header>
+
+        <!-- Provider Tab Bar -->
+        <div class="provider-segmented-wrap" id="provider-segmented-bar">
+            <button class="provider-tab-btn active codex-theme" id="tab-codex" onclick="switchProvider('Codex')">
+                <span>🟣</span>
+                <span>ChatGPT</span>
+            </button>
+            <button class="provider-tab-btn antigravity-theme" id="tab-antigravity" onclick="switchProvider('Antigravity')">
+                <span>🟢</span>
+                <span>Gemini</span>
+            </button>
+        </div>
+
+        <!-- Model Deep-Dive Analytics Card -->
+        <section class="glass-card" id="pool-overview-section">
+            <div class="pool-header-row">
+                <div class="pool-title-group">
+                    <span id="pool-icon" style="font-size: 18px;">🟣</span>
+                    <span class="pool-title" id="pool-title-label">ChatGPT Pool</span>
+                </div>
+                <button class="refresh-btn" id="main-refresh-btn" onclick="fetchLiveLogs(true)" title="Sync real-time metrics and stream">
+                    <div class="fill-progress" id="main-refresh-progress"></div>
+                    <span id="main-refresh-spinner" style="display:none;" class="sync-spin-icon"></span>
+                    <span id="main-refresh-text">Sync</span>
+                </button>
+            </div>
+
+            <!-- Pool Overall Capacity Card -->
+            <div id="pool-capacity-card" style="background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: var(--border-radius-md); padding: 12px 14px; margin-bottom: 16px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+                    <span style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">📊 Pool Capacity:</span>
+                    <span id="pool-total-capacity-text" style="font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; color:var(--accent-cyan);">--</span>
+                </div>
+                <!-- 5H & Weekly/Monthly Bar on the same row with 5-Hour longer and balanced -->
+                <div style="display:grid; grid-template-columns: 1.4fr 1fr; gap: 16px; align-items: center;">
+                    <div>
+                        <div style="display:flex; justify-content:space-between; font-size:10.5px; color:var(--text-tertiary); margin-bottom:4px;">
+                            <span id="pool-5h-label" style="font-weight:600;">5-Hour Quota</span>
+                            <span id="pool-5h-summary-val" style="font-family:'JetBrains Mono'; font-weight:700; color:#38bdf8;">--%</span>
+                        </div>
+                        <div style="height:8px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden; border:1px solid rgba(255,255,255,0.05);">
+                            <div id="pool-5h-progress" style="height:100%; width:0%; background:linear-gradient(90deg, #6366f1, #38bdf8); transition:width 0.4s ease; border-radius:4px;"></div>
+                        </div>
+                    </div>
+                    <div>
+                        <div style="display:flex; justify-content:space-between; font-size:10.5px; color:var(--text-tertiary); margin-bottom:4px;">
+                            <span id="pool-wk-label" style="font-weight:600;">Weekly / Monthly</span>
+                            <span id="pool-wk-summary-val" style="font-family:'JetBrains Mono'; font-weight:700; color:#a855f7;">--%</span>
+                        </div>
+                        <div style="height:8px; background:rgba(255,255,255,0.06); border-radius:4px; overflow:hidden; border:1px solid rgba(255,255,255,0.05);">
+                            <div id="pool-wk-progress" style="height:100%; width:0%; background:linear-gradient(90deg, #8b5cf6, #10b981); transition:width 0.4s ease; border-radius:4px;"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Reference three-card pool summary: tokens, requests, average per request. -->
+            <div class="stats-summary-grid">
+                <div class="stat-tri-card">
+                    <div class="stat-tri-label">Total Tokens</div>
+                    <div class="stat-tri-val" id="model-total-tokens" style="color: var(--accent-cyan);">--</div>
+                </div>
+                <div class="stat-tri-card">
+                    <div class="stat-tri-label">Total Requests</div>
+                    <div class="stat-tri-val" id="model-total-requests" style="color: var(--accent-purple);">--</div>
+                </div>
+                <div class="stat-tri-card">
+                    <div class="stat-tri-label">Avg / Req</div>
+                    <div class="stat-tri-val" id="model-avg-tokens" style="color: var(--accent-emerald);">--</div>
+                </div>
+            </div>
+
+            <!-- Pool Accounts Summary List -->
+            <div style="margin-top: 14px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+                    <div id="accounts-section-title" style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">Connected Accounts:</div>
+                    <button id="accounts-toggle-btn" class="accounts-toggle-btn" onclick="toggleAccountsList()">
+                        <span id="accounts-toggle-icon">👁️</span>
+                        <span id="accounts-toggle-text">View Accounts</span>
+                        <span id="accounts-toggle-chevron" style="transition: transform 0.3s ease; display: inline-block; font-size: 10px; transform: rotate(180deg);">▾</span>
+                    </button>
+                </div>
+                <div class="accounts-strip collapsed" id="pool-accounts-container">
+                    <!-- Loaded dynamically -->
+                </div>
+            </div>
+        </section>
+
+        <!-- Real Stream Card -->
+        <section class="glass-card" id="stream-section">
+            <div class="stream-header">
+                <div class="stream-title-text">
+                    <span>⚡</span>
+                    <span>Live Operations Stream</span>
+                </div>
+            </div>
+            <div class="stream-list" id="activity-stream-list">
+                <!-- Activity Items Loaded Here -->
+            </div>
+        </section>
+
+        <!-- API View Section -->
+        <section id="api-view-section" style="display: none; flex-direction: column; gap: 16px;">
+            <!-- Public Base URLs Card -->
+            <div class="glass-card settings-card" style="border: 1px solid rgba(0, 242, 254, 0.25); background: linear-gradient(135deg, rgba(0, 242, 254, 0.04), rgba(157, 78, 221, 0.04));">
+                <div class="settings-card-header">
+                    <div style="display:flex; align-items:center; gap: 10px;">
+                        <span style="font-size: 22px;">🌐</span>
+                        <div>
+                            <div class="settings-card-title" style="color: #fff;">Public Remote Endpoints (Base URLs)</div>
+                            <div class="settings-card-sub">Standard OpenAI-compatible endpoints with SSL encryption for remote apps & agents</div>
+                        </div>
+                    </div>
+                    <span class="endpoint-pill-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);">🟢 SSL LIVE</span>
+                </div>
+
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px;">
+                    <!-- Codex Base URL -->
+                    <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 14px; padding: 14px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+                            <span style="font-weight: 700; color: #d8b4fe; font-size: 13px;">🟣 Codex Base URL (ChatGPT Models)</span>
+                            <button onclick="copyToClipboard('https://masteryj.shop/api/v1/codex/')" class="refresh-btn" style="padding: 4px 8px; font-size: 11px;">📋 Copy</button>
+                        </div>
+                        <div style="font-family:'JetBrains Mono',monospace; font-size: 12px; color: #f8fafc; word-break: break-all; background: rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 8px;">
+                            https://masteryj.shop/api/v1/codex/
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 6px;">
+                            Supported Models: <span style="color: #c084fc;">gpt-5.6-luna, gpt-5.6-sol, gpt-5.5</span>
+                        </div>
+                    </div>
+
+                    <!-- Gemini Base URL -->
+                    <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 14px; padding: 14px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
+                            <span style="font-weight: 700; color: #67e8f9; font-size: 13px;">🟢 Gemini Base URL (Antigravity Models)</span>
+                            <button onclick="copyToClipboard('https://masteryj.shop/api/v1/gemini/')" class="refresh-btn" style="padding: 4px 8px; font-size: 11px;">📋 Copy</button>
+                        </div>
+                        <div style="font-family:'JetBrains Mono',monospace; font-size: 12px; color: #f8fafc; word-break: break-all; background: rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 8px;">
+                            https://masteryj.shop/api/v1/gemini/
+                        </div>
+                        <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 6px;">
+                            Supported Models: <span style="color: #38bdf8;">gemini-3.8-flash, gemini-3.1-pro, claude-opus-4-6-thinking</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- API Keys Management Card -->
+            <div class="glass-card settings-card">
+                <div class="settings-card-header">
+                    <div>
+                        <div class="settings-card-title">🔑 API Keys & Clients Management</div>
+                        <div class="settings-card-sub">Generate and manage bearer credentials for remote users and external systems</div>
+                    </div>
+                    <button class="settings-btn" onclick="promptCreateApiKey()" style="background: linear-gradient(135deg, #6366f1, #06b6d4); color: #fff; font-weight: 700;">
+                        ➕ Create New Key
+                    </button>
+                </div>
+
+                <div id="new-key-alert-box" style="display:none; margin-top:14px; padding:12px 14px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px;">
+                    <div style="font-size: 12px; font-weight: 700; color: #34d399; margin-bottom: 4px;">🎉 Key Created Successfully! Make sure to copy it now:</div>
+                    <div style="display:flex; gap: 8px; align-items: center;">
+                        <input type="text" id="new-created-key-input" readonly style="flex:1; font-family:'JetBrains Mono'; font-size:12px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); color:#fff; padding:6px 10px; border-radius:8px;">
+                        <button onclick="copyCreatedKey()" class="refresh-btn" style="padding: 6px 12px;">Copy</button>
+                    </div>
+                </div>
+
+                <div style="margin-top: 14px; overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; text-align: left;">
+                        <thead>
+                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); color: var(--text-tertiary);">
+                                <th style="padding: 10px 8px;">Client / Key Name</th>
+                                <th style="padding: 10px 8px;">Key ID</th>
+                                <th style="padding: 10px 8px;">Status</th>
+                                <th style="padding: 10px 8px; text-align: right;">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="api-tokens-table-body">
+                            <tr><td colspan="4" style="padding: 16px; text-align:center; color: var(--text-tertiary);">Loading API keys...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+            <!-- Quick Integration Guide -->
+            <div class="glass-card settings-card">
+                <div class="settings-card-header">
+                    <div>
+                        <div class="settings-card-title">💡 How to Connect External Apps</div>
+                        <div class="settings-card-sub">Use with Cursor, LibreChat, NextChat, Python, or standard OpenAI clients</div>
+                    </div>
+                </div>
+                <div style="margin-top: 10px; font-family:'JetBrains Mono',monospace; font-size: 11.5px; color:#cbd5e1; background: rgba(0,0,0,0.4); padding: 14px; border-radius: 12px; line-height: 1.6;">
+                    <span style="color: #64748b;"># Example cURL request to your remote Gemini bridge</span><br>
+                    curl https://64.112.42.39.sslip.io/api/v1/gemini/chat/completions \<br>
+                    &nbsp;&nbsp;-H <span style="color: #38bdf8;">"Authorization: Bearer YOUR_API_KEY"</span> \<br>
+                    &nbsp;&nbsp;-H "Content-Type: application/json" \<br>
+                    &nbsp;&nbsp;-d '{"model": "gemini-3.8-flash", "messages": [{"role": "user", "content": "Hello"}]}'
+                </div>
+            </div>
+        </section>
+
+        <!-- Settings View Section -->
+        <section id="settings-view-section" style="display: none; flex-direction: column; gap: 14px;">
+            <!-- Hermes Agent Integration Card -->
+            <div class="glass-card settings-card">
+                <div class="settings-card-header">
+                    <div class="settings-card-top-row">
+                        <div class="settings-card-title-group">
+                            <span class="settings-card-icon">🤖</span>
+                            <span class="settings-card-title">Hermes Agent Integration</span>
+                        </div>
+                        <span id="hermes-badge" class="badge">Checking...</span>
+                    </div>
+                    <div class="settings-card-sub">Auto-link pool gateways in ~/.hermes/config.yaml</div>
+                </div>
+                <div class="settings-info-box">
+                    Config Path: <code style="color: var(--accent-cyan);">~/.hermes/config.yaml</code><br>
+                    Models: <span style="color: var(--accent-emerald);">gemini-3.8-flash (1M)</span>, <span style="color: var(--accent-purple);">gpt-6-astra (1M)</span> + full family
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="action-btn" id="btn-sync-hermes" onclick="triggerIntegration('hermes')" style="flex: 1; background: linear-gradient(135deg, #0ea5e9, #0284c7); color: #fff; border: none; padding: 10px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                        <span>⚡</span>
+                        <span>Configure Hermes Agent</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- OpenClaw Integration Card -->
+            <div class="glass-card settings-card">
+                <div class="settings-card-header">
+                    <div class="settings-card-top-row">
+                        <div class="settings-card-title-group">
+                            <span class="settings-card-icon">🦅</span>
+                            <span class="settings-card-title">OpenClaw Integration</span>
+                        </div>
+                        <span id="openclaw-badge" class="badge">Checking...</span>
+                    </div>
+                    <div class="settings-card-sub">Auto-link gemini & codex in ~/.openclaw/openclaw.json</div>
+                </div>
+                <div class="settings-info-box">
+                    Config Path: <code style="color: var(--accent-cyan);">~/.openclaw/openclaw.json</code><br>
+                    Providers: <span style="color: var(--accent-emerald);">gemini</span>, <span style="color: var(--accent-purple);">codex</span>
+                </div>
+                <div style="display: flex; gap: 8px;">
+                    <button class="action-btn" id="btn-sync-openclaw" onclick="triggerIntegration('openclaw')" style="flex: 1; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: #fff; border: none; padding: 10px 14px; border-radius: 8px; font-weight: 600; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                        <span>⚡</span>
+                        <span>Configure OpenClaw</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- CLI Tools Prerequisites Card -->
+            <div class="glass-card settings-card">
+                <div class="settings-card-header">
+                    <div class="settings-card-top-row">
+                        <div class="settings-card-title-group">
+                            <span class="settings-card-icon">🛠️</span>
+                            <span class="settings-card-title">CLI Tools Status</span>
+                        </div>
+                        <button class="recheck-btn" onclick="fetchCliToolsStatus()" title="Re-check installed CLI tools">
+                            🔄 Re-check
+                        </button>
+                    </div>
+                    <div class="settings-card-sub">Detects and configures CLI tools required for enrolling accounts.</div>
+                </div>
+
+                <div style="display: flex; flex-direction: column; gap: 10px;">
+                    <!-- Codex CLI item -->
+                    <div class="cli-tool-item">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                <span style="font-weight: 700; color: #fff; font-size: 13px;">OpenAI Codex CLI</span>
+                                <span id="codex-cli-badge" class="badge">Checking...</span>
+                            </div>
+                            <div id="codex-cli-desc" style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Required for 'c add' interactive login session.</div>
+                        </div>
+                        <button id="btn-install-codex" class="action-btn" onclick="installCliTool('codex')" style="display: none; background: linear-gradient(135deg, #8b5cf6, #7c3aed); color: #fff; border: none; padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;">
+                            ⚡ Install CLI
+                        </button>
+                    </div>
+
+                    <!-- Antigravity CLI item -->
+                    <div class="cli-tool-item">
+                        <div>
+                            <div style="display: flex; align-items: center; gap: 8px; flex-wrap: wrap;">
+                                <span style="font-weight: 700; color: #fff; font-size: 13px;">Gemini Antigravity CLI</span>
+                                <span id="antigravity-cli-badge" class="badge">Checking...</span>
+                            </div>
+                            <div id="antigravity-cli-desc" style="font-size: 11px; color: var(--text-secondary); margin-top: 4px;">Required for 'ag add' interactive login session.</div>
+                        </div>
+                        <button id="btn-install-antigravity" class="action-btn" onclick="installCliTool('antigravity')" style="display: none; background: linear-gradient(135deg, #10b981, #059669); color: #fff; border: none; padding: 8px 14px; border-radius: 6px; font-size: 12px; font-weight: 700; cursor: pointer; white-space: nowrap;">
+                            ⚡ Setup CLI
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- System Updates Card -->
+            <div class="glass-card settings-card">
+                <div class="settings-card-header">
+                    <div class="settings-card-top-row">
+                        <div class="settings-card-title-group">
+                            <span class="settings-card-icon">🚀</span>
+                            <span class="settings-card-title">System Updates</span>
+                        </div>
+                        <span id="update-status-pill" class="badge" style="background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3);">
+                            Live Synchronized
+                        </span>
+                    </div>
+                    <div class="settings-card-sub">Continuous release delivery with live verified deployment.</div>
+                </div>
+
+                <!-- Bento Grid Info -->
+                <div class="bento-update-grid">
+                    <div class="bento-update-cell">
+                        <span class="bento-cell-label">Running Build</span>
+                        <div class="bento-cell-value">
+                            <span style="color: #34d399; font-weight: 700;" id="settings-installed-version">Loading…</span>
+                        </div>
+                    </div>
+                    <div class="bento-update-cell">
+                        <span class="bento-cell-label">Source Repo</span>
+                        <div class="bento-cell-value">
+                            <span style="color: #38bdf8;">🐙 yjlvfe/AiPoolCodexGemini</span>
+                            <span id="settings-source-version" style="display:none">Loading…</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Commit Log Stream Box -->
+                <div class="commit-log-box">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px; font-size: 10px; color: var(--text-tertiary);">
+                        <span>🕒 <span id="settings-commit-date">—</span></span>
+                        <span>⏱️ <span id="settings-last-update">Up to date</span></span>
+                    </div>
+                    <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #cbd5e1;" id="settings-commit-message">Loading latest commit...</div>
+                </div>
+
+                <!-- Zero Risk Security Pill -->
+                <div style="display: flex; align-items: center; gap: 6px; font-size: 11px; color: #10b981; margin-bottom: 12px; background: rgba(16, 185, 129, 0.08); padding: 8px 10px; border-radius: 6px; border: 1px solid rgba(16, 185, 129, 0.15);">
+                    <span>🛡️</span>
+                    <span>Zero-Risk: Account tokens, session auth, and port bindings are preserved.</span>
+                </div>
+
+                <div id="update-result-box" hidden style="border:1px solid #38bdf8;border-radius:8px;padding:12px;margin-bottom:12px;background:rgba(0,0,0,0.4);">
+                    <div style="display: flex; justify-content: space-between; align-items: center;">
+                        <strong id="update-result-title"></strong>
+                        <span id="update-loading-dots" class="bouncing-dots" style="color: #38bdf8; display: none;">
+                            <span></span><span></span><span></span>
+                        </span>
+                    </div>
+                    <pre id="update-result-detail" style="white-space:pre-wrap;overflow-wrap:anywhere;font-size:11px;max-height:260px;overflow:auto;margin-top:6px;"></pre>
+                </div>
+
+                <div class="update-action-row">
+                    <button class="check-update-btn" id="btn-check-update" onclick="checkRemoteUpdates()" style="width: 100%;">
+                        <span id="check-icon">🔍</span>
+                        <span id="check-btn-text">Check for Updates (Safe Status)</span>
+                    </button>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <script>
+        let cachedReportData = null;
+        let currentProvider = 'Codex';
+        // Keep account rows hidden independently until the user opens them.
+        let accountsVisibleByProvider = { Codex: false, Antigravity: false };
+        let accountsVisible = false;
+        let currentSelectedModel = 'gpt-6-astra';
+        let clientSessionId = localStorage.getItem('yj_aipool_session') || '';
+        const urlParams = new URLSearchParams(window.location.search);
+        const urlToken = urlParams.get('token') || '';
+
+        function resolveApiUrl(subpath) {
+            const hasAipool = window.location.pathname.startsWith('/aipool');
+            const cleanPath = subpath.startsWith('/') ? subpath : '/' + subpath;
+            const fullPath = (hasAipool ? '/aipool' : '') + cleanPath;
+        
+            // Parse existing query params from subpath if any
+            const parts = fullPath.split('?');
+            const basePath = parts[0];
+            const params = new URLSearchParams(parts[1] || '');
+        
+            if (clientSessionId && !params.has('session_id')) params.set('session_id', clientSessionId);
+            if (urlToken && !params.has('token')) params.set('token', urlToken);
+        
+            const qs = params.toString();
+            return basePath + (qs ? '?' + qs : '');
+        }
+
+        function apiHeaders(extraHeaders = {}) {
+            const headers = { ...extraHeaders };
+            if (clientSessionId) {
+                headers['X-Session-ID'] = clientSessionId;
+            }
+            return headers;
+        }
+
+        function toggleDropdown() {
+            const wrapper = document.getElementById('custom-model-select');
+            wrapper.classList.toggle('open');
+        }
+
+        // Close dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            const wrapper = document.getElementById('custom-model-select');
+            if (wrapper && !wrapper.contains(e.target)) {
+                wrapper.classList.remove('open');
+            }
+        });
+
+        let isSettingsOpen = false;
+        let isApiViewOpen = false;
+
+        function toggleApiView() {
+            isApiViewOpen = !isApiViewOpen;
+            if (isApiViewOpen && isSettingsOpen) {
+                toggleSettingsView();
+            }
+            const btn = document.getElementById('api-page-toggle-btn');
+            const providerBar = document.getElementById('provider-segmented-bar');
+            const poolSec = document.getElementById('pool-overview-section');
+            const streamSec = document.getElementById('stream-section');
+            const apiSec = document.getElementById('api-view-section');
+
+            if (isApiViewOpen) {
+                btn.classList.add('active');
+                btn.innerHTML = '<span>📊</span><span>Dashboard</span>';
+                providerBar.style.display = 'none';
+                poolSec.style.display = 'none';
+                streamSec.style.display = 'none';
+                apiSec.style.display = 'flex';
+                loadApiTokens();
+            } else {
+                btn.classList.remove('active');
+                btn.innerHTML = '<span>🌐</span><span>Public API</span>';
+                providerBar.style.display = '';
+                poolSec.style.display = 'block';
+                streamSec.style.display = 'block';
+                apiSec.style.display = 'none';
+                switchProvider(currentProvider);
+            }
+        }
+
+        async function loadApiTokens() {
+            const tbody = document.getElementById('api-tokens-table-body');
+            try {
+                const res = await fetch(resolveApiUrl('/api/tokens/list'), { headers: apiHeaders() });
+                const data = await res.json();
+                if (!data.success) throw new Error(data.message);
+                if (!data.tokens || data.tokens.length === 0) {
+                    tbody.innerHTML = '<tr><td colspan="4" style="padding:16px; text-align:center; color:var(--text-tertiary);">No custom API keys created yet.</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.tokens.map(t => {
+                    const isSystem = ['hermes', 'openclaw', 'localtooling'].includes(t.id);
+                    return `
+                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
+                            <td style="padding: 10px 8px; font-weight: 600; color: #fff;">${t.name || 'Key'}</td>
+                            <td style="padding: 10px 8px; font-family:'JetBrains Mono'; font-size:11.5px; color: var(--accent-cyan);">${t.id}</td>
+                            <td style="padding: 10px 8px;">
+                                <span style="font-size:11px; padding: 3px 8px; border-radius: 6px; background: rgba(16,185,129,0.15); color: #34d399;">Active</span>
+                            </td>
+                            <td style="padding: 10px 8px; text-align: right;">
+                                ${isSystem ? '<span style="font-size:11px; color:var(--text-tertiary);">Internal System</span>' : 
+                                  `<button onclick="revokeApiKey('${t.id}')" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer;">Revoke</button>`}
+                            </td>
+                        </tr>
+                    `;
+                }).join('');
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="4" style="padding:16px; text-align:center; color:#f87171;">Failed to load keys: ${e.message}</td></tr>`;
+            }
+        }
+
+        async function promptCreateApiKey() {
+            const name = prompt('Enter a label/client name for this API Key (e.g. Youssef Friend, Cursor, LibreChat):');
+            if (!name) return;
+            try {
+                const res = await fetch(resolveApiUrl('/api/tokens/create'), {
+                    method: 'POST',
+                    headers: apiHeaders({ 'Content-Type': 'application/json' }),
+                    body: jsonStringifySafely({ name })
+                });
+                const data = await res.json();
+                if (data.success && data.token) {
+                    const alertBox = document.getElementById('new-key-alert-box');
+                    const input = document.getElementById('new-created-key-input');
+                    input.value = data.token;
+                    alertBox.style.display = 'block';
+                    loadApiTokens();
+                } else {
+                    alert('Error creating key: ' + (data.message || 'Unknown'));
+                }
+            } catch (e) {
+                alert('Request failed: ' + e.message);
+            }
+        }
+
+        function copyCreatedKey() {
+            const input = document.getElementById('new-created-key-input');
+            navigator.clipboard.writeText(input.value);
+            alert('API Key copied to clipboard!');
+        }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text);
+            alert('Base URL copied to clipboard: ' + text);
+        }
+
+        async function revokeApiKey(id) {
+            if (!confirm(`Are you sure you want to revoke key '${id}'? Users using this key will immediately lose access.`)) return;
+            try {
+                const res = await fetch(resolveApiUrl('/api/tokens/revoke'), {
+                    method: 'POST',
+                    headers: apiHeaders({ 'Content-Type': 'application/json' }),
+                    body: jsonStringifySafely({ id })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    loadApiTokens();
+                } else {
+                    alert('Error revoking key: ' + data.message);
+                }
+            } catch (e) {
+                alert('Request failed: ' + e.message);
+            }
+        }
+
+        function toggleSettingsView() {
+            isSettingsOpen = !isSettingsOpen;
+            if (isSettingsOpen && isApiViewOpen) {
+                toggleApiView();
+            }
+            const btn = document.getElementById('settings-toggle-btn');
+            const btnIcon = document.getElementById('settings-btn-icon');
+            const btnText = document.getElementById('settings-btn-text');
+            const providerBar = document.getElementById('provider-segmented-bar');
+            const poolSec = document.getElementById('pool-overview-section');
+            const streamSec = document.getElementById('stream-section');
+            const settingsSec = document.getElementById('settings-view-section');
+
+            if (isSettingsOpen) {
+                btn.classList.add('active');
+                btnIcon.innerText = '📊';
+                btnText.innerText = 'Dashboard';
+                providerBar.style.display = 'none';
+                poolSec.style.display = 'none';
+                streamSec.style.display = 'none';
+                settingsSec.style.display = 'flex';
+                fetchSettingsStatus();
+                fetchCliToolsStatus();
+            } else {
+                btn.classList.remove('active');
+                btnIcon.innerText = '⚙️';
+                btnText.innerText = 'Settings';
+                providerBar.style.display = '';
+                streamSec.style.display = 'block';
+                poolSec.style.display = 'block';
+                settingsSec.style.display = 'none';
+                switchProvider(currentProvider);
+            }
+        }
+
+        function switchProvider(prov, force = false) {
+            if (currentProvider === prov && !force) return;
+            currentProvider = prov;
+    
+            const tabCodex = document.getElementById('tab-codex');
+            const tabAg = document.getElementById('tab-antigravity');
+            const tabMix = document.getElementById('tab-mixture');
+            const capCard = document.getElementById('pool-capacity-card');
+            const secTitle = document.getElementById('accounts-section-title');
+            const togBtn = document.getElementById('accounts-toggle-btn');
+            currentProvider = (prov === 'Mixture') ? 'Codex' : prov;
+
+            tabCodex.className = 'provider-tab-btn codex-theme';
+            tabAg.className = 'provider-tab-btn antigravity-theme';
+            if (tabMix) tabMix.style.display = 'none';
+
+            if (currentProvider === 'Codex') {
+                tabCodex.className = 'provider-tab-btn active codex-theme';
+                document.getElementById('pool-icon').innerText = '🟣';
+                document.getElementById('pool-title-label').innerText = 'ChatGPT Pool';
+                if (capCard) capCard.style.display = 'block';
+                if (secTitle) secTitle.innerText = 'Connected Accounts:';
+                if (togBtn) togBtn.style.display = 'inline-flex';
+                syncAccountsVisibilityUi();
+            } else if (prov === 'Mixture') {
+                if (tabMix) tabMix.className = 'provider-tab-btn active mixture-theme';
+                document.getElementById('pool-icon').innerText = '🧠';
+                document.getElementById('pool-title-label').innerText = 'Mixture AI Pool';
+                if (capCard) capCard.style.display = 'none';
+                if (secTitle) secTitle.innerText = 'Connected Models';
+                if (togBtn) togBtn.style.display = 'none';
+                if (accContainer) accContainer.classList.remove('collapsed');
+                accountsVisible = true;
+            } else {
+                tabAg.className = 'provider-tab-btn active antigravity-theme';
+                document.getElementById('pool-icon').innerText = '🟢';
+                document.getElementById('pool-title-label').innerText = 'Gemini Pool';
+                if (capCard) capCard.style.display = 'block';
+                if (secTitle) secTitle.innerText = 'Connected Accounts:';
+                if (togBtn) togBtn.style.display = 'inline-flex';
+                syncAccountsVisibilityUi();
+            }
+
+            updateProviderStatsAndModels();
+            renderAccountsList();
+        }
+
+        async function fetchSettingsStatus() {
+            try {
+                const res = await fetch(resolveApiUrl('/api/settings/status'), {
+                    headers: apiHeaders(),
+                    credentials: 'same-origin'
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+                
+                const hermesBadge = document.getElementById('hermes-badge');
+                if (data.hermes && data.hermes.connected) {
+                    hermesBadge.innerText = '🟢 Config verified';
+                    hermesBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+                    hermesBadge.style.color = '#34d399';
+                } else {
+                    hermesBadge.innerText = '⚪ Disconnected';
+                    hermesBadge.style.background = 'rgba(255, 255, 255, 0.08)';
+                    hermesBadge.style.color = '#94a3b8';
+                }
+
+                const openclawBadge = document.getElementById('openclaw-badge');
+                if (data.openclaw && data.openclaw.connected) {
+                    openclawBadge.innerText = '🟢 Config verified';
+                    openclawBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+                    openclawBadge.style.color = '#34d399';
+                } else {
+                    openclawBadge.innerText = '⚪ Disconnected';
+                    openclawBadge.style.background = 'rgba(255, 255, 255, 0.08)';
+                    openclawBadge.style.color = '#94a3b8';
+                }
+                if (data.version && data.version.version) {
+                    const pillHeader = document.getElementById('system-version-pill');
+                    if (pillHeader) pillHeader.textContent = 'v' + data.version.version;
+                }
+                for (const agent of ['hermes','openclaw']) {
+                    const badge = document.getElementById(agent + '-badge');
+                    let detail = document.getElementById(agent + '-config-detail');
+                    if (!detail) {
+                        detail = document.createElement('div');
+                        detail.id = agent + '-config-detail';
+                        detail.className = 'agent-config-detail-box';
+                        badge.closest('.settings-card').appendChild(detail);
+                    }
+                    detail.textContent = (data[agent]?.config_path || '') + ' — ' + (data[agent]?.message || 'Status unavailable');
+                }
+            } catch (e) {
+                console.error('Failed to load settings status:', e);
+            }
+        }
+
+        async function fetchCliToolsStatus() {
+            const recheckBtn = document.querySelector('.recheck-btn[onclick="fetchCliToolsStatus()"]');
+            if (recheckBtn) {
+                recheckBtn.innerHTML = '<span class="spin-icon">🔄</span> Checking <span class="bouncing-dots" style="color: currentColor;"><span></span><span></span><span></span></span>';
+                recheckBtn.disabled = true;
+            }
+            try {
+                const res = await fetch(resolveApiUrl('/api/settings/check_cli'), {
+                    headers: apiHeaders(),
+                    credentials: 'same-origin'
+                });
+                if (!res.ok) return;
+                const data = await res.json();
+
+                // Codex
+                const codexBadge = document.getElementById('codex-cli-badge');
+                const codexDesc = document.getElementById('codex-cli-desc');
+                const codexBtn = document.getElementById('btn-install-codex');
+                if (data.codex && data.codex.installed) {
+                    codexBadge.innerText = '🟢 Installed';
+                    codexBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+                    codexBadge.style.color = '#34d399';
+                    codexDesc.innerText = `Path: ${data.codex.path || 'Detected in PATH'} ${data.codex.version ? '(' + data.codex.version + ')' : ''}`;
+                    codexBtn.style.display = 'none';
+                } else {
+                    codexBadge.innerText = '🔴 Not Installed';
+                    codexBadge.style.background = 'rgba(239, 68, 68, 0.15)';
+                    codexBadge.style.color = '#f87171';
+                    codexDesc.innerText = "Required for 'c add' interactive login. Click Install to configure.";
+                    codexBtn.style.display = 'inline-block';
+                }
+
+                // Antigravity
+                const agBadge = document.getElementById('antigravity-cli-badge');
+                const agDesc = document.getElementById('antigravity-cli-desc');
+                const agBtn = document.getElementById('btn-install-antigravity');
+                if (data.antigravity && data.antigravity.installed) {
+                    agBadge.innerText = '🟢 Installed';
+                    agBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+                    agBadge.style.color = '#34d399';
+                    agDesc.innerText = `Path: ${data.antigravity.path || 'Detected in PATH'}`;
+                    agBtn.style.display = 'none';
+                } else {
+                    agBadge.innerText = '🔴 Not Installed';
+                    agBadge.style.background = 'rgba(239, 68, 68, 0.15)';
+                    agBadge.style.color = '#f87171';
+                    agDesc.innerText = "Required for 'ag add' interactive login. Click Setup to configure.";
+                    agBtn.style.display = 'inline-block';
+                }
+            } catch(e) { console.error(e); }
+            finally {
+                if (recheckBtn) {
+                    recheckBtn.innerHTML = '🔄 Re-check';
+                    recheckBtn.disabled = false;
+                }
+            }
+        }
+
+        async function installCliTool(tool) {
+            const btn = tool === 'codex' ? document.getElementById('btn-install-codex') : document.getElementById('btn-install-antigravity');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span><span class="spin-icon">⏳</span></span><span>Installing <span class="bouncing-dots" style="color: currentColor;"><span></span><span></span><span></span></span></span>';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(resolveApiUrl('/api/settings/install_cli'), {
+                    method: 'POST',
+                    headers: apiHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ tool: tool }),
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    btn.innerHTML = '<span>✅</span><span>Done!</span>';
+                    fetchCliToolsStatus();
+                } else {
+                    alert('Installation message: ' + (data.message || 'Failed'));
+                    btn.innerHTML = originalText;
+                }
+            } catch(e) {
+                alert('Connection error: ' + e);
+                btn.innerHTML = originalText;
+            } finally {
+                btn.disabled = false;
+                setTimeout(() => { fetchCliToolsStatus(); }, 1500);
+            }
+        }
+
+        async function triggerIntegration(target) {
+            const btn = target === 'hermes' ? document.getElementById('btn-sync-hermes') : document.getElementById('btn-sync-openclaw');
+            const originalHtml = btn.innerHTML;
+            btn.innerHTML = '<span><span class="spin-icon">⚡</span></span><span>Configuring <span class="bouncing-dots" style="color: currentColor;"><span></span><span></span><span></span></span></span>';
+            btn.disabled = true;
+
+            try {
+                const endpoint = target === 'hermes' ? '/api/settings/integrate_hermes' : '/api/settings/integrate_openclaw';
+                const res = await fetch(resolveApiUrl(endpoint), {
+                    method: 'POST',
+                    headers: apiHeaders(),
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (data.success) {
+                    btn.innerHTML = '<span>✅</span><span>Linked Successfully!</span>';
+                    fetchSettingsStatus();
+                } else {
+                    alert('Integration error: ' + (data.message || 'Failed'));
+                    btn.innerHTML = originalHtml;
+                }
+            } catch(e) {
+                alert('Server connection error: ' + e);
+                btn.innerHTML = originalHtml;
+            } finally {
+                btn.disabled = false;
+                setTimeout(() => { btn.innerHTML = originalHtml; }, 3000);
+            }
+        }
+
+        function formatTokenCount(num) {
+            if (!num || num <= 0) return '0';
+            if (num >= 1000000000) return (num / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
+            if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
+            if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+            return String(num);
+        }
+        window.formatTokenCount = formatTokenCount;
+
+        function formatPoolNumber(value) {
+            if (value === null || value === undefined || !Number.isFinite(Number(value))) return '--';
+            const number = Number(value);
+            const sign = number < 0 ? '-' : '';
+            const abs = Math.abs(number);
+            const trim = (scaled) => scaled.toFixed(2).replace(/\.00$/, '').replace(/(\.\d)0$/, '$1');
+            if (abs >= 1e12) return `${sign}${trim(abs / 1e12)}T`;
+            if (abs >= 1e9) return `${sign}${trim(abs / 1e9)}B`;
+            if (abs >= 1e6) return `${sign}${trim(abs / 1e6)}M`;
+            return number.toLocaleString('en-US');
+        }
+
+        function updateProviderStatsAndModels() {
+            if (!cachedReportData || !cachedReportData.providers) return;
+            const provData = cachedReportData.providers[currentProvider];
+            if (!provData) return;
+
+            const totalTokens = provData.total_tokens || 0;
+            const reqCount = provData.requests || 0;
+            const avg = reqCount > 0 ? Math.round(totalTokens / reqCount) : 0;
+            const values = [
+                ['model-total-tokens', totalTokens],
+                ['model-total-requests', reqCount],
+                ['model-avg-tokens', avg],
+            ];
+            values.forEach(([id, value]) => {
+                const element = document.getElementById(id);
+                element.innerText = formatPoolNumber(value);
+                element.title = Number(value).toLocaleString('en-US');
+            });
+            fitPoolStatValues();
+        }
+
+        function fitPoolStatValues() {
+            document.querySelectorAll('.stat-tri-val').forEach((el) => {
+                el.style.fontSize = '13.5px';
+                const available = Math.max(30, el.clientWidth - 10);
+                const natural = el.scrollWidth;
+                if (natural > available) {
+                    const fitted = Math.max(7, 13.5 * available / natural);
+                    el.style.fontSize = `${fitted.toFixed(2)}px`;
+                }
+            });
+        }
+
+        window.addEventListener('resize', fitPoolStatValues);
+
+        function renderAccountsList() {
+            if (!cachedReportData || !cachedReportData.status) return;
+            const status = cachedReportData.status;
+            const container = document.getElementById('pool-accounts-container');
+            container.innerHTML = '';
+
+            if (currentProvider === 'Mixture') {
+                const provData = (cachedReportData.providers && cachedReportData.providers['Mixture']) || {};
+                const modelsMap = provData.models || {};
+                const activeAgg = (window.activeMoaAggregator || 'gpt-5.6-luna');
+
+                const refModels = [
+                    { id: 'gpt-5.6-luna',     name: 'ChatGPT Luna 5.6' },
+                    { id: 'gemini-3.8-flash', name: 'Gemini Flash 3.8' },
+                    { id: 'gemini-3.1-pro',   name: 'Gemini Pro 3.1' }
+                ];
+
+                refModels.forEach(m => {
+                    const stats = modelsMap[m.id] || {};
+                    const totalTok = stats.total_tokens || 0;
+                    const isAggregator = (m.id === activeAgg);
+
+                    const div = document.createElement('div');
+                    div.className = 'account-item-pill' + (isAggregator ? ' active' : '');
+
+                    // وسم MoA موحد لجميع الموديلات بجانب الاسم مباشرة
+                    const moaBadgeHtml = '<span style="font-size:9px; background:rgba(236,72,153,0.22); color:#f472b6; border:1px solid rgba(236,72,153,0.38); padding:2px 7px; border-radius:6px; font-weight:800; font-family:monospace; letter-spacing:0.5px;">MoA</span>';
+
+                    // وسم التوكنات المحروقة بجانب وسم MoA مباشرة
+                    const tokenBadgeHtml = `<span style="font-size:10px; background:rgba(245,158,11,0.16); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); padding:2px 7px; border-radius:6px; font-weight:700; font-family:'JetBrains Mono',monospace;" title="Total Tokens burned by this model">🔥 ${formatTokenCount(totalTok)}</span>`;
+
+                    div.innerHTML = `
+                        <div class="account-normal-content" style="padding: 10px 14px; min-height: unset;">
+                            <div style="display:flex; align-items:center; gap:8px; width:100%;">
+                                <div class="acc-dot ${isAggregator ? 'active' : ''}"></div>
+                                <span class="acc-email" style="font-size:13px; font-weight:700; color:var(--text-primary); margin-left:0; margin-right:4px;">${m.name}</span>
+                                ${moaBadgeHtml}
+                                ${tokenBadgeHtml}
+                            </div>
+                        </div>
+                        <div class="account-actions-bar">
+                            ${isAggregator
+                                ? `<button type="button" class="account-btn-switch" disabled style="opacity:0.6; cursor:not-allowed; background:rgba(236,72,153,0.3); color:#f472b6; border-color:rgba(236,72,153,0.5);">Active MoA</button>`
+                                : `<button type="button" class="account-btn-switch" onclick="event.stopPropagation(); switchMoaAggregator('${m.id}', this)" title="Make ${m.name} the Primary Decider">⚡ Switch</button>`
+                            }
+                        </div>
+                    `;
+
+                    div.style.cursor = 'pointer';
+                    div.title = 'Click to show action buttons';
+                    div.onclick = function(e) {
+                        if (e.target && e.target.closest && e.target.closest('.account-btn-switch')) return;
+                        const isAlreadySelected = this.classList.contains('selected');
+                        document.querySelectorAll('.account-item-pill.selected').forEach(el => el.classList.remove('selected'));
+                        if (!isAlreadySelected) this.classList.add('selected');
+                    };
+
+                    container.appendChild(div);
+                });
+                return;
+            }
+
+            let rawAccounts = [];
+            let poolMetrics = null;
+
+            if (currentProvider === 'Codex') {
+                rawAccounts = (status.codex && status.codex.accounts) || [];
+                poolMetrics = status.codex && status.codex.pool_metrics;
+            } else {
+                rawAccounts = (status.antigravity && status.antigravity.accounts) || [];
+                poolMetrics = status.antigravity && status.antigravity.pool_metrics;
+            }
+
+            // Update Pool Summary Bars
+            if (poolMetrics) {
+                let h5_pct = 0;
+                let wk_pct = 0;
+                let tot_accs = poolMetrics.total_accounts || rawAccounts.length;
+
+                if (currentProvider === 'Codex') {
+                    h5_pct = poolMetrics['5h_pool_pct'] || 0;
+                    wk_pct = poolMetrics['wk_pool_pct'] || 0;
+                } else {
+                    const gemM = poolMetrics.gemini || {};
+                    h5_pct = gemM['5h_pool_pct'] || 0;
+                    wk_pct = gemM['wk_pool_pct'] || 0;
+                }
+
+                document.getElementById('pool-total-capacity-text').innerText = `${tot_accs} Accounts (${h5_pct}% Active)`;
+                document.getElementById('pool-5h-summary-val').innerText = `${h5_pct}%`;
+                document.getElementById('pool-5h-progress').style.width = `${Math.min(100, Math.max(0, h5_pct))}%`;
+                document.getElementById('pool-wk-summary-val').innerText = `${wk_pct}%`;
+                document.getElementById('pool-wk-progress').style.width = `${Math.min(100, Math.max(0, wk_pct))}%`;
+            }
+
+            // Performance optimization: If accounts list container is collapsed/hidden, skip full DOM generation
+            if (!accountsVisible) {
+                container.innerHTML = '';
+                return;
+            }
+
+            if (rawAccounts.length === 0) {
+                container.innerHTML = '<div style="font-size: 11px; color: var(--text-tertiary);">Synchronizing accounts...</div>';
+                return;
+            }
+
+            // Categorize and sort accounts strictly per requirement:
+            // 1. Active (Pin at the top)
+            // 2. Paid (ordered by 5h desc)
+            // 3. Free (ordered by 5h/monthly desc)
+            // 4. Paid out of weekly token (wk_pct === 0)
+            // 5. Free out of token (5h_pct === 0 or mo_pct === 0)
+            function getAccountRankAndScore(acc) {
+                const isActive = Boolean(acc.is_active);
+                if (isActive) return { rank: 1, score: 999999 };
+
+                const isCodex = (currentProvider === 'Codex');
+                const isFree = isCodex ? (String(acc.plan || '').toLowerCase() === 'free') : false;
+                
+                let h5 = 0;
+                let wk = 100;
+                if (isCodex) {
+                    h5 = typeof acc['5h_pct'] === 'number' ? acc['5h_pct'] : 0;
+                    wk = typeof acc['wk_pct'] === 'number' ? acc['wk_pct'] : 100;
+                    if (isFree && acc['mo_pct'] !== null && typeof acc['mo_pct'] === 'number') {
+                        h5 = acc['mo_pct'];
+                    }
+                } else {
+                    const gem = acc.gemini || {};
+                    h5 = typeof gem['5h_pct'] === 'number' ? gem['5h_pct'] : 0;
+                    wk = typeof gem['wk_pct'] === 'number' ? gem['wk_pct'] : 100;
+                }
+
+                if (!isFree) {
+                    // Paid account
+                    if (wk === 0) {
+                        return { rank: 4, score: h5 }; // Paid out of weekly
+                    }
+                    if (h5 === 0) {
+                        return { rank: 4, score: 0 }; // Paid out of 5h
+                    }
+                    return { rank: 2, score: h5 }; // Paid Ready
+                } else {
+                    // Free account
+                    if (h5 === 0) {
+                        return { rank: 5, score: 0 }; // Free out of token
+                    }
+                    return { rank: 3, score: h5 }; // Free Ready
+                }
+            }
+
+            const accounts = [...rawAccounts].sort((a, b) => {
+                const ra = getAccountRankAndScore(a);
+                const rb = getAccountRankAndScore(b);
+                if (ra.rank !== rb.rank) {
+                    return ra.rank - rb.rank;
+                }
+                return rb.score - ra.score;
+            });
+
+
+
+            accounts.forEach(acc => {
+                const isActive = acc.is_active;
+                const div = document.createElement('div');
+                div.className = 'account-item-pill' + (isActive ? ' active' : '');
+                
+                let metricsHtml = '';
+                const formatQuotaPct = (value) => {
+                    return typeof value === 'number' && Number.isFinite(value)
+                        ? `${Math.round(value)}%`
+                        : 'N/A';
+                };
+                
+                const rankInfo = getAccountRankAndScore(acc);
+                let stateBadgeHtml = '';
+                if (isActive) {
+                    stateBadgeHtml = '<span style="font-size:9px; background:rgba(16,185,129,0.2); color:#10b981; padding:2px 7px; border-radius:6px; font-weight:800; font-family:monospace; letter-spacing:0.5px;">ACTIVE</span>';
+                } else if (rankInfo.rank === 4 || rankInfo.rank === 5) {
+                    stateBadgeHtml = '<span style="font-size:9px; background:rgba(239,68,68,0.2); color:#f87171; padding:2px 7px; border-radius:6px; font-weight:800; font-family:monospace; letter-spacing:0.5px;">OUT</span>';
+                } else {
+                    stateBadgeHtml = '<span style="font-size:9px; background:rgba(56,189,248,0.18); color:#38bdf8; padding:2px 7px; border-radius:6px; font-weight:800; font-family:monospace; letter-spacing:0.5px;">READY</span>';
+                }
+
+                const totalTok = acc.total_tokens || 0;
+                const tokenBadgeHtml = `<span style="font-size:9px; background:rgba(245,158,11,0.16); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); padding:2px 6px; border-radius:6px; font-weight:700; font-family:'JetBrains Mono',monospace;" title="Total Tokens consumed by this account">🔥 ${formatTokenCount(totalTok)}</span>`;
+
+                const accountStatus = String(acc.status || '').toUpperCase();
+                const statusBadge = accountStatus && accountStatus !== 'OK'
+                    ? `<span style="font-size:9px; background:rgba(248,113,113,0.15); color:#f87171; padding:2px 7px; border-radius:6px; font-weight:800; font-family:monospace; letter-spacing:.3px;">${escapeHtml(accountStatus)}</span>`
+                    : '';
+
+                if (currentProvider === 'Codex') {
+                    const isFree = String(acc.plan || '').toLowerCase() === 'free';
+                    const mo = formatQuotaPct(acc['mo_pct']);
+                    const mo_res = escapeHtml(acc['mo_reset'] || 'N/A');
+                    const h5 = formatQuotaPct(acc['5h_pct']);
+                    const h5_res = escapeHtml(acc['5h_reset'] || 'N/A');
+                    const wk = formatQuotaPct(acc['wk_pct']);
+                    const wk_res = escapeHtml(acc['wk_reset'] || 'N/A');
+
+                    if (isFree && (acc['mo_pct'] !== null || (acc['5h_pct'] === null && acc['wk_pct'] === null))) {
+                        metricsHtml = `
+                            <div style="text-align:right; font-family:'JetBrains Mono',monospace; font-size:10px; line-height:1.4;">
+                                <div style="color:var(--accent-cyan); font-weight:700;">Monthly: ${escapeHtml(mo !== 'N/A' ? mo : '100%')} <span style="color:var(--text-tertiary); font-weight:400;">(${mo_res})</span></div>
+                                <div style="color:#10b981; font-weight:600; font-size:9px;">Free Plan (30d Reset)</div>
+                            </div>
+                        `;
+                    } else {
+                        metricsHtml = `
+                            <div style="text-align:right; font-family:'JetBrains Mono',monospace; font-size:10px; line-height:1.4;">
+                                <div style="color:var(--accent-cyan); font-weight:700;">5h: ${escapeHtml(h5)} <span style="color:var(--text-tertiary); font-weight:400;">(${h5_res})</span></div>
+                                <div style="color:var(--accent-purple); font-weight:700;">Wk: ${escapeHtml(wk)} <span style="color:var(--text-tertiary); font-weight:400;">(${wk_res})</span></div>
+                            </div>
+                        `;
+                    }
+                } else {
+                    const gem = acc.gemini || {};
+                    const gem_5h = formatQuotaPct(gem['5h_pct']);
+                    const gem_res = escapeHtml(gem['5h_reset'] || 'N/A');
+                    const wk = formatQuotaPct(gem['wk_pct']);
+                    const wk_res = escapeHtml(gem['wk_reset'] || 'N/A');
+
+                    metricsHtml = `
+                        <div style="text-align:right; font-family:'JetBrains Mono',monospace; font-size:10px; line-height:1.4;">
+                            <div style="color:#67e8f9; font-weight:700;">5h: ${escapeHtml(gem_5h)} <span style="color:var(--text-tertiary); font-weight:400;">(${gem_res})</span></div>
+                            <div style="color:#c084fc; font-weight:700;">Wk: ${escapeHtml(wk)} <span style="color:var(--text-tertiary); font-weight:400;">(${wk_res})</span></div>
+                        </div>
+                    `;
+                }
+
+                div.innerHTML = `
+                    <div class="account-normal-content">
+                        <div class="acc-info-left" style="display:flex; align-items:center; gap:8px;">
+                            <div class="acc-dot ${isActive ? 'active' : ''}"></div>
+                            <div style="text-align:left;">
+                                <div class="acc-email">${escapeHtml(acc.email || ('Account ' + acc.account))}</div>
+                                <div style="display:flex; align-items:center; gap:5px; margin-top:3px;">
+                                    ${stateBadgeHtml}
+                                    ${tokenBadgeHtml}
+                                    ${statusBadge}
+                                </div>
+                            </div>
+                        </div>
+                        <div class="account-metrics-view">
+                            ${metricsHtml}
+                        </div>
+                    </div>
+                    <div class="account-actions-bar">
+                        ${isActive 
+                            ? `<button type="button" class="account-btn-switch" disabled style="opacity:0.5; cursor:not-allowed;">Active</button>`
+                            : `<button type="button" class="account-btn-switch" onclick="event.stopPropagation(); switchAccount(${acc.account}, this)" title="Switch to Account #${acc.account}">⚡ Switch</button>`
+                        }
+                        ${isActive
+                            ? `<button type="button" class="account-btn-delete" disabled style="opacity:0.4; cursor:not-allowed;" title="Cannot delete active account">Active (Protected)</button>`
+                            : `<button type="button" class="account-btn-delete" onclick="event.stopPropagation(); openDeleteModal(${acc.account})" title="Delete Account #${acc.account}">🗑️ Delete</button>`
+                        }
+                    </div>
+                `;
+
+                div.style.cursor = 'pointer';
+                div.title = 'Click account to show actions';
+                div.onclick = function(e) {
+                    if (e.target && e.target.closest && (e.target.closest('.account-btn-switch') || e.target.closest('.account-btn-delete'))) return;
+                    const isAlreadySelected = this.classList.contains('selected');
+                    document.querySelectorAll('.account-item-pill.selected').forEach(el => {
+                        el.classList.remove('selected');
+                    });
+                    if (!isAlreadySelected) {
+                        this.classList.add('selected');
+                    }
+                };
+                container.appendChild(div);
+            });
+        }
+
+        let pendingDeleteAccount = null;
+
+        function openDeleteModal(accountNum) {
+            pendingDeleteAccount = accountNum;
+            const labelEl = document.getElementById('modal-del-account-label');
+            if (labelEl) labelEl.innerText = `Account #${accountNum}`;
+            const inputEl = document.getElementById('modal-delete-confirm-input');
+            if (inputEl) {
+                inputEl.value = '';
+            }
+            const confirmBtn = document.getElementById('modal-btn-confirm-delete');
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+                confirmBtn.innerHTML = '🗑️ Delete Account';
+            }
+            const overlay = document.getElementById('delete-modal-overlay');
+            if (overlay) overlay.style.display = 'flex';
+            setTimeout(() => { if (inputEl) inputEl.focus(); }, 50);
+        }
+
+        function closeDeleteModal(e) {
+            if (e && e.target && e.target !== e.currentTarget && !e.target.classList.contains('modal-close-btn') && !e.target.classList.contains('modal-btn-cancel')) return;
+            const overlay = document.getElementById('delete-modal-overlay');
+            if (overlay) overlay.style.display = 'none';
+            pendingDeleteAccount = null;
+        }
+
+        function validateDeleteInput() {
+            const inputEl = document.getElementById('modal-delete-confirm-input');
+            const confirmBtn = document.getElementById('modal-btn-confirm-delete');
+            if (!inputEl || !confirmBtn) return;
+            confirmBtn.disabled = (inputEl.value.trim().toLowerCase() !== 'confirm');
+        }
+
+        async function executeAccountDelete() {
+            if (!pendingDeleteAccount) return;
+            const inputEl = document.getElementById('modal-delete-confirm-input');
+            const confirmation = inputEl ? inputEl.value.trim() : '';
+            if (confirmation.toLowerCase() !== 'confirm') return;
+
+            const confirmBtn = document.getElementById('modal-btn-confirm-delete');
+            if (confirmBtn) {
+                confirmBtn.disabled = true;
+                confirmBtn.innerHTML = '<span>⏳</span> Deleting...';
+            }
+
+            const system = currentProvider === 'Codex' ? 'codex' : 'antigravity';
+            const accNum = pendingDeleteAccount;
+
+            try {
+                const res = await fetch(resolveApiUrl('/api/accounts/delete'), {
+                    method: 'POST',
+                    headers: apiHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ system: system, account: accNum, confirmation: confirmation }),
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    closeDeleteModal();
+                    showToast(`Account #${accNum} deleted successfully`);
+
+                    // Live DOM update: remove account from cachedReportData immediately without reload
+                    const sysKey = system;
+                    if (cachedReportData && cachedReportData.status && cachedReportData.status[sysKey] && cachedReportData.status[sysKey].accounts) {
+                        cachedReportData.status[sysKey].accounts = cachedReportData.status[sysKey].accounts.filter(a => a.account !== accNum);
+                        if (cachedReportData.status[sysKey].pool_metrics) {
+                            cachedReportData.status[sysKey].pool_metrics.total_accounts = cachedReportData.status[sysKey].accounts.length;
+                        }
+                    }
+                    renderAccountsList();
+                    fetchLiveLogs(false);
+                } else {
+                    alert('Delete failed: ' + (data.message || 'Unknown error'));
+                    if (confirmBtn) {
+                        confirmBtn.disabled = false;
+                        confirmBtn.innerHTML = '🗑️ Delete Account';
+                    }
+                }
+            } catch (err) {
+                alert('Connection error: ' + err);
+                if (confirmBtn) {
+                    confirmBtn.disabled = false;
+                    confirmBtn.innerHTML = '🗑️ Delete Account';
+                }
+            }
+        }
+
+        function syncAccountsVisibilityUi() {
+            const container = document.getElementById('pool-accounts-container');
+            const textEl = document.getElementById('accounts-toggle-text');
+            const chevronEl = document.getElementById('accounts-toggle-chevron');
+            const iconEl = document.getElementById('accounts-toggle-icon');
+            accountsVisible = Boolean(accountsVisibleByProvider[currentProvider]);
+
+            if (accountsVisible) {
+                container.classList.remove('collapsed');
+                if (textEl) textEl.innerText = 'Hide Accounts';
+                if (iconEl) iconEl.innerText = '🔒';
+                if (chevronEl) chevronEl.style.transform = 'rotate(0deg)';
+                renderAccountsList();
+            } else {
+                container.classList.add('collapsed');
+                if (textEl) textEl.innerText = 'View Accounts';
+                if (iconEl) iconEl.innerText = '👁️';
+                if (chevronEl) chevronEl.style.transform = 'rotate(180deg)';
+                container.innerHTML = '';
+            }
+        }
+
+        function toggleAccountsList() {
+            accountsVisibleByProvider[currentProvider] = !Boolean(accountsVisibleByProvider[currentProvider]);
+            syncAccountsVisibilityUi();
+            if (accountsVisibleByProvider[currentProvider]) renderAccountsList();
+        }
+
+        function showToast(msg) {
+            const toast = document.getElementById('toast-notification');
+            const toastText = document.getElementById('toast-text');
+            if (!toast) return;
+            if (toastText) toastText.innerText = msg;
+            toast.classList.add('show');
+            setTimeout(() => {
+                toast.classList.remove('show');
+            }, 2200);
+        }
+
+        function escapeHtml(value) {
+            const span = document.createElement('span');
+            span.textContent = String(value ?? '');
+            return span.innerHTML;
+        }
+        function renderGeneralActivityStream(recentRequests) {
+            const listContainer = document.getElementById('activity-stream-list');
+            listContainer.innerHTML = '';
+
+            // Combined activity stream showing both Gemini and Codex / ChatGPT in one unified chronological feed
+            const requests = recentRequests || [];
+
+            if (requests.length === 0) {
+                listContainer.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-tertiary);">No activity records yet</div>';
+                return;
+            }
+
+            requests.forEach(req => {
+                const item = document.createElement('div');
+                item.className = 'stream-card-item';
+                const p = (req.provider || req.pool || '').toLowerCase();
+                const m = (req.model || '').toLowerCase();
+                const isCodex = p === 'codex' || p === 'chatgpt';
+                const badgeClass = isCodex ? 'codex' : 'antigravity';
+                const provIcon = isCodex ? '🟣' : '🟢';
+
+                // Ensure pure numeric MM/DD HH:MM format
+                let timeStr = req.time_formatted || '--';
+                if (req.timestamp) {
+                    const d = new Date(req.timestamp * 1000);
+                    const mo = String(d.getMonth() + 1).padStart(2, '0');
+                    const da = String(d.getDate()).padStart(2, '0');
+                    const ho = String(d.getHours()).padStart(2, '0');
+                    const mi = String(d.getMinutes()).padStart(2, '0');
+                    timeStr = `${mo}/${da} ${ho}:${mi}`;
+                }
+
+                item.innerHTML = `
+                    <!-- Top Tier: Model on Left | Pure Numeric Date on Right -->
+                    <div class="stream-card-top">
+                        <div class="stream-model-name">
+                            <span>${provIcon}</span>
+                            <span style="color:#f8fafc; font-weight:700;">${escapeHtml(req.model)}</span>
+                            <span style="font-size:10.5px; color:#38bdf8; font-weight:700; font-family:'JetBrains Mono',monospace;">#${escapeHtml(req.call_num || req.id)}</span>
+                        </div>
+                        <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#94a3b8; font-weight:600;">
+                            ${escapeHtml(timeStr)}
+                        </div>
+                    </div>
+                    <!-- Bottom Tier: IN & OUT on Left | Total on Right -->
+                    <div style="font-size:10px;color:#94a3b8">${isCodex ? 'Codex' : 'Antigravity'} · ${escapeHtml(req.status || 'Recorded')} ${req.account ? '· Account ' + escapeHtml(req.account) : ''} · <span style="color:#7dd3fc; font-weight:600;">${escapeHtml(req.audit?.client_label || 'Direct API')}</span></div>
+                    <div class="stream-card-bottom">
+                        <div style="display:flex; align-items:center; gap:5px; flex-shrink:1; min-width:0; overflow:hidden; font-size:10px;">
+                            <span style="color:#38bdf8; font-weight:700; white-space:nowrap;">📥 ${req.prompt == null ? "—" : formatPoolNumber(req.prompt)}</span>
+                            <span style="color:rgba(255,255,255,0.15);">|</span>
+                            <span style="color:#c084fc; font-weight:700; white-space:nowrap;">📤 ${req.completion == null ? "—" : formatPoolNumber(req.completion)}</span>
+
+                        </div>
+                        <div class="stream-tok-badge ${badgeClass}">
+                            <span>⚡</span>
+                            <span>+${req.tokens == null ? "unknown" : formatPoolNumber(req.tokens)} tok</span>
+                        </div>
+                    </div>
+                `;
+                const detail = document.createElement('button');
+                detail.type = 'button'; detail.className = 'request-detail-trigger';
+                detail.textContent = 'Inspect request ↗';
+                detail.addEventListener('click', () => openRequestInspector(req));
+                item.appendChild(detail);
+                listContainer.appendChild(item);
+            });
+        }
+
+        async function switchAccount(accountNum, btnEl) {
+            const system = currentProvider === 'Codex' ? 'codex' : 'antigravity';
+            const oldText = btnEl ? btnEl.innerText : 'Switch';
+            if (btnEl) {
+                btnEl.disabled = true;
+                btnEl.innerText = 'Switching...';
+            }
+            try {
+                const res = await fetch(resolveApiUrl('/api/accounts/switch'), {
+                    method: 'POST',
+                    headers: apiHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ system: system, account: accountNum }),
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    showToast('⚠️ ' + (data.message || 'Switch failed'));
+                    return;
+                }
+                showToast('✓ ' + (data.message || ('Switched to account #' + accountNum)));
+                
+                // Live immediate DOM update: mark account active and refresh UI without reload
+                const sysKey = system === 'codex' ? 'codex' : 'antigravity';
+                if (cachedReportData && cachedReportData.status && cachedReportData.status[sysKey]) {
+                    const accList = cachedReportData.status[sysKey].accounts || [];
+                    accList.forEach(a => {
+                        a.is_active = (Number(a.account) === Number(accountNum));
+                    });
+                    renderAccountsList();
+                }
+
+                await fetchLiveLogs(true);
+            } catch (err) {
+                console.error('Switch failed:', err);
+                showToast('⚠️ Switch request failed');
+            } finally {
+                if (btnEl) {
+                    btnEl.disabled = false;
+                    btnEl.innerText = oldText;
+                }
+            }
+        }
+
+        let syncResetTimer = null;
+
+        async function fetchLiveLogs(force = false) {
+            const btn = document.getElementById('main-refresh-btn') || document.querySelector('.refresh-btn');
+            const progress = document.getElementById('main-refresh-progress');
+            const spinner = document.getElementById('main-refresh-spinner');
+            const text = document.getElementById('main-refresh-text');
+
+            if (btn && force) {
+                // Clear any pending reset from a previous click so multiple clicks behave consistently
+                if (syncResetTimer) {
+                    clearTimeout(syncResetTimer);
+                    syncResetTimer = null;
+                }
+                // Instant clean reset of progress before filling starts
+                btn.classList.remove('done-state', 'filling');
+                if (progress) {
+                    progress.style.transition = 'none';
+                    progress.style.width = '0%';
+                    // Force browser reflow so width: 0% applies immediately
+                    void progress.offsetWidth;
+                    progress.style.transition = '';
+                }
+                btn.classList.add('filling');
+                if (spinner) spinner.style.display = 'inline-block';
+                if (text) text.textContent = 'Syncing…';
+            }
+            try {
+                const path = force ? '/api/refresh' : '/api/logs_data';
+                const res = await fetch(resolveApiUrl(path), {
+                    headers: apiHeaders(),
+                    credentials: 'same-origin'
+                });
+                if (!res.ok) throw new Error('HTTP ' + res.status);
+                const data = await res.json();
+                cachedReportData = data;
+                
+                updateProviderStatsAndModels();
+                renderAccountsList();
+                renderGeneralActivityStream(data.recent_requests || []);
+                
+                if (btn && force) {
+                    // Snap progress to 100% full green
+                    btn.classList.remove('filling');
+                    btn.classList.add('done-state');
+                    if (progress) progress.style.width = '100%';
+                    if (spinner) spinner.style.display = 'none';
+                    if (text) text.textContent = 'Done';
+                }
+            } catch (err) {
+                console.error('Failed to sync logs:', err);
+                if (btn && force) {
+                    btn.classList.remove('filling');
+                    if (spinner) spinner.style.display = 'none';
+                    if (text) text.textContent = 'Failed';
+                }
+            } finally {
+                if (btn && force) {
+                    syncResetTimer = setTimeout(() => {
+                        btn.classList.remove('filling', 'done-state');
+                        if (progress) {
+                            progress.style.transition = 'none';
+                            progress.style.width = '0%';
+                        }
+                        if (spinner) spinner.style.display = 'none';
+                        if (text) text.textContent = 'Sync';
+                        syncResetTimer = null;
+                    }, 1400);
+                } else if (btn && !btn.classList.contains('done-state')) {
+                    btn.classList.remove('filling');
+                }
+            }
+        }
+
+        if (window.__INITIAL_DATA__) {
+            cachedReportData = window.__INITIAL_DATA__;
+            try {
+                switchProvider(currentProvider, true);
+                renderGeneralActivityStream(cachedReportData.recent_requests || []);
+            } catch(e) { console.error(e); }
+        }
+
+        function initDashboard() {
+            if (window.__INITIAL_DATA__) {
+                cachedReportData = window.__INITIAL_DATA__;
+                switchProvider(currentProvider, true);
+                renderGeneralActivityStream(cachedReportData.recent_requests || []);
+            }
+            // Always fetch live data immediately to guarantee no stale or empty state
+            fetchLiveLogs(false);
+        }
+
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initDashboard);
+        } else {
+            initDashboard();
+        }
+        window.addEventListener('load', () => {
+            if (!cachedReportData) initDashboard();
+        });
+        setInterval(fetchLiveLogs, 10000);
+    </script>
+<dialog id="request-inspector" aria-labelledby="ri-title">
+    <header class="ri-header">
+        <div style="display:flex; align-items:center; gap:8px; min-width:0;">
+            <h2 id="ri-title" style="margin:0; font-size:16px; font-weight:800; color:#fff;">Request inspector</h2>
+            <span id="ri-app-badge" style="font-size:11px; padding:2px 8px; border-radius:6px; background:rgba(56,189,248,0.15); color:#38bdf8; font-weight:700;">Direct API</span>
+        </div>
+        <button type="button" aria-label="Close details" onclick="document.getElementById('request-inspector').close()" style="border:1px solid #475569; border-radius:50%; background:transparent; color:white; width:32px; height:32px; cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">✕</button>
+    </header>
+    <div class="ri-body" id="ri-body"></div>
+</dialog>
+
+<script>
+function openRequestInspector(request) {
+    const req = JSON.parse(JSON.stringify(request)); // Snapshot survives live feed replacement.
+    const audit = req.audit || {};
+    const body = document.getElementById('ri-body');
+    body.replaceChildren();
+
+    const appBadge = document.getElementById('ri-app-badge');
+    if (appBadge) {
+        appBadge.textContent = audit.client_label || 'Direct API';
+    }
+
+    function section(title, rows) {
+        const box = document.createElement('section'); box.className = 'ri-section';
+        const h = document.createElement('h3'); h.textContent = title; box.append(h);
+        for (const [label, value] of rows) {
+            const row = document.createElement('div'); row.className = 'ri-row';
+            const l = document.createElement('span'), v = document.createElement('span');
+            l.textContent = label;
+            v.textContent = (value === null || value === undefined || value === '') ? 'Unknown / not recorded' : String(value);
+            row.append(l, v);
+            box.append(row);
+        }
+        body.append(box);
+        return box;
+    }
+
+    section('01 · Request identity', [
+        ['Request ID', req.request_id],
+        ['SHA-256', audit.payload_sha256],
+        ['Time', req.time_formatted],
+        ['Status', req.status],
+        ['Model', req.model],
+        ['Provider', req.provider || req.pool],
+        ['Account', req.account]
+    ]);
+
+    section('02 · Origin & application', [
+        ['Application', audit.client_label || 'Direct API'],
+        ['TCP peer', audit.peer_ip],
+        ['Endpoint', audit.endpoint],
+        ['User-Agent', audit.user_agent]
+    ]);
+
+    section('03 · Usage & token savings', [
+        ['Input tokens', req.prompt == null ? '—' : Number(req.prompt).toLocaleString()],
+        ['Output tokens', req.completion == null ? '—' : Number(req.completion).toLocaleString()],
+        ['Net billed tokens', req.tokens == null ? '—' : Number(req.tokens).toLocaleString()]
+    ]);
+
+    // Render the received request and the exact final provider payload.
+    const requestId = String(req.request_id || req.id || '');
+    let promptData = {
+        prompt_text: audit.prompt_text || audit.original_payload || '',
+        response_text: audit.response_text || '',
+        provider_prompt_text: audit.provider_prompt_text || ''
+    };
+
+    function createPromptBox(title, subnote, initialText) {
+        const promptSection = document.createElement('section');
+        promptSection.className = 'ri-section';
+
+        const header = document.createElement('div');
+        header.style.cssText = 'display:flex; align-items:center; justify-content:space-between; gap:8px; margin-bottom:6px;';
+
+        const heading = document.createElement('h3');
+        heading.style.margin = '0';
+        heading.textContent = title;
+        header.appendChild(heading);
+
+        let currentText = String(initialText || '');
+        const copyButton = document.createElement('button');
+        copyButton.type = 'button';
+        copyButton.style.cssText = 'border:1px solid #38bdf8; border-radius:6px; background:rgba(56,189,248,0.12); color:#38bdf8; font-size:11px; font-weight:700; padding:4px 10px; cursor:pointer; display:flex; align-items:center; gap:5px; transition:0.15s ease;';
+        copyButton.innerHTML = '<span>📋</span><span>Copy</span>';
+        copyButton.onclick = async () => {
+            if (!currentText) {
+                showToast('No content to copy');
+                return;
+            }
+            try {
+                await navigator.clipboard.writeText(currentText);
+                copyButton.innerHTML = '<span>✅</span><span>Copied!</span>';
+                copyButton.style.borderColor = '#10b981';
+                copyButton.style.color = '#10b981';
+                showToast('Prompt copied to clipboard!');
+                setTimeout(() => {
+                    copyButton.innerHTML = '<span>📋</span><span>Copy</span>';
+                    copyButton.style.borderColor = '#38bdf8';
+                    copyButton.style.color = '#38bdf8';
+                }, 2000);
+            } catch (error) {
+                showToast('Copy failed');
+            }
+        };
+        header.appendChild(copyButton);
+        promptSection.appendChild(header);
+
+        const note = document.createElement('p');
+        note.className = 'ri-note';
+        note.textContent = subnote;
+        promptSection.appendChild(note);
+
+        const promptBox = document.createElement('textarea');
+        promptBox.className = 'ri-prompt';
+        promptBox.readOnly = true;
+        promptBox.rows = 12;
+        promptBox.wrap = 'off';
+        promptBox.setAttribute('aria-label', title);
+        promptSection.appendChild(promptBox);
+
+        function setText(value, emptyMessage) {
+            currentText = String(value || '');
+            promptBox.value = currentText || emptyMessage;
+        }
+        setText(currentText, 'No prompt content recorded.');
+        body.appendChild(promptSection);
+        return { setText };
+    }
+
+    const originalPromptBox = createPromptBox(
+        '04 · IN Messages (Received from Agent)',
+        'Raw request content received at the bridge.',
+        promptData.prompt_text
+    );
+    const processedPromptBox = createPromptBox(
+        '05 · OUT Messages (Provider Response)',
+        'Actual assistant output returned by the provider. The transformed wire payload is kept only as backend diagnostics.',
+        promptData.response_text
+    );
+
+    const dialog = document.getElementById('request-inspector');
+    if (!dialog.open) dialog.showModal();
+
+    if (requestId) {
+        fetch(resolveApiUrl('/api/request_prompt?id=' + encodeURIComponent(requestId)), { headers: apiHeaders() })
+            .then(response => {
+                if (!response.ok) throw new Error(`Prompt fetch failed (${response.status})`);
+                return response.json();
+            })
+            .then(data => {
+                promptData = {
+                    prompt_text: data.prompt_text || data.original_payload || '',
+                    response_text: data.response_text || '',
+                    provider_prompt_text: data.provider_prompt_text || ''
+                };
+                originalPromptBox.setText(promptData.prompt_text, 'No IN messages recorded for this request.');
+                processedPromptBox.setText(
+                    promptData.response_text,
+                    'No OUT messages recorded for this request. The transformed provider payload is available only in backend diagnostics.'
+                );
+            })
+            .catch(() => {
+                // Keep the activity-row snapshot visible if the on-demand
+                // authoritative refresh is unavailable.
+            });
+    }
+}
+document.getElementById('request-inspector').addEventListener('click',function(e){if(e.target===this){const r=this.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)this.close()}});
+
+        async function switchMoaAggregator(modelId, btnEl) {
+            const oldText = btnEl ? btnEl.innerText : 'Switch';
+            if (btnEl) {
+                btnEl.disabled = true;
+                btnEl.innerText = 'Switching...';
+            }
+            try {
+                const res = await fetch(resolveApiUrl('/api/mixture/switch'), {
+                    method: 'POST',
+                    headers: apiHeaders(),
+                    credentials: 'same-origin',
+                    body: JSON.stringify({ model: modelId })
+                });
+                const data = await res.json();
+                if (res.ok && data.success) {
+                    window.activeMoaAggregator = modelId;
+                    showToast('✓ Primary Decider switched to: ' + modelId);
+                    renderAccountsList();
+                } else {
+                    showToast('⚠️ Switch failed: ' + (data.message || 'Unknown error'));
+                }
+            } catch (err) {
+                showToast('⚠️ Switch request failed');
+            } finally {
+                if (btnEl) {
+                    btnEl.disabled = false;
+                    btnEl.innerText = oldText;
+                }
+            }
+        }
+    
+</script></body>
+</html>

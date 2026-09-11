@@ -1,17 +1,24 @@
 """Transactional account storage shared by every CLI entry point (stdlib only)."""
 import base64
+import binascii
 import contextlib
 import fcntl
 import importlib.machinery
 import importlib.util
 import json
 import os
+import pwd
 from pathlib import Path
 import re
 import shutil
 import subprocess
 import sys
 import tempfile
+import threading
+
+_STORE_LOCKS = {}
+_STORE_LOCKS_GUARD = threading.Lock()
+_LOCK_DEPTH = threading.local()
 
 ROOT = Path(__file__).resolve().parents[1]
 
@@ -42,6 +49,13 @@ def atomic_bytes(path, blob):
             f.write(blob)
             f.flush()
             os.fsync(f.fileno())
+        if os.geteuid() == 0 and '/var/lib/aipool' in str(path):
+            try:
+                import pwd
+                entry = pwd.getpwnam('aipool')
+                os.chown(tmp, entry.pw_uid, entry.pw_gid)
+            except Exception:
+                pass
         os.replace(tmp, path)
     finally:
         if os.path.exists(tmp):
@@ -61,8 +75,9 @@ def slot(value):
 def decode_claims(token):
     try:
         part = token.split('.')[1]
-        return json.loads(base64.urlsafe_b64decode(part + '=' * (-len(part) % 4)))
-    except (ValueError, IndexError, TypeError):
+        value = json.loads(base64.urlsafe_b64decode(part + '=' * (-len(part) % 4)))
+        return value if isinstance(value, dict) else {}
+    except (ValueError, IndexError, TypeError, binascii.Error, UnicodeDecodeError, json.JSONDecodeError):
         return {}
 
 
@@ -138,12 +153,48 @@ class Manager:
         return slot(value) if value else ''
 
     @contextlib.contextmanager
-    def locked(self):
+    def locked(self, timeout=5.0):
+        import time
         private_dir(self.store)
-        fd = os.open(self.store / 'switch.lock', os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW, 0o600)
-        with os.fdopen(fd, 'a') as lock:
-            fcntl.flock(lock, fcntl.LOCK_EX)
-            yield
+        key = str(self.store.resolve())
+        with _STORE_LOCKS_GUARD:
+            local_lock = _STORE_LOCKS.setdefault(key, threading.RLock())
+        with local_lock:
+            held = getattr(_LOCK_DEPTH, 'held', None)
+            if held is None:
+                held = _LOCK_DEPTH.held = set()
+            if key in held:
+                yield
+                return
+            flags = os.O_CREAT | os.O_RDWR | os.O_NOFOLLOW
+            if hasattr(os, 'O_CLOEXEC'):
+                flags |= os.O_CLOEXEC
+            fd = os.open(self.store / 'switch.lock', flags, 0o600)
+            start = time.time()
+            locked_ok = False
+            while True:
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    locked_ok = True
+                    break
+                except (BlockingIOError, OSError):
+                    if time.time() - start >= timeout:
+                        break
+                    time.sleep(0.05)
+            held.add(key)
+            try:
+                yield
+            finally:
+                held.discard(key)
+                if locked_ok:
+                    try:
+                        fcntl.flock(fd, fcntl.LOCK_UN)
+                    except OSError:
+                        pass
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
 
     def identity(self, data):
         if not self.ag:
@@ -259,6 +310,17 @@ class Manager:
                 if legacy is not None:
                     atomic_bytes(target, legacy)
                 raise
+            if self.ag and os.geteuid() == 0 and str(self.store).startswith('/var/lib/aipool/'):
+                try:
+                    owner = pwd.getpwnam('aipool')
+                    for path in writes:
+                        os.chown(path, owner.pw_uid, owner.pw_gid)
+                    os.chown(self.store, owner.pw_uid, owner.pw_gid)
+                    os.chown(target, owner.pw_uid, owner.pw_gid)
+                except KeyError:
+                    raise ValueError('aipool service user is missing; account was not activated') from None
+                except OSError as exc:
+                    raise ValueError(f'account ownership update failed: {exc}') from None
             print(f'Active {self.label} account: {number}\nEmail: {meta["email"]}')
             if not self.ag:
                 print('OAuth credentials saved. Use cusage to verify current server status.')
@@ -279,17 +341,62 @@ class Manager:
                     print(f'Account {n}: invalid credential; left untouched')
             print('Scan complete. Nothing deleted. Use rm N for a non-active slot (permanently deleted).')
 
+    def compact(self):
+        """Ensure slots are contiguous from 1..N and update active marker if moved."""
+        with self.locked():
+            ids = sorted([p.name for p in self.store.iterdir() if re.fullmatch(r'[1-9][0-9]*', p.name) and not p.is_symlink() and (p.is_dir() or p.is_file())], key=int)
+            active = self.active()
+            new_active = active
+            for idx, old_id in enumerate(ids, start=1):
+                target_id = str(idx)
+                if old_id != target_id:
+                    src = self.store / old_id
+                    dst = self.store / target_id
+                    shutil.move(str(src), str(dst))
+                    if active == old_id:
+                        new_active = target_id
+            if new_active and (self.store / 'active').is_file():
+                atomic_bytes(self.store / 'active', (new_active + '\n').encode())
+            if os.geteuid() == 0 and str(self.store).startswith('/var/lib/aipool/'):
+                try:
+                    owner = pwd.getpwnam('aipool')
+                    for p in self.store.iterdir():
+                        os.chown(p, owner.pw_uid, owner.pw_gid)
+                    os.chown(self.store, owner.pw_uid, owner.pw_gid)
+                except Exception:
+                    pass
+
+    def relogin(self, number, browser=False):
+        """Purge existing credential for slot number and immediately trigger fresh enrollment."""
+        number = slot(number)
+        with self.locked():
+            target = self.store / number
+            if target.is_dir():
+                shutil.rmtree(target)
+            elif target.is_file():
+                target.unlink()
+        print(f'Purged existing session for {self.prefix}{number}. Initiating fresh login...', flush=True)
+        return self.add_or_switch(number=number, browser=browser)
+
     def remove(self, number):
         number = slot(number)
         with self.locked():
             if number == self.active():
-                raise ValueError('Cannot remove the active account; switch to another account first')
+                # If active is removed, pick another candidate or first available
+                candidates = [n for n in self.ids() if n != number]
+                if candidates:
+                    self.add_or_switch(candidates[0])
+                else:
+                    (self.store / 'active').unlink(missing_ok=True)
             source = self.store / number
             if source.is_symlink() or not source.exists():
                 raise ValueError('Account is missing or unsafe')
-            import shutil
-            shutil.rmtree(source)
+            if source.is_dir():
+                shutil.rmtree(source)
+            else:
+                source.unlink()
             print(f'Account {number} permanently deleted')
+            self.compact()
 
     def usage(self, selection=None, short=False):
         ids = [slot(selection)] if selection else self.ids()
@@ -320,9 +427,18 @@ def main(provider):
         args = ['help'] + args
     elif invoked in ('agswitch', 'cswitch'):
         args = ['switch'] + args
+    # Handle c1 relogin or c relogin 1
+    if len(args) >= 2 and args[0] in ('switch',) and args[1].lower() in ('relogin', 'login'):
+        cmd = 'relogin'
+        rest = [args[0]] if len(args) == 2 else [args[1]]
     cmd, rest = (args[0], args[1:]) if args else ('list', [])
     if re.fullmatch(r'[1-9][0-9]*', cmd):
-        cmd, rest = 'switch', [cmd] + rest
+        if rest and rest[0].lower() in ('relogin', 'login'):
+            cmd, rest = 'relogin', [cmd] + rest[1:]
+        else:
+            cmd, rest = 'switch', [cmd] + rest
+    elif cmd in ('switch',) and rest and len(rest) >= 2 and rest[1].lower() in ('relogin', 'login'):
+        cmd, rest = 'relogin', [rest[0]] + rest[2:]
     try:
         if cmd in ('help', '--help', '-h'):
             print(f'{manager.label} Account Manager\n\n{manager.prefix} add [FILE] [--browser] [--resume]  Add or import an account; --resume continues a paused login\n{manager.prefix} switch N [--verify] / {manager.prefix}N   Switch accounts (instant, local); --verify re-checks with Google\n{manager.prefix} refresh-active     Re-validate the active account against Google\n{manager.prefix} list                  List saved identities without network calls\n{manager.prefix} usage [N] [--short]   Query current provider limits\n{manager.prefix} clean                 Non-destructive duplicate scan\n{manager.prefix} rm N                  Archive a non-active account\nNo provider/model settings are changed.')
@@ -360,6 +476,15 @@ def main(provider):
                 print(f'No accounts registered. Run: {manager.prefix} add')
         elif cmd == 'clean' and not rest:
             manager.clean()
+        elif cmd in ('relogin', 'login'):
+            target = rest[0] if rest else manager.active()
+            browser = '--browser' in rest
+            if not target:
+                raise ValueError(f'Usage: {manager.prefix} relogin N')
+            manager.relogin(target, browser=browser)
+        elif cmd in ('compact',):
+            manager.compact()
+            print(f'{manager.label} slots compacted successfully.')
         elif cmd in ('rm', 'remove', 'del') and len(rest) == 1:
             manager.remove(rest[0])
         else:

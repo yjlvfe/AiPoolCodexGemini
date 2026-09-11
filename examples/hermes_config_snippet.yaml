@@ -33,6 +33,7 @@ custom_providers:
       - id: "gpt-6-astra"
         display_name: "ChatGPT Astra"
         context_window: 1048576
+
       - id: "gpt-5.6-luna"
         display_name: "ChatGPT Luna"
         context_window: 1048576
@@ -48,3 +49,7 @@ custom_providers:
       - id: "gpt-5.4-mini"
         display_name: "ChatGPT 5.4 Mini"
         context_window: 1048576
+
+# Keep a Telegram turn alive while the local AiPool bridge/provider restarts.
+agent:
+  api_max_retries: 25

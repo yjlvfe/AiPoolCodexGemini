@@ -1,5 +1,4 @@
 """Install official Codex in the user's prefix without touching agent profiles."""
-import os
 from pathlib import Path
 import shutil
 import subprocess

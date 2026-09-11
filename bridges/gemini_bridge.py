@@ -8,23 +8,23 @@ to use Gemini subscriptions inside Hermes without manual API keys.
 
 import json
 import os
+import time
 import sys
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parents[1]/"cli"))
 from config_env import load
 load()
-import time
-import datetime
 import urllib.request
 import urllib.parse
 import urllib.error
 import threading
 import http.server
 import socketserver
-import sys
-import shutil
 import secrets
+import sqlite3
 from copy import deepcopy
+
+from model_catalog import CatalogError, DynamicCatalog, catalog_cache_dir, extract_gemini_catalog
 
 # ---------------------------------------------------------------------------
 # Config
@@ -32,9 +32,10 @@ from copy import deepcopy
 HOST = os.environ.get("AG_BRIDGE_HOST", "127.0.0.1")
 PORT = int(os.environ.get("AG_BRIDGE_PORT", "8123"))
 
-# Antigravity OAuth client credentials
-CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
-CLIENT_SECRET = "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"
+# Antigravity OAuth client credentials (resolved lazily from environment or the
+# private credentials file; never hard-code secrets in source)
+from oauth_credentials import oauth_credentials
+
 TOKEN_URL = "https://oauth2.googleapis.com/token"
 
 # Antigravity gateway endpoints
@@ -52,6 +53,7 @@ CLIENT_METADATA = '{"ideType":"ANTIGRAVITY","platform":"MACOS","pluginType":"GEM
 SKIP_THOUGHT_SIGNATURE = "skip_thought_signature_validator"
 
 DEFAULT_PROJECT = "aicode-consumers"
+MAX_REQUEST_BYTES = 32 * 1024 * 1024
 
 # ---------------------------------------------------------------------------
 # Token management (refresh)
@@ -114,9 +116,14 @@ def _refresh_tokens():
     if not rt:
         raise RuntimeError("No refresh_token found in session files.")
 
+    try:
+        client_id, client_secret = oauth_credentials()
+    except RuntimeError as exc:
+        raise RuntimeError(str(exc)) from None
+
     body = urllib.parse.urlencode({
-        "client_id": CLIENT_ID,
-        "client_secret": CLIENT_SECRET,
+        "client_id": client_id,
+        "client_secret": client_secret,
         "grant_type": "refresh_token",
         "refresh_token": rt,
     }).encode()
@@ -126,9 +133,9 @@ def _refresh_tokens():
         with urllib.request.urlopen(req, timeout=30) as resp:
             data = json.loads(resp.read().decode())
     except urllib.error.HTTPError as e:
-        raise RuntimeError(f"Token refresh failed: HTTP {e.code}: {e.read()[:200]}")
+        raise RuntimeError(f"Token refresh failed: HTTP {e.code}")
     except Exception as e:
-        raise RuntimeError(f"Token refresh network error: {e}")
+        raise RuntimeError(f"Token refresh network error: {type(e).__name__}")
 
     if "access_token" not in data:
         raise RuntimeError(f"Token refresh response missing access_token: {list(data)}")
@@ -198,241 +205,209 @@ MODEL_SEND_MAP = {
     "gpt-oss-120b-medium": "gpt-oss-120b-medium",
 }
 
-# Clean list of public model IDs exposed via /v1/models (no ugly tiered suffixes)
-_CANDIDATE_MODELS = [
-    "gemini-3.8-flash",
-    "gemini-3.7-flash",
-    "gemini-3.6-flash",
-    "gemini-3.6-flash-high",
-    "gemini-3.6-flash-medium",
-    "gemini-3.6-flash-low",
-    "gemini-3.1-pro",
-    "gemini-pro-agent",
-    "claude-opus-4-6",
-    "claude-sonnet-4-6",
-    "gpt-oss-120b",
-]
+# Model discovery is deliberately upstream-driven.  The old candidate list was
+# removed because it silently hid newly introduced Antigravity models.
+def _fetch_gemini_catalog():
+    """Fetch the authoritative Antigravity model catalog.
 
-_available = set(_CANDIDATE_MODELS)
-_discovery_lock = threading.Lock()
-_DISCOVERY_TTL = 1800
-_last_probe = 0.0
-_probe_running = False
+    ``fetchAvailableModels`` is the same upstream call used by the installed
+    Antigravity client.  Only model IDs and the observed wire IDs are retained;
+    credentials and response bodies are never written to the catalog cache.
+    """
+    access = get_access_token()
+    project = _current_project()
+    body = json.dumps({"project": project}, separators=(",", ":")).encode()
+    headers = _antigravity_headers(access)
+    last_error = None
+    for endpoint in ANTIGRAVITY_ENDPOINTS:
+        url = endpoint + "/v1internal:fetchAvailableModels"
+        request = urllib.request.Request(url, data=body, headers=headers, method="POST")
+        try:
+            with urllib.request.urlopen(request, timeout=30) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+            models, wire_models = extract_gemini_catalog(payload)
+            return models, {"wire_models": wire_models}
+        except urllib.error.HTTPError as exc:
+            last_error = f"HTTP {exc.code}"
+            try:
+                exc.close()
+            except Exception:
+                pass
+        except (OSError, ValueError, TypeError, CatalogError) as exc:
+            last_error = type(exc).__name__
+    raise CatalogError(f"Gemini model catalog unavailable ({last_error or 'upstream error'})")
+
+
+_gemini_catalog = DynamicCatalog(
+    "gemini",
+    _fetch_gemini_catalog,
+    catalog_cache_dir() / "gemini.json",
+)
 
 
 def _send_model(model):
     if not isinstance(model, str) or not model or model != model.strip():
-        raise ValueError('An exact model ID is required')
+        raise ValueError("An exact model ID is required")
+    try:
+        # A model newly returned by upstream is accepted immediately.  The
+        # dynamic wire map takes precedence over compatibility aliases.
+        _gemini_catalog.get()
+        wire_models = _gemini_catalog.metadata.get("wire_models", {})
+        if isinstance(wire_models, dict) and model in wire_models:
+            return wire_models[model]
+    except CatalogError:
+        pass
     return MODEL_SEND_MAP.get(model, model)
 
 
-def list_available_models():
+def list_available_models(force_refresh=True):
+    models = _gemini_catalog.get(force=force_refresh)
     out = []
-    with _discovery_lock:
-        for name in _CANDIDATE_MODELS:
-            if name in _available:
-                if name.startswith("claude"):
-                    owned = "anthropic"
-                elif name.startswith("gpt"):
-                    owned = "openai"
-                else:
-                    owned = "google"
-                out.append({"id": name, "object": "model", "owned_by": owned})
+    for name in models:
+        if name.startswith("claude"):
+            owned = "anthropic"
+        elif name.startswith("gpt"):
+            owned = "openai"
+        else:
+            owned = "google"
+        out.append({"id": name, "object": "model", "owned_by": owned})
     return out
 
 
 # ---------------------------------------------------------------------------
 # Schema & Tool Transformation Helpers
 # ---------------------------------------------------------------------------
-def _clean_schema(schema):
-    if not isinstance(schema, dict):
-        return {"type": "OBJECT", "properties": {}}
-
-    banned = {
-        "$schema", "$defs", "definitions", "additionalProperties",
-        "patternProperties", "unevaluatedProperties", "propertyNames",
-        "minProperties", "maxProperties", "title", "default", "examples",
-        "anyOf", "oneOf", "allOf", "$ref", "minimum", "maximum", "minItems", "maxItems",
-        "exclusiveMinimum", "exclusiveMaximum", "format", "pattern"
-    }
-
-    def sanitize(node):
-        if not isinstance(node, dict):
-            return {"type": "STRING"}
-
-        out = {}
-        for k, v in node.items():
-            if k in banned or k in ("type", "properties", "required"):
-                continue
-            if isinstance(v, dict):
-                out[k] = sanitize(v)
-            elif isinstance(v, list):
-                if k == "enum":
-                    out[k] = [str(x) for x in v if isinstance(x, (str, int, float, bool))]
-                else:
-                    out[k] = [sanitize(x) if isinstance(x, dict) else x for x in v]
-            elif isinstance(v, (int, float, bool, str)):
-                out[k] = v
-
-        raw_t = node.get("type")
-        if isinstance(raw_t, list):
-            non_null = [str(x) for x in raw_t if str(x).lower() != "null"]
-            raw_t = non_null[0] if non_null else "string"
-        t = str(raw_t or "").upper()
-
-        if t in ("STR", "TEXT", "STRING"):
-            out["type"] = "STRING"
-        elif t in ("INT", "INTEGER"):
-            out["type"] = "INTEGER"
-        elif t in ("FLOAT", "NUMBER"):
-            out["type"] = "NUMBER"
-        elif t in ("BOOL", "BOOLEAN"):
-            out["type"] = "BOOLEAN"
-        elif t in ("ARRAY", "LIST"):
-            out["type"] = "ARRAY"
-            if "items" not in node or not isinstance(node["items"], dict):
-                out["items"] = {"type": "STRING"}
-            else:
-                out["items"] = sanitize(node["items"])
-        elif t in ("OBJ", "OBJECT", "DICT") or "properties" in node:
-            out["type"] = "OBJECT"
-            raw_props = node.get("properties")
-            if not isinstance(raw_props, dict):
-                raw_props = {}
-            cleaned_props = {}
-            for pk, pv in raw_props.items():
-                if pk == "type":
-                    continue
-                if isinstance(pv, dict):
-                    cleaned_props[str(pk)] = sanitize(pv)
-                else:
-                    cleaned_props[str(pk)] = {"type": "STRING"}
-            out["properties"] = cleaned_props
-            if "required" in node:
-                req = node.get("required")
-                if isinstance(req, list):
-                    out["required"] = [r for r in req if isinstance(r, str) and r in cleaned_props]
-        else:
-            out["type"] = "STRING"
-
-        return out
-
-    return sanitize(deepcopy(schema))
-
-
 def _build_tools(tools):
     declarations = []
-    for idx, tool in enumerate(tools or []):
+    for tool in tools or []:
         if not isinstance(tool, dict) or tool.get("type") != "function":
-            continue
-        fn = tool.get("function") or {}
-        if not isinstance(fn, dict) or not fn.get("name"):
-            continue
-        cleaned = _clean_schema(fn.get("parameters"))
-        if idx == 11 or len(declarations) == 11:
-            print(f"[bridge] TOOL 11 NAME={fn.get('name')}: cleaned={json.dumps(cleaned)}", file=sys.stderr)
-        declarations.append({
-            "name": fn["name"],
-            "description": fn.get("description") or "",
-            "parameters": cleaned,
-        })
+            raise ValueError("Only function tools are supported by this endpoint")
+        fn = tool.get("function")
+        if not isinstance(fn, dict) or not isinstance(fn.get("name"), str) or not fn["name"]:
+            raise ValueError("Function tools require function.name")
+        declaration = {"name": fn["name"]}
+        if "description" in fn:
+            if not isinstance(fn["description"], str):
+                raise ValueError("Function description must be text")
+            declaration["description"] = fn["description"]
+        if "parameters" in fn:
+            if not isinstance(fn["parameters"], dict):
+                raise ValueError("Function parameters must be a JSON schema object")
+            declaration["parametersJsonSchema"] = deepcopy(fn["parameters"])
+        declarations.append(declaration)
     return [{"functionDeclarations": declarations}] if declarations else None
+
+
+def _content_parts(content):
+    """Lossless supported content translation; reject rather than omit."""
+    if content is None:
+        return []
+    if isinstance(content, str):
+        return [{"text": content}]
+    if not isinstance(content, list):
+        raise PoolError("Message content must be text or content parts", 400)
+    parts = []
+    for block in content:
+        if not isinstance(block, dict):
+            raise PoolError("Content parts must be objects", 400)
+        if block.get("type") == "text" and isinstance(block.get("text"), str):
+            parts.append({"text": block["text"]})
+        elif block.get("type") in ("image_url", "image"):
+            image = block.get("image_url", block.get("url"))
+            url = image.get("url") if isinstance(image, dict) else image
+            if not isinstance(url, str) or not url:
+                raise PoolError("Image requires a URL", 400)
+            if url.startswith("data:") and ";base64," in url:
+                meta, data = url.split(",", 1)
+                parts.append({"inlineData": {"mimeType": meta[5:].split(";", 1)[0], "data": data}})
+            elif urllib.parse.urlsplit(url).scheme in ("https", "http", "gs"):
+                parts.append({"fileData": {"fileUri": url}})
+            else:
+                raise PoolError("Unsupported image URL", 400)
+        else:
+            raise PoolError("Unsupported content part", 400)
+    return parts
 
 
 # ---------------------------------------------------------------------------
 # Request & Response Conversion
 # ---------------------------------------------------------------------------
 def to_antigravity_body(payload):
+    from canonical_request import CanonicalRequest
+    try:
+        payload = CanonicalRequest.from_payload(payload).to_payload()
+    except ValueError as exc:
+        raise PoolError(str(exc), 400) from None
     messages = payload.get("messages", [])
     model_name = payload.get("model") or "gemini-3.8-flash"
     wire_model = _send_model(model_name)
 
-    system_parts = []
+    instructions = payload.get("instructions")
+    system_parts = ([{"text": item} for item in instructions] if isinstance(instructions, list)
+                    else _content_parts(instructions))
     contents = []
     call_names = {}
-
     for m in messages:
-        role = m.get("role", "user")
-        content = m.get("content", "")
-
+        role = m.get("role")
+        content = m.get("content")
         if role in ("system", "developer"):
-            if isinstance(content, str) and content.strip():
-                system_parts.append({"text": content})
-            continue
-
-        if role == "user":
-            parts = []
-            if isinstance(content, list):
-                for block in content:
-                    if isinstance(block, dict):
-                        if block.get("type") == "text" and block.get("text"):
-                            parts.append({"text": block["text"]})
-                        elif block.get("type") in ("image_url", "image"):
-                            url = (block.get("image_url") or {}).get("url", "")
-                            if "data:" in url and ";base64," in url:
-                                meta, data = url.split(",", 1)
-                                mime = meta[5:].split(";", 1)[0] or "image/png"
-                                parts.append({"inlineData": {"mimeType": mime, "data": data}})
-            else:
-                text_str = str(content) if content is not None else ""
-                if text_str.strip():
-                    parts.append({"text": text_str})
-            if parts:
-                contents.append({"role": "user", "parts": parts})
-
-        elif role == "assistant":
-            parts = []
-            if isinstance(content, str) and content.strip():
-                parts.append({"text": content})
+            parts = _content_parts(content)
+            if any("text" not in part for part in parts):
+                raise PoolError("System content must contain text only", 400)
+            system_parts.extend(parts)
+        elif role in ("user", "assistant"):
+            parts = _content_parts(content)
             tool_calls = m.get("tool_calls") or []
+            if not isinstance(tool_calls, list) or (tool_calls and role != "assistant"):
+                raise PoolError("tool_calls must be an assistant array", 400)
             for tc in tool_calls:
-                if not isinstance(tc, dict):
-                    continue
-                fn = tc.get("function") or {}
-                name = fn.get("name")
-                if not name:
-                    continue
-                args_raw = fn.get("arguments", {})
-                if isinstance(args_raw, str):
+                fn = tc.get("function") if isinstance(tc, dict) else None
+                if not isinstance(fn, dict) or not isinstance(fn.get("name"), str) or not fn["name"]:
+                    raise PoolError("Tool calls require function.name", 400)
+                args = fn.get("arguments", {})
+                if isinstance(args, str):
                     try:
-                        args = json.loads(args_raw) if args_raw.strip() else {}
-                    except Exception:
-                        args = {"value": args_raw}
-                else:
-                    args = args_raw or {}
-                call_id = str(tc.get("id") or tc.get("call_id") or "")
-                function_call = {"name": name, "args": args}
-                if call_id:
-                    function_call["id"] = call_id
-                part = {"functionCall": function_call}
-                part["thoughtSignature"] = SKIP_THOUGHT_SIGNATURE
+                        args = json.loads(args)
+                    except ValueError:
+                        raise PoolError("Tool arguments must be valid JSON", 400) from None
+                if not isinstance(args, dict):
+                    raise PoolError("Tool arguments must be a JSON object", 400)
+                call_id = tc.get("id") or tc.get("call_id")
+                if not isinstance(call_id, str) or not call_id:
+                    raise PoolError("Tool calls require an id", 400)
+                part = {"functionCall": {"name": fn["name"], "args": args, "id": call_id},
+                        "thoughtSignature": tc.get("thought_signature") or SKIP_THOUGHT_SIGNATURE}
                 parts.append(part)
-                if call_id:
-                    call_names[call_id] = name
-            if parts:
-                contents.append({"role": "model", "parts": parts})
-
+                call_names[call_id] = fn["name"]
+            contents.append({"role": "model" if role == "assistant" else "user", "parts": parts})
         elif role == "tool":
-            name = m.get("name") or call_names.get(str(m.get("tool_call_id") or "")) or "tool"
-            out_text = str(content) if content is not None else ""
-            call_id = str(m.get("tool_call_id") or "")
-            function_response = {"name": name, "response": {"output": out_text}}
-            if call_id:
-                function_response["id"] = call_id
-            part = {"functionResponse": function_response}
-            if contents and contents[-1].get("role") == "user" and any("functionResponse" in p for p in contents[-1].get("parts", [])):
+            call_id = m.get("tool_call_id")
+            name = m.get("name") or call_names.get(call_id)
+            if not isinstance(call_id, str) or not call_id or not isinstance(name, str) or not name:
+                raise PoolError("Tool results require a matching tool_call_id or name", 400)
+            part = {"functionResponse": {"name": name, "id": call_id, "response": {"output": deepcopy(content)}}}
+            if contents and contents[-1].get("role") == "user" and any("functionResponse" in p for p in contents[-1]["parts"]):
                 contents[-1]["parts"].append(part)
             else:
                 contents.append({"role": "user", "parts": [part]})
-
+        else:
+            raise PoolError("Unsupported message role", 400)
     if not contents:
-        contents.append({"role": "user", "parts": [{"text": "Continue."}]})
+        raise PoolError("At least one non-system message is required", 400)
 
-    max_tok = int(payload.get("max_tokens") or payload.get("max_completion_tokens") or 65536)
+    try:
+        max_tok = int(payload.get("max_tokens") or payload.get("max_completion_tokens") or 65536)
+    except (TypeError, ValueError):
+        raise PoolError("max_tokens must be an integer", 400) from None
+    if max_tok < 1:
+        raise PoolError("max_tokens must be positive", 400)
     gen_cfg = {}
     temp = payload.get("temperature")
     if temp is not None:
-        gen_cfg["temperature"] = float(temp)
+        try:
+            gen_cfg["temperature"] = float(temp)
+        except (TypeError, ValueError):
+            raise PoolError("temperature must be numeric", 400) from None
 
     if wire_model.startswith("gpt-"):
         gen_cfg["maxOutputTokens"] = min(max_tok, 8192)
@@ -446,9 +421,11 @@ def to_antigravity_body(payload):
         }
     else:
         eff = str(payload.get("reasoning_effort") or "").lower()
-        if eff == "high" or "-high" in wire_model or "-high" in str(model_name):
+        # Hermes levels normalize to provider-supported tiers. The highest
+        # provider tier is high; xhigh/max/ultra intentionally clamp to it.
+        if eff in ("xhigh", "max", "ultra", "high") or "-high" in wire_model or "-high" in str(model_name):
             budget = 16000
-        elif eff == "low" or "-low" in wire_model or "-low" in str(model_name):
+        elif eff in ("none", "minimal", "low") or "-low" in wire_model or "-low" in str(model_name):
             budget = 2000
         else:
             budget = 8000
@@ -471,7 +448,10 @@ def to_antigravity_body(payload):
     if system_parts:
         ag_body["request"]["systemInstruction"] = {"role": "system", "parts": system_parts}
 
-    converted_tools = _build_tools(payload.get("tools"))
+    try:
+        converted_tools = _build_tools(payload.get("tools"))
+    except ValueError as exc:
+        raise PoolError(str(exc), 400) from None
     if converted_tools:
         ag_body["request"]["tools"] = converted_tools
 
@@ -512,9 +492,12 @@ def to_openai_response(ag_response, request_model=None):
 
         text = "".join(text_parts)
         thought = "".join(thought_parts)
-        finish_reason = "tool_calls" if tool_calls else (cand.get("finishReason") or "stop").lower()
-        if finish_reason == "stop":
-            finish_reason = "stop"
+        reason = cand.get("finishReason") or "STOP"
+        finish_reason = "tool_calls" if tool_calls else {
+            "STOP": "stop", "MAX_TOKENS": "length", "SAFETY": "content_filter",
+            "RECITATION": "content_filter", "BLOCKLIST": "content_filter",
+            "PROHIBITED_CONTENT": "content_filter", "SPII": "content_filter",
+        }.get(reason, "stop")
 
         msg = {"role": "assistant"}
         msg["content"] = text if text else ("" if tool_calls else None)
@@ -530,11 +513,7 @@ def to_openai_response(ag_response, request_model=None):
         })
 
     if not choices:
-        choices.append({
-            "index": 0,
-            "message": {"role": "assistant", "content": ""},
-            "finish_reason": "stop",
-        })
+        raise PoolError("Provider returned no candidates (blocked or malformed response)", 502)
 
     usage = resp.get("usageMetadata") or {}
     translated_usage = {}
@@ -564,9 +543,13 @@ def _antigravity_headers(access):
 
 
 from pool_runtime import AccountPool, PoolError, record, retry_seconds, clean_model_name
+from durable_requests import DurableRequestStore, request_key
+from retry_policy import provider_attempts, retry_delay
 AG_POOL = AccountPool('antigravity')
 
-
+# A provider outage is a transient infrastructure event, not a reason to
+# abandon a live Hermes turn after one account cycle.  The default is 20
+# upstream attempts; deployments may raise it but cannot lower it below 20.
 def call_antigravity(ag_body, access=None):
     access = access or get_access_token()
     endpoints = [os.environ['AG_UPSTREAM_URL']] if os.environ.get('AG_UPSTREAM_URL') else [e + ANTIGRAVITY_PATH for e in ANTIGRAVITY_ENDPOINTS]
@@ -575,7 +558,10 @@ def call_antigravity(ag_body, access=None):
         req = urllib.request.Request(url, data=json.dumps(ag_body).encode(), headers=_antigravity_headers(access))
         try:
             with urllib.request.urlopen(req, timeout=120) as resp:
-                return json.loads(resp.read().decode())
+                result = json.loads(resp.read().decode())
+                if not isinstance(result, dict):
+                    raise PoolError('Antigravity returned a non-object response', 502)
+                return result
         except urllib.error.HTTPError as exc:
             status = exc.code
             last_status = status
@@ -592,6 +578,60 @@ def call_antigravity(ag_body, access=None):
     raise PoolError('Antigravity endpoints are unavailable',last_status)
 
 
+def call_with_retry(ag_body, attempts=None, on_success=None, sleep=None):
+    """Call Antigravity with a real transient-outage retry budget.
+
+    Account quota/auth failures rotate away from that account.  Provider 5xx
+    and network failures keep retrying the same logical request across the
+    available account set, including accounts temporarily marked by the
+    circuit breaker.  This distinction prevents an outage from emptying the
+    candidate list after the first pass.
+    """
+    model = ag_body['model']
+    candidates = AG_POOL.candidates(model, include_cooldown=True)
+    if not candidates:
+        raise PoolError('No usable Antigravity account for this exact model; pool is empty', 503)
+    configured = attempts
+    if configured is None:
+        configured = (os.environ.get('AIPOOL_GEMINI_MAX_ATTEMPTS') or
+                      os.environ.get('AIPOOL_PROVIDER_MAX_ATTEMPTS'))
+    total = provider_attempts(configured)
+    sleeper = sleep or time.sleep
+    last_status = 503
+    quota_exhausted = set()
+    outage_failures = 0
+
+    for attempt in range(total):
+        usable = [n for n in candidates if n not in quota_exhausted] or candidates
+        number = usable[attempt % len(usable)]
+        try:
+            credentials = AG_POOL.credentials(number)
+            body = deepcopy(ag_body)
+            body['project'] = credentials.get('project_id') or body.get('project')
+            result = call_antigravity(body, credentials['token']['access_token'])
+            if on_success:
+                on_success(number)
+            return result
+        except (PoolError, ValueError, OSError, RuntimeError) as exc:
+            last_status = int(getattr(exc, 'status', 503) or 503)
+            if last_status not in (401, 403, 429) and last_status < 500:
+                raise
+            if last_status in (401, 403, 429):
+                quota_exhausted.add(number)
+                AG_POOL.exhausted(number, model, getattr(exc, 'retry_after', 60), reason='account_failure')
+                if len(quota_exhausted) >= len(candidates):
+                    break
+            else:
+                outage_failures += 1
+                AG_POOL.exhausted(number, model, min(5, max(1, outage_failures)), reason='provider_outage')
+            if attempt + 1 < total:
+                retry_after = getattr(exc, 'retry_after', None) if last_status in (401, 403, 429) else None
+                sleeper(retry_delay(attempt, retry_after))
+    raise PoolError(
+        f'Antigravity provider did not recover after {total} attempts', last_status
+    )
+
+
 # ---------------------------------------------------------------------------
 # HTTP server (OpenAI-compatible)
 # ---------------------------------------------------------------------------
@@ -602,15 +642,22 @@ class Handler(http.server.BaseHTTPRequestHandler):
         pass
 
     def _read_body(self):
-        length = int(self.headers.get("Content-Length") or 0)
-        if length <= 0:
-            return {}
         try:
-            return json.loads(self.rfile.read(length).decode("utf-8"))
-        except Exception:
-            return {}
+            length = int(self.headers.get("Content-Length") or 0)
+        except (TypeError, ValueError):
+            raise PoolError("Invalid Content-Length", 400) from None
+        if length <= 0 or length > MAX_REQUEST_BYTES:
+            raise PoolError("Invalid request size", 400)
+        try:
+            value = json.loads(self.rfile.read(length).decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            raise PoolError("Request body must be valid JSON", 400) from None
+        if not isinstance(value, dict):
+            raise PoolError("Request body must be a JSON object", 400)
+        return value
 
     def _send_json(self, obj, status=200):
+        self.close_connection = True
         data = json.dumps(obj).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json")
@@ -620,12 +667,65 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self.wfile.write(data)
 
     def _send_error(self, message, status=500):
-        self._send_json({"error": {"message": str(message), "type": "antigravity_bridge"}}, status)
+        from error_taxonomy import classify, public_error
+        classified = classify(message, status=status, stream_started=False)
+        self._send_json({"error": public_error(classified)}, status)
 
     def _record_bridge_request(self, out_resp, req_model, pool_name='Antigravity'):
-        record(pool_name, clean_model_name(req_model), out_resp.get('usage'), getattr(self, '_account_used', None))
+        audit = getattr(self, '_audit', None)
+        if audit is not None:
+            from request_audit import attach_response
+            attach_response(audit, out_resp)
+        if audit is not None and getattr(self, '_request_started_at', None) is not None:
+            audit['latency_ms'] = round((time.perf_counter() - self._request_started_at) * 1000, 2)
+        record(pool_name, clean_model_name(req_model), out_resp.get('usage'), getattr(self, '_account_used', None), audit=audit)
+
+    def _send_cached_stream(self, out, requested_model=None):
+        """Deliver a buffered provider response as OpenAI SSE."""
+        self.close_connection = True
+        self._stream_started = True
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream")
+        self.send_header("Cache-Control", "no-cache")
+        self.send_header("Connection", "close")
+        self.end_headers()
+        choice = (out.get('choices') or [{}])[0]
+        message = choice.get('message') or {}
+        model = requested_model or out.get('model', 'gemini-3.8-flash')
+        base = {
+            'id': out.get('id', 'chatcmpl-replay'), 'object': 'chat.completion.chunk',
+            'created': out.get('created', int(time.time())), 'model': model,
+        }
+        reasoning = message.get('reasoning_content')
+        if reasoning:
+            self.wfile.write(('data: ' + json.dumps({**base, 'choices': [
+                {'index': 0, 'delta': {'role': 'assistant', 'reasoning_content': reasoning}, 'finish_reason': None}
+            ]}) + '\n\n').encode())
+        if message.get('tool_calls'):
+            delta = {'role': 'assistant', 'content': message.get('content'), 'tool_calls': [dict(tool, index=i) for i, tool in enumerate(message['tool_calls'])]}
+            finish = 'tool_calls'
+        else:
+            delta = {'role': 'assistant', 'content': message.get('content') or ''}
+            finish = None
+        self.wfile.write(('data: ' + json.dumps({**base, 'choices': [
+            {'index': 0, 'delta': delta, 'finish_reason': finish}
+        ]}) + '\n\n').encode())
+        if finish is None:
+            self.wfile.write(('data: ' + json.dumps({**base, 'choices': [
+                {'index': 0, 'delta': {}, 'finish_reason': choice.get('finish_reason', 'stop')}
+            ]}) + '\n\n').encode())
+        usage = out.get('usage')
+        if usage:
+            self.wfile.write(('data: ' + json.dumps({**base, 'choices': [], 'usage': usage}) + '\n\n').encode())
+        self.wfile.write(b'data: [DONE]\n\n')
+        self.wfile.flush()
 
     def do_GET(self):
+        from client_identity import authorize, is_loopback
+        forwarded = self.headers.get('X-Real-IP') or self.headers.get('X-Forwarded-For', '').split(',')[0].strip()
+        peer = forwarded if forwarded else self.client_address[0]
+        if not is_loopback(peer) and not authorize(self, 'Antigravity'):
+            return
         path = urllib.parse.urlparse(self.path).path
         try:
             if path in ("/v1/models", "/models"):
@@ -639,160 +739,167 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self._send_error(e)
 
     def do_POST(self):
+        from client_identity import authorize
+        if not authorize(self, 'Antigravity'):
+            return
+        from request_audit import attach_provider_payload, capture
+        self._audit = None
+        self._stream_started = False
         path = urllib.parse.urlparse(self.path).path
         if path not in ("/v1/chat/completions", "/chat/completions", "/v1/completions"):
             self._send_json({"error": {"message": "Not found", "type": "not_found"}}, 404)
             return
         payload = {}
         self._account_used = None
+        self._durable_store = None
+        self._durable_key = None
+        self._durable_claimed = False
+        started_at = time.perf_counter()
+        self._request_started_at = started_at
         try:
-            payload = self._read_body()
+            started_at = self._request_started_at = time.perf_counter()
+            raw_payload = self._read_body()
+            payload = raw_payload
+            self._audit = capture(self, raw_payload)
+            self._audit['provider_label'] = 'Gemini'
+            self._audit['wire_input_bytes'] = int(self.headers.get('Content-Length', 0))
             if not isinstance(payload, dict) or not isinstance(payload.get('model'), str) or not payload['model']:
                 payload = {}
                 raise PoolError('A literal model ID is required',400)
+            if not isinstance(payload.get('messages'), list):
+                raise PoolError('messages must be an array', 400)
+            if not all(isinstance(message, dict) for message in payload['messages']):
+                raise PoolError('each message must be an object', 400)
+            if 'tools' in payload and not isinstance(payload.get('tools'), list):
+                raise PoolError('tools must be an array', 400)
             m = payload.get("model")
             n_msgs = len(payload.get("messages", []))
             n_tools = len(payload.get("tools", []))
             stream = payload.get("stream", False)
             print(f"[bridge] POST model={m} msgs={n_msgs} tools={n_tools} stream={stream}", file=sys.stderr)
             ag_body = to_antigravity_body(payload)
+            # The provider receives this nested Gemini body, so the Inspector
+            # must display it rather than the pre-adapter client payload.
+            attach_provider_payload(self._audit, ag_body)
+            self._audit['wire_provider_bytes'] = len(json.dumps(ag_body, ensure_ascii=False, separators=(',', ':')).encode('utf-8'))
+            self._audit['wire_tokens_estimate'] = max(1, (self._audit['wire_provider_bytes'] + 3) // 4)
+
+            # Journal the request before contacting the provider.  If this
+            # process is restarted after accepting the request, the next
+            # bridge instance can finish it and a caller retry can replay the
+            # durable response instead of losing the turn.
+            try:
+                self._durable_store = DurableRequestStore()
+                supplied_id = (self.headers.get('Idempotency-Key') or
+                               self.headers.get('X-Request-ID') or
+                               self.headers.get('X-Request-Id'))
+                scope = (getattr(self, '_client_identity', {}).get('credential_id') or 'local')
+                self._durable_key = request_key('Antigravity', path, payload, supplied_id, client_scope=scope)
+                state = self._durable_store.begin(
+                    key=self._durable_key,
+                    request_id=self._audit['request_id'],
+                    provider='Antigravity', model=m, endpoint=path, payload=payload,
+                )
+                if state['state'] == 'completed':
+                    stored = json.loads(state['response_json'])
+                    out = to_openai_response(stored, request_model=m)
+                    self._audit['replayed_after_restart'] = True
+                    self._record_bridge_request(out, m, "Antigravity")
+                    if stream:
+                        self._send_cached_stream(out, requested_model=m)
+                    else:
+                        self._send_json(out, 200)
+                    return
+                if state['state'] == 'in_progress':
+                    raise PoolError('Request is already being recovered; retry the same request', 503)
+                self._durable_claimed = state['state'] == 'claimed'
+            except PoolError:
+                raise
+            except ValueError as exc:
+                raise PoolError(str(exc), 409) from None
+            except (OSError, TypeError, sqlite3.Error) as exc:
+                # Request durability is best-effort; an unavailable journal
+                # must not turn a healthy provider into a gateway outage.
+                print(f'[bridge] durable request journal unavailable: {type(exc).__name__}', file=sys.stderr)
+                self._durable_store = None
+                self._durable_key = None
 
             if stream:
-                self._handle_stream(ag_body, requested_model=m)
+                self._handle_stream(ag_body, requested_model=m,
+                                    durable_store=self._durable_store, durable_key=self._durable_key)
                 return
 
             ag_resp = self._call_with_retry(ag_body)
+            if self._durable_store and self._durable_key:
+                self._durable_store.complete(self._durable_key, ag_resp, 200)
             out = to_openai_response(ag_resp, request_model=m)
+            self._audit['latency_ms'] = round((time.perf_counter() - started_at) * 1000, 2)
             self._record_bridge_request(out, m, "Antigravity")
             self._send_json(out, 200)
         except Exception as e:
             print(f"[bridge] POST ERROR: {e}", file=sys.stderr)
-            record('Antigravity',payload.get('model'),None,getattr(self,'_account_used',None),'FAILED')
-            self._send_error(e,getattr(e,'status',500))
-
-    def _handle_stream(self, ag_body, requested_model=None):
-        ag_resp = self._call_with_retry(ag_body)
-        try:
-            self.send_response(200)
-            self.send_header("Content-Type", "text/event-stream")
-            self.send_header("Cache-Control", "no-cache")
-            self.send_header("Connection", "close")
-            self.end_headers()
-            self.wfile.flush()
-        except Exception as e:
-            print(f"[bridge] stream header error: {e}", file=sys.stderr)
-            return
-
-        try:
-            out = to_openai_response(ag_resp, request_model=requested_model)
-            choice = (out.get("choices") or [{}])[0]
-            msg = choice.get("message") or {}
-            content = msg.get("content") or ""
-            reasoning = msg.get("reasoning_content")
-            tool_calls = msg.get("tool_calls")
-            model = requested_model or out.get("model", "gemini-3.8-flash")
-            created = out.get("created", int(time.time()))
-            rid = out.get("id", "chatcmpl")
-            print(f"[bridge] stream output text_len={len(content)} tool_calls={len(tool_calls or [])}", file=sys.stderr)
-
-            if reasoning:
-                chunk_r = {
-                    "id": rid,
-                    "object": "chat.completion.chunk",
-                    "created": created,
-                    "model": model,
-                    "choices": [{"index": 0, "delta": {"role": "assistant", "reasoning_content": reasoning}, "finish_reason": None}],
-                }
-                self.wfile.write(f"data: {json.dumps(chunk_r)}\n\n".encode("utf-8"))
-                self.wfile.flush()
-
-            if tool_calls:
-                chunk_t = {
-                    "id": rid,
-                    "object": "chat.completion.chunk",
-                    "created": created,
-                    "model": model,
-                    "choices": [{"index": 0, "delta": {"role": "assistant", "content": content or None, "tool_calls": tool_calls}, "finish_reason": "tool_calls"}],
-                }
-                self.wfile.write(f"data: {json.dumps(chunk_t)}\n\n".encode("utf-8"))
-                self.wfile.flush()
+            from error_taxonomy import classify
+            status = getattr(e, 'status', 500)
+            classified = classify(e, status=status, stream_started=False)
+            if self._audit is not None:
+                self._audit['error_code'] = classified.code.value
+                self._audit['latency_ms'] = round((time.perf_counter() - started_at) * 1000, 2)
+            if self._durable_store and self._durable_key and self._durable_claimed:
+                self._durable_store.fail(
+                    self._durable_key, classified.code.value,
+                    retryable=(status >= 500 or isinstance(e, (OSError, TimeoutError))),
+                )
+            record('Antigravity',payload.get('model'),None,getattr(self,'_account_used',None),'FAILED',audit=getattr(self,'_audit',None),error_code=classified.code.value)
+            if not self._stream_started:
+                self._send_error(e,status)
             else:
-                chunk_c = {
-                    "id": rid,
-                    "object": "chat.completion.chunk",
-                    "created": created,
-                    "model": model,
-                    "choices": [{"index": 0, "delta": {"role": "assistant", "content": content}, "finish_reason": None}],
-                }
-                self.wfile.write(f"data: {json.dumps(chunk_c)}\n\n".encode("utf-8"))
-                self.wfile.flush()
+                self.close_connection = True
 
-                chunk_stop = {
-                    "id": rid,
-                    "object": "chat.completion.chunk",
-                    "created": created,
-                    "model": model,
-                    "choices": [{"index": 0, "delta": {}, "finish_reason": "stop"}],
-                }
-                self.wfile.write(f"data: {json.dumps(chunk_stop)}\n\n".encode("utf-8"))
-                self.wfile.flush()
-
-            usage_dict = out.get("usage") or {}
-            self._record_bridge_request(out, requested_model or model, "Antigravity")
-            if usage_dict:
-                chunk_usage = {
-                    "id": rid,
-                    "object": "chat.completion.chunk",
-                    "created": created,
-                    "model": model,
-                    "choices": [],
-                    "usage": usage_dict
-                }
-                self.wfile.write(f"data: {json.dumps(chunk_usage)}\n\n".encode("utf-8"))
-                self.wfile.flush()
-            self.wfile.write(b"data: [DONE]\n\n")
-            self.wfile.flush()
-        except Exception as e:
-            print(f"[bridge] stream body error: {e}", file=sys.stderr)
-            chunk_err = {
-                "id": "chatcmpl-err",
-                "object": "chat.completion.chunk",
-                "created": int(time.time()),
-                "model": "gemini-3.8-flash",
-                "choices": [{"index": 0, "delta": {"role": "assistant", "content": f"Error: {e}"}, "finish_reason": "stop"}],
-            }
-            try:
-                self.wfile.write(f"data: {json.dumps(chunk_err)}\n\ndata: [DONE]\n\n".encode("utf-8"))
-                self.wfile.flush()
-            except Exception:
-                pass
+    def _handle_stream(self, ag_body, requested_model=None, durable_store=None, durable_key=None):
+        ag_resp = self._call_with_retry(ag_body)
+        out = to_openai_response(ag_resp, request_model=requested_model)
+        if durable_store and durable_key:
+            durable_store.complete(durable_key, ag_resp, 200)
+        self._record_bridge_request(out, requested_model or out['model'], "Antigravity")
+        self._send_cached_stream(out, requested_model=requested_model)
 
     def _call_with_retry(self, ag_body, attempts=None):
-        model = ag_body['model']
-        candidates = AG_POOL.candidates(model)
-        last_status = 429
-        for number in candidates:
+        def succeeded(number):
+            self._account_used = number
             try:
-                credentials = AG_POOL.credentials(number)
-                body = deepcopy(ag_body)
-                body['project'] = credentials.get('project_id') or body.get('project')
-                result = call_antigravity(body, credentials['token']['access_token'])
-                self._account_used = number
-                try:
-                    AG_POOL.promote(number)
-                except Exception:
-                    print('[gemini-bridge] Active-account synchronization failed after upstream success',file=sys.stderr)
-                return result
-            except (PoolError,ValueError,OSError) as exc:
-                last_status = getattr(exc,'status',401)
-                if last_status not in (401,403,429,503):
-                    raise
-                AG_POOL.exhausted(number,model,getattr(exc,'retry_after',60))
-        raise PoolError('No usable Antigravity account for this exact model; pool quota/authentication exhausted',last_status)
+                AG_POOL.promote(number)
+            except Exception:
+                print('[gemini-bridge] Active-account synchronization failed after upstream success',file=sys.stderr)
+        return call_with_retry(ag_body, attempts=attempts, on_success=succeeded)
 
 
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):
     daemon_threads = True
+
+
+def _recovery_worker(store):
+    """Finish requests left in progress by a previous bridge process."""
+    store.requeue_in_progress()
+    while True:
+        rows = store.pending(limit=4)
+        if not rows:
+            time.sleep(2)
+            continue
+        for row in rows:
+            key = row['request_key']
+            claimed = store.claim_pending(key)
+            if not claimed:
+                continue
+            try:
+                payload = json.loads(claimed['payload_json'] or '{}')
+                ag_body = to_antigravity_body(payload)
+                result = call_with_retry(ag_body)
+                store.complete(key, result, 200)
+                print(f"[gemini-bridge] recovered durable request model={claimed['model']}", flush=True)
+            except Exception as exc:
+                status = int(getattr(exc, 'status', 503) or 503)
+                store.fail(key, type(exc).__name__, retryable=status >= 500)
+                print(f"[gemini-bridge] durable recovery deferred: {type(exc).__name__}", file=sys.stderr, flush=True)
 
 
 def main():
@@ -802,6 +909,10 @@ def main():
     except Exception as e:
         print(f"[bridge] WARNING: Token check failed: {e}", file=sys.stderr)
 
+    recovery_store = DurableRequestStore()
+    recovery_store.initialize()
+    threading.Thread(target=_recovery_worker, args=(recovery_store,), daemon=True,
+                     name='durable-request-recovery').start()
     server = ThreadingHTTPServer((HOST, PORT), Handler)
     print(f"[bridge] OpenAI-compatible proxy listening on http://{HOST}:{PORT}")
     try:

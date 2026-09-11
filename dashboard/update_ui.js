@@ -71,7 +71,6 @@ async function readBuild() {
     const response = await fetch('/aipool/api/settings/version', {cache:'no-store', credentials:'same-origin'});
     if (!response.ok) throw new Error(`Version check returned HTTP ${response.status}`);
     const data = await response.json();
-    if (!data.running_commit) throw new Error('The running build could not be identified');
     return data;
 }
 function renderBuild(data) {

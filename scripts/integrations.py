@@ -14,13 +14,180 @@ import shutil
 import subprocess
 import sys
 import time
+import urllib.error
+import urllib.request
 
 ROOT = Path(__file__).resolve().parents[1]
+HERMES_MIN_API_RETRIES = 25
+BRIDGES_DIR = ROOT / "bridges"
+sys.path.insert(0, str(BRIDGES_DIR))
 sys.path.insert(0, str(ROOT / "cli"))
+from model_catalog import normalize_models
 from config_env import load
 load()
-sys.path.insert(0, str(ROOT / 'cli'))
 from account_manager import atomic_bytes
+
+# These are the exact stable provider IDs exposed to OpenClaw and the dashboard.
+# Do not add prefixes: the integration contract is gemini/codex.
+AGENT_PROVIDER_NAMES = {"gemini": "gemini", "codex": "codex"}
+LEGACY_PROVIDER_NAMES = {
+    "Gemini", "Codex", "Mixture", "mixture",
+    "aipool-gemini", "aipool-codex", "aipool-mixture",
+    "gemini_pool", "codex_pool",
+}
+
+
+def _live_models(kind: str, port: str) -> list[str]:
+    """Read the bridge's authoritative live catalog; never use a baked list."""
+    url = f"http://127.0.0.1:{int(port)}/v1/models"
+    request = urllib.request.Request(url, headers={"Authorization": "Bearer pool-key"})
+    try:
+        with urllib.request.urlopen(request, timeout=8) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (OSError, ValueError, urllib.error.URLError) as exc:
+        raise ValueError(f"{kind} live model catalog unavailable: {type(exc).__name__}") from None
+    rows = payload.get("data") if isinstance(payload, dict) else None
+    models = normalize_models(rows or [])
+    if not models:
+        raise ValueError(f"{kind} live model catalog was empty")
+    return models
+
+
+def _catalogs() -> dict[str, list[str]]:
+    return {
+        "gemini": _live_models("Gemini", os.environ.get("AG_BRIDGE_PORT", "8123")),
+        "codex": _live_models("Codex", os.environ.get("CODEX_BRIDGE_PORT", "8124")),
+    }
+
+
+def _desired_entries(agent: str, catalogs: dict[str, list[str]] | None = None) -> dict[str, dict]:
+    catalogs = catalogs or _catalogs()
+    result = {}
+    for kind, models in catalogs.items():
+        name = AGENT_PROVIDER_NAMES[kind]
+        url = f"http://127.0.0.1:{int(os.environ.get('AG_BRIDGE_PORT' if kind == 'gemini' else 'CODEX_BRIDGE_PORT', '8123' if kind == 'gemini' else '8124'))}/v1"
+        port_num = '8123' if kind == 'gemini' else ('8124' if kind == 'codex' else '8125')
+        url = f"http://127.0.0.1:{port_num}/v1"
+        if agent == "hermes":
+            result[name] = {
+                "api": url,
+                "api_key": "pool-key",
+                "transport": "codex_responses" if kind == "codex" else "chat_completions",
+                "default_model": models[0],
+                "models": {model: {"context_length": 1048576} for model in models},
+                "discover_models": True,
+            }
+        else:
+            result[name] = {
+                "baseUrl": url,
+                "apiKey": "pool-key",
+                "api": "openai-completions",
+                "models": [{"id": model, "name": model, "contextWindow": 1048576} for model in models],
+            }
+    return result
+
+
+def providers(agent, catalogs: dict[str, list[str]] | None = None):
+    return _desired_entries(agent, catalogs)
+
+
+def _is_legacy_pool(entry: object, agent: str) -> bool:
+    if not isinstance(entry, dict):
+        return False
+    endpoint = entry.get("api") if agent == "hermes" else entry.get("baseUrl")
+    return str(endpoint or "").rstrip("/") in {
+        "http://127.0.0.1:8123/v1", "http://127.0.0.1:8124/v1"
+    }
+
+
+def merged(agent, original, catalogs: dict[str, list[str]] | None = None):
+    data = copy.deepcopy(original)
+    desired = providers(agent, catalogs)
+    if agent == "hermes":
+        dest = data.setdefault("providers", {})
+        if not isinstance(dest, dict):
+            raise ValueError("Invalid Hermes provider map; no settings were discarded")
+        # Remove only this integration's obsolete identities.  MoA is a separate
+        # top-level section and is deliberately never traversed or rewritten.
+        for key in list(dest):
+            if key in LEGACY_PROVIDER_NAMES:
+                del dest[key]
+        # Keep Hermes' legacy custom_providers list untouched.  It contains the
+        # user's ChatGPT/Gemini subscription entries and is also referenced by
+        # MoA.  This integration owns only the modern `providers:` map.
+        for key, entry in desired.items():
+            old = dest.get(key)
+            if old is not None and not isinstance(old, dict):
+                raise ValueError(f"Provider name {key} is already used by a non-provider value")
+            dest[key] = {**(old or {}), **entry}
+        agent_config = data.setdefault("agent", {})
+        if not isinstance(agent_config, dict):
+            raise ValueError("Invalid Hermes agent configuration; nothing changed")
+        try:
+            configured_retries = int(agent_config.get("api_max_retries", 0))
+        except (TypeError, ValueError):
+            configured_retries = 0
+        agent_config["api_max_retries"] = max(HERMES_MIN_API_RETRIES, configured_retries)
+    else:
+        models_config = data.setdefault("models", {})
+        if not isinstance(models_config, dict):
+            raise ValueError("Invalid OpenClaw models map; no settings were discarded")
+        dest = models_config.setdefault("providers", {})
+        if not isinstance(dest, dict):
+            raise ValueError("Invalid OpenClaw provider map; no settings were discarded")
+        for key in list(dest):
+            if key in LEGACY_PROVIDER_NAMES:
+                del dest[key]
+        for key, entry in desired.items():
+            old = dest.get(key)
+            if old is not None and not isinstance(old, dict):
+                raise ValueError(f"Provider name {key} is already used by a non-provider value")
+            dest[key] = {**(old or {}), **entry}
+        defaults = data.setdefault("agents", {}).setdefault("defaults", {})
+        if defaults.get("models"):
+            for old_key in LEGACY_PROVIDER_NAMES:
+                for model_key in list(defaults["models"]):
+                    if str(model_key).startswith(old_key + "/"):
+                        del defaults["models"][model_key]
+            for key, entry in desired.items():
+                for model in entry["models"]:
+                    defaults["models"].setdefault(key + "/" + model["id"], {})
+    return data
+
+
+
+def _ensure_openclaw_model_picker_compat() -> str | None:
+    """Keep AiPool's OpenAI-compatible ``codex`` provider visible in /models.
+
+    OpenClaw reserves the same ID for its retired CLI runtime in some releases.
+    The integration button repairs the installed bundle when that exact guard is
+    present, so a package update can be recovered by pressing Configure again.
+    """
+    if shutil.which('openclaw') is None:
+        return None
+    try:
+        resolved = subprocess.run(
+            ['node', '-p', "require.resolve('openclaw/package.json')"],
+            capture_output=True, text=True, timeout=10,
+            env={**os.environ, 'NODE_PATH': '/usr/local/lib/node_modules'},
+        )
+        roots = []
+        if resolved.returncode == 0 and resolved.stdout.strip():
+            roots.append(Path(resolved.stdout.strip()).parent / 'dist')
+        roots.extend([Path('/usr/local/lib/node_modules/openclaw/dist'), Path('/usr/lib/node_modules/openclaw/dist')])
+        for root in roots:
+            for path in sorted(root.glob('model-runtime-aliases-*.js')):
+                text = path.read_text(encoding='utf-8')
+                old = 'new Set(["codex", "codex-cli"])'
+                new = 'new Set(["codex-cli"])'
+                if old in text:
+                    path.write_text(text.replace(old, new, 1), encoding='utf-8')
+                    return str(path)
+                if new in text:
+                    return str(path)
+    except (OSError, subprocess.SubprocessError, UnicodeError):
+        return None
+    return None
 
 
 def config_path(agent):
@@ -60,93 +227,6 @@ def read_config(agent, path):
     return data
 
 
-def providers(agent):
-    result = {}
-    for name, port, transport, models in [
-        ('gemini', os.environ.get('AG_BRIDGE_PORT', '8123'), 'chat_completions', [
-            'gemini-3.8-flash',
-            'gemini-3.7-flash',
-            'gemini-3.6-flash',
-            'gemini-3.1-pro',
-            'claude-sonnet-4-6',
-        ]),
-        ('codex', os.environ.get('CODEX_BRIDGE_PORT', '8124'), 'codex_responses', [
-            'gpt-6-astra',
-            'gpt-5.6-luna',
-            'gpt-5.6-sol',
-            'gpt-5.6-terra',
-            'gpt-5.5',
-            'gpt-5.4-mini',
-        ])
-    ]:
-        url = f'http://127.0.0.1:{int(port)}/v1'
-        if agent == 'hermes':
-            result['aipool-' + name] = {
-                'api': url,
-                'api_key': 'pool-key',
-                'transport': transport,
-                'default_model': models[0],
-                'models': {m: {'context_length': 1048576} for m in models},
-                'discover_models': True,
-            }
-        else:
-            result['aipool-' + name] = {
-                'baseUrl': url,
-                'apiKey': 'pool-key',
-                'api': 'openai-responses' if name == 'codex' else 'openai-completions',
-                'models': [{'id': m, 'name': m, 'contextWindow': 1048576} for m in models]
-            }
-    return result
-
-
-def merged(agent, original):
-    data = copy.deepcopy(original)
-    desired = providers(agent)
-    if agent == 'hermes':
-        legacy = data.get('custom_providers')
-        if isinstance(legacy, dict):
-            # Convert only the known all-dicts shape. Any other shape is
-            # foreign to this suite and must survive byte-for-byte.
-            if all(isinstance(entry, dict) for entry in legacy.values()):
-                data['custom_providers'] = [dict(entry, name=entry.get('name', name)) for name, entry in legacy.items()]
-        for entry in data.get('custom_providers', []) or []:
-            if not isinstance(entry, dict):
-                continue  # Unknown legacy entry: left untouched, never fatal.
-            if entry.get('name') in ('codex', 'gemini'):
-                pool = desired['aipool-' + entry['name']]
-                if entry.get('base_url') == pool['api']:
-                    entry['api_mode'] = pool['transport']
-        dest = data.setdefault('providers', {})
-    else:
-        dest = data.setdefault('models', {}).setdefault('providers', {})
-        # Repair only entries created by prior suite releases at these exact local endpoints.
-        for legacy, kind in [('codex_pool', 'codex'), ('gemini_pool', 'gemini')]:
-            entry = dest.get(legacy)
-            expected = desired['aipool-' + kind]
-            if isinstance(entry, dict) and entry.get('baseUrl') == expected['baseUrl']:
-                entry['models'] = [{'id': model, 'name': model} if isinstance(model, str) else model for model in entry.get('models', [])]
-                entry['api'] = expected['api']
-    if not isinstance(dest, dict):
-        raise ValueError('Invalid provider map; no settings were discarded')
-    for key, entry in desired.items():
-        if key in dest:
-            old = dest[key]
-            if not isinstance(old, dict) or (old.get('api') if agent == 'hermes' else old.get('baseUrl')) != (entry.get('api') if agent == 'hermes' else entry.get('baseUrl')):
-                raise ValueError(f'Provider name {key} is already used by a different endpoint; nothing changed')
-            # Keep unrelated per-provider options; suite transport/catalog are explicit.
-            dest[key] = {**old, **entry}
-        else:
-            dest[key] = entry
-    if agent == 'openclaw':
-        defaults = data.setdefault('agents', {}).setdefault('defaults', {})
-        # Only extend an existing allowlist; absent allowlists remain unrestricted.
-        if defaults.get('models'):
-            for key, entry in desired.items():
-                for model in entry['models']:
-                    defaults['models'].setdefault(key + '/' + model['id'], {})
-    return data
-
-
 def _clean_env(agent, path):
     env = {k: v for k, v in os.environ.items() if not k.startswith(('HERMES_', 'OPENCLAW_'))}
     if agent == 'hermes':
@@ -179,7 +259,11 @@ def apply_native(agent, path, data):
     """Inject via the agent's own CLI. Returns True only when applied and verified natively."""
     if os.environ.get('AIPOOL_INTEGRATION_OFFLINE') == '1':
         return False
-    desired = providers(agent)
+    desired = (
+        data.get('providers', {})
+        if agent == 'hermes'
+        else data.get('models', {}).get('providers', {})
+    )
     binary = shutil.which('openclaw' if agent == 'openclaw' else 'hermes')
     if not binary:
         return False
@@ -212,11 +296,21 @@ def apply_native(agent, path, data):
                                         env=env, capture_output=True, text=True, timeout=60)
                 if result.returncode:
                     raise ValueError(result.stderr.strip() or result.stdout.strip() or f'hermes config set {name} failed')
-            native_evidence = 'hermes config set providers.aipool-* (native CLI)'
+            target_retries = int((data.get('agent') or {}).get('api_max_retries', HERMES_MIN_API_RETRIES))
+            retry_result = subprocess.run(
+                [binary, 'config', 'set', 'agent.api_max_retries', str(max(HERMES_MIN_API_RETRIES, target_retries)), '--force'],
+                env=env, capture_output=True, text=True, timeout=60,
+            )
+            if retry_result.returncode:
+                raise ValueError(retry_result.stderr.strip() or retry_result.stdout.strip() or 'hermes retry policy update failed')
+            native_evidence = 'hermes config set providers (native CLI) + JSON readback'
             for name, entry in desired.items():
                 value, err = _cli_get_json(binary, env, 'config', 'get', 'providers.' + name, '--json')
                 if not isinstance(value, dict) or value.get('api') != entry['api'] or value.get('transport') != entry['transport']:
                     raise ValueError(f'hermes config get readback mismatch for {name}: {err or value}')
+            retry_value, retry_err = _cli_get_json(binary, env, 'config', 'get', 'agent.api_max_retries', '--json')
+            if int(retry_value or 0) < HERMES_MIN_API_RETRIES:
+                raise ValueError(f'hermes retry policy readback mismatch: {retry_err or retry_value}')
     except (OSError, ValueError, subprocess.SubprocessError) as exc:
         # Native injection must never leave a half-written config behind.
         try:
@@ -225,7 +319,10 @@ def apply_native(agent, path, data):
             pass
         raise ValueError(f'Native {agent} CLI injection failed ({exc}); falling back to guarded file edit') from None
     # Cross-check with our own reader so the file on disk equals the intended merge.
-    if read_config(agent, path).get('providers' if agent == 'hermes' else 'models', {}) != data.get('providers' if agent == 'hermes' else 'models', {}):
+    actual_config = read_config(agent, path)
+    if actual_config.get('providers' if agent == 'hermes' else 'models', {}) != data.get('providers' if agent == 'hermes' else 'models', {}) or (
+        agent == 'hermes' and int((actual_config.get('agent') or {}).get('api_max_retries', 0) or 0) < HERMES_MIN_API_RETRIES
+    ):
         try:
             atomic_bytes(path, before)
         except OSError:
@@ -244,6 +341,11 @@ def status(agent):
         actual = data.get('providers', {}) if agent == 'hermes' else data.get('models', {}).get('providers', {})
         expected = providers(agent)
         result['connected'] = all(isinstance(actual.get(k), dict) and all(actual[k].get(field) == value for field, value in entry.items()) for k, entry in expected.items())
+        if agent == 'hermes':
+            try:
+                result['connected'] = result['connected'] and int((data.get('agent') or {}).get('api_max_retries', 0)) >= HERMES_MIN_API_RETRIES
+            except (TypeError, ValueError):
+                result['connected'] = False
         result['verified'] = result['connected']
         result['providers'] = list(expected)
         result['message'] = 'Configuration verified; existing sessions keep their selected provider.' if result['connected'] else 'Pool providers are missing or mismatched.'
@@ -253,6 +355,10 @@ def status(agent):
 
 
 def integrate(agent):
+    if agent == 'openclaw':
+        # Keep the provider picker repair part of the dashboard install flow;
+        # package upgrades may recreate the hashed OpenClaw bundle file.
+        _ensure_openclaw_model_picker_compat()
     path = config_path(agent)
     original = read_config(agent, path)
     before = path.read_bytes()
@@ -281,6 +387,16 @@ def integrate(agent):
             if read_config(agent, path) != data:
                 atomic_bytes(path, before)
                 raise ValueError('Configuration readback failed; original restored')
+    if agent == 'openclaw':
+        # Provider-picker compatibility is a bundle-level fix; reload the
+        # gateway so Telegram reads the repaired catalog immediately.
+        try:
+            subprocess.run(['openclaw', 'gateway', 'restart'], capture_output=True,
+                           text=True, timeout=60, check=True)
+        except (OSError, subprocess.SubprocessError):
+            # Config installation remains valid even when no gateway service is
+            # installed; status/readback below is still authoritative.
+            pass
     check = status(agent)
     if not check['verified']:
         if path.read_bytes() != before:
@@ -289,7 +405,7 @@ def integrate(agent):
     check.update(success=True, changed=data != original, method=method, evidence=evidence,
                  backup=str(backup) if data != original and method == 'file-edit' else None,
                  message=f'Providers injected {("via " + method.replace("-", " ")) if method != "already-present" else "already"}; verified with readback. No default model, selected provider or fallback was changed. Select the new pool provider in your agent to route requests through this suite.',
-                 selection_examples=['/model custom:aipool-gemini:gemini-3.8-flash-tiered', '/model custom:aipool-codex:gpt-6-astra'] if agent == 'hermes' else ['/model aipool-gemini/gemini-3.8-flash-tiered', '/model aipool-codex/gpt-6-astra'])
+                 selection_examples=['/model gemini/gemini-3.8-flash', '/model codex/gpt-6-astra'])
     return check
 
 

@@ -2,13 +2,14 @@
 Telegram Bot Long-Polling Daemon for Dashboard Access
 """
 import os
-import sys
 import json
+import html
 import time
 import urllib.request
 import urllib.parse
-from server import auth_manager
+from app import TokenAuthManager
 
+auth_manager = TokenAuthManager()
 BOT_TOKEN = os.environ.get("TG_BOT_TOKEN", "")
 API_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 DASHBOARD_BASE_URL = os.environ.get("POOL_DASHBOARD_URL", "http://127.0.0.1:8444")
@@ -27,15 +28,21 @@ def call_tg(method: str, payload: dict = None):
         with urllib.request.urlopen(req, timeout=35) as resp:
             return json.loads(resp.read().decode())
     except Exception as e:
-        print(f"Telegram API Error ({method}): {e}")
+        # urllib errors can echo the request URL, which contains the bot token.
+        print(f"Telegram API Error ({method}): {type(e).__name__}")
         return None
 
 def send_dashboard_link(chat_id: int, user_id: int):
+    allowed = {x.strip() for x in os.environ.get('AIPOOL_ADMIN_USER_IDS', '').split(',') if x.strip()}
+    # Administrative access is fail-closed and only delivered in a private chat.
+    if str(user_id) not in allowed or chat_id != user_id:
+        return
     magic_link = auth_manager.generate_magic_link(DASHBOARD_BASE_URL, user_id)
+    safe_link = html.escape(magic_link, quote=True)
     text = (
         "🔐 <b>AI Pool Dashboard Access Link</b>\n\n"
         "Hello, a secure one-time authentication link has been generated for you:\n\n"
-        f'🔗 <b><a href="{magic_link}">Click here to open AI Pool Dashboard</a></b>\n\n'
+        f'🔗 <b><a href="{safe_link}">Click here to open AI Pool Dashboard</a></b>\n\n'
         "⏱️ <i>Link validity: 30 minutes (single device registration).</i>\n"
         "🛡️ <i>Independent Gateways: Gemini (:8123) & Codex (:8124).</i>"
     )
@@ -53,6 +60,9 @@ def send_dashboard_link(chat_id: int, user_id: int):
     })
 
 def run_bot():
+    if not BOT_TOKEN:
+        print('Telegram bot disabled: TG_BOT_TOKEN is not configured.')
+        return
     print("Starting Telegram Bot listener (@YJReportbot)...")
     offset = 0
     # Clear any stale webhooks
@@ -61,6 +71,8 @@ def run_bot():
     while True:
         try:
             updates_res = call_tg("getUpdates", {"offset": offset, "timeout": 2})
+            if not updates_res or not updates_res.get("ok"):
+                time.sleep(2)
             if updates_res and updates_res.get("ok"):
                 for u in updates_res.get("result", []):
                     offset = u["update_id"] + 1

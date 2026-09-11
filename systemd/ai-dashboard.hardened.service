@@ -1,0 +1,28 @@
+[Unit]
+Description=AiPool - ai-dashboard (hardened, staged)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+Group=root
+WorkingDirectory=/opt/aipool/dashboard
+ExecStart=/opt/aipool/.venv/bin/python -u /opt/aipool/dashboard/server.py
+EnvironmentFile=/etc/aipool/aipool.env
+Environment=PYTHONUNBUFFERED=1
+Restart=on-failure
+RestartSec=3
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/aipool /var/log/aipool
+RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6
+CapabilityBoundingSet=
+LockPersonality=true
+MemoryDenyWriteExecute=true
+RestrictSUIDSGID=true
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target

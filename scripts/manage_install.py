@@ -36,6 +36,40 @@ def link(source, target):
     os.replace(tmp, target)
 
 
+def ensure_cli_tools():
+    """Ensure the suite-owned ag/c launchers and official Codex CLI exist."""
+    required = (ROOT / 'cli' / 'ag', ROOT / 'cli' / 'cx')
+    missing = [str(path) for path in required if not path.is_file()]
+    if missing:
+        raise ValueError('Suite CLI files missing: ' + ', '.join(missing))
+    installer = ROOT / 'scripts' / 'install_codex.py'
+    result = subprocess.run([sys.executable, str(installer)], capture_output=True, text=True, timeout=300)
+    if result.returncode:
+        raise ValueError('Codex CLI installation failed: ' + (result.stderr or result.stdout)[-2000:])
+    print((result.stdout or '').strip())
+    return True
+
+
+def integrate_installed_agents():
+    """Use native agent CLIs/configs when present; never create guessed configs."""
+    script = ROOT / 'scripts' / 'integrations.py'
+    results = {}
+    for agent, binary in (('hermes', 'hermes'), ('openclaw', 'openclaw')):
+        config = (Path(os.environ.get('HERMES_HOME', Path.home() / '.hermes')) / 'config.yaml'
+                  if agent == 'hermes' else
+                  Path(os.environ.get('OPENCLAW_CONFIG_PATH', Path(os.environ.get('OPENCLAW_STATE_DIR', Path.home() / '.openclaw')) / 'openclaw.json')))
+        if not shutil.which(binary) or not config.is_file():
+            results[agent] = {'skipped': True, 'reason': 'agent CLI or config not installed'}
+            continue
+        result = subprocess.run([sys.executable, str(ROOT / 'scripts' / ('setup-hermes.py' if agent == 'hermes' else 'setup-openclaw.py'))], capture_output=True, text=True, timeout=120)
+        if result.returncode:
+            raise ValueError(f'{agent} integration failed: ' + (result.stderr or result.stdout)[-2000:])
+        results[agent] = json.loads(result.stdout.strip().splitlines()[-1])
+        if not results[agent].get('verified'):
+            raise ValueError(f'{agent} integration did not verify readback')
+    return results
+
+
 def install_cli(prefix):
     bindir = prefix / 'bin'
     links = {'ag': 'ag', 'cx': 'cx', 'c': 'cx', 'antigravity-account-switch': 'antigravity-account-switch', 'codex-account-switch': 'codex-account-switch', 'codex-account-query': 'codex-account-query', 'agusage': 'ag', 'agswitch': 'ag', 'aglist': 'ag', 'aghelp': 'ag', 'cusage': 'cx', 'cswitch': 'cx', 'clist': 'cx', 'chelp': 'cx'}
@@ -159,7 +193,30 @@ def ensure_dependencies():
 def render_unit(name, relative, prefix):
     script = ROOT / relative
     path = os.pathsep.join([str(prefix / 'bin'), str(Path.home() / '.local/bin'), '/usr/local/bin', '/usr/bin', '/bin'])
-    return '\n'.join(['[Unit]', f'Description=AiPool - {name}', 'After=network.target', '', '[Service]', 'Type=simple', f'WorkingDirectory={str(script.parent).replace("%", "%%")}', f'ExecStart={quote(ROOT / ".venv/bin/python")} {quote(script)}', f'Environment={quote("PATH=" + path)}', f'EnvironmentFile=-{str(ROOT / "config.env").replace("%", "%%")}', 'Restart=on-failure', 'RestartSec=3', '', '[Install]', 'WantedBy=default.target', ''])
+    env_files = [f'EnvironmentFile=-{str(ROOT / "config.env").replace("%", "%%")}']
+    # The Telegram bot must issue tokens into the same auth DB consumed by
+    # the deployed dashboard.  Keep this optional for generic installations.
+    if name == 'ai-bot':
+        env_files.append('EnvironmentFile=-/etc/aipool/aipool.env')
+    lines = [
+        '[Unit]',
+        f'Description=AiPool - {name}',
+        'After=network.target',
+        '',
+        '[Service]',
+        'Type=simple',
+        f'WorkingDirectory={str(script.parent).replace("%", "%%")}',
+        f'ExecStart={quote(ROOT / ".venv/bin/python")} {quote(script)}',
+        f'Environment={quote("PATH=" + path)}',
+        *env_files,
+        'Restart=on-failure',
+        'RestartSec=3',
+        '',
+        '[Install]',
+        'WantedBy=default.target',
+        '',
+    ]
+    return '\\n'.join(lines)
 
 
 def installed_prefix():
@@ -204,8 +261,17 @@ def main():
     if not args.cli_only and not service_available():
         raise ValueError('No systemd user session. Run install.sh --cli-only for CLI tools; enable a user systemd session before installing background services. Do not run with sudo on a desktop.')
     prefix = (args.prefix or Path(os.environ['AIPOOL_PREFIX']) if os.environ.get('AIPOOL_PREFIX') else args.prefix or installed_prefix()).expanduser().absolute()
+    if args.update:
+        state_file = STATE / 'installation.json'
+        if not state_file.is_file():
+            raise ValueError('Cannot update before an installation manifest exists; run install.sh first')
+        print(f'Updating existing AiPool installation at {prefix}')
     if not args.cli_only:
         ensure_dependencies()
+    if os.environ.get('AIPOOL_SKIP_NETWORK_INSTALL') != '1':
+        ensure_cli_tools()
+    else:
+        print('CLI dependency installation skipped by explicit test flag')
     links = install_cli(prefix)
     STATE.mkdir(parents=True, exist_ok=True, mode=0o700)
     prior = {}
@@ -215,6 +281,8 @@ def main():
         pass
     manifest = {'root': str(ROOT), 'prefix': str(prefix), 'links': links, 'services': not args.cli_only or (prior.get('root') == str(ROOT) and bool(prior.get('services')))}
     (STATE / 'installation.json').write_text(json.dumps(manifest, indent=2) + '\n')
+    integration_status = integrate_installed_agents()
+    print('Agent integrations:', json.dumps(integration_status, ensure_ascii=False))
     if args.cli_only:
         print('CLI-only installation completed. No services or account files changed.')
         return
@@ -241,6 +309,9 @@ def main():
         run(['systemctl', '--user', 'enable', name + '.service'])
         run(['systemctl', '--user', 'restart', name + '.service'])
         run(['systemctl', '--user', 'is-active', '--quiet', name + '.service'])
+    if not args.cli_only:
+        integration_status = integrate_installed_agents()
+        print('Agent integrations:', json.dumps(integration_status, ensure_ascii=False))
     if not args.no_dashboard:
         port = os.environ.get('DASHBOARD_PORT', '8444')
         deadline = time.monotonic() + 45

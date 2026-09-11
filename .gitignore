@@ -25,3 +25,14 @@ __pycache__/
 *.sqlite3-wal
 *.sqlite3-shm
 .DS_Store
+oauth-client.private.json
+# Runtime and private credentials
+auth.db
+auth.db-journal
+*.db
+*.db-journal
+client-identities.json
+oauth-client.private.json
+artifacts/
+reports/
+work-progress.md

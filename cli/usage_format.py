@@ -1,13 +1,12 @@
 """Usage rendering keeps provider values separate from unavailable data."""
 import datetime
 import json
-import os
 from pathlib import Path
 import subprocess
 import sys
 import tempfile
 import time
-from account_manager import ROOT, ag_module, atomic_bytes, codex_env, encoded, private_dir, read_json
+from account_manager import ROOT, ag_module, atomic_bytes, codex_env, encoded, read_json
 
 
 def bar(value):
@@ -30,33 +29,33 @@ def countdown(value):
 
 def inspect(manager, number):
     with manager.locked():
-        path = manager.credential(number)
-        data = read_json(path)
-        snapshot = path.read_bytes()
-    if manager.ag:
-        provider = ag_module()
-        fresh, _, meta = provider.refresh(data)
-        project = fresh.get('project_id') or data.get('project_id')
-        if not project:
-            raise ValueError('No Code Assist project on this account yet; run: ' + manager.prefix + ' switch ' + number + ' --verify to onboard it')
-        info = {'status':'OK', 'email':meta['email'], 'usage':provider.quota({**fresh, 'project_id':project})}
-    else:
-        with tempfile.TemporaryDirectory(prefix='.query-', dir=manager.store) as home:
-            atomic_bytes(Path(home) / 'auth.json', encoded(data))
-            env = codex_env(home)
-            result = subprocess.run([sys.executable, str(ROOT / 'cli/codex-account-query'), 'usage'], env=env, capture_output=True, text=True, timeout=50)
-            if result.returncode:
-                raise ValueError('Codex account query failed')
-            info = json.loads(result.stdout)
-            fresh = read_json(Path(home) / 'auth.json')
-    with manager.locked():
-        # CAS: do not overwrite credentials that another process refreshed during the query.
-        if path.is_file() and path.read_bytes() == snapshot:
-            atomic_bytes(path, encoded(fresh))
-            if manager.active() == number and manager.live.is_file() and manager.live.read_bytes() == snapshot:
-                atomic_bytes(manager.live, encoded(fresh))
-    return info
-
+        with manager.locked():
+            path = manager.credential(number)
+            data = read_json(path)
+            snapshot = path.read_bytes()
+        if manager.ag:
+            provider = ag_module()
+            fresh, _, meta = provider.refresh(data)
+            project = fresh.get('project_id') or data.get('project_id')
+            if not project:
+                raise ValueError('No Code Assist project on this account yet; run: ' + manager.prefix + ' switch ' + number + ' --verify to onboard it')
+            info = {'status':'OK', 'email':meta['email'], 'usage':provider.quota({**fresh, 'project_id':project})}
+        else:
+            with tempfile.TemporaryDirectory(prefix='.query-', dir=manager.store) as home:
+                atomic_bytes(Path(home) / 'auth.json', encoded(data))
+                env = codex_env(home)
+                result = subprocess.run([sys.executable, str(ROOT / 'cli/codex-account-query'), 'usage'], env=env, capture_output=True, text=True, timeout=50)
+                if result.returncode:
+                    raise ValueError('Codex account query failed')
+                info = json.loads(result.stdout)
+                fresh = read_json(Path(home) / 'auth.json')
+        with manager.locked():
+            # CAS: do not overwrite credentials that another process refreshed during the query.
+            if path.is_file() and path.read_bytes() == snapshot:
+                atomic_bytes(path, encoded(fresh))
+                if manager.active() == number and manager.live.is_file() and manager.live.read_bytes() == snapshot:
+                    atomic_bytes(manager.live, encoded(fresh))
+        return info
 
 def show_account(manager, number, short=False):
     email = '-'
@@ -94,7 +93,9 @@ def show_account(manager, number, short=False):
         if not short:
             lines.append('Plan: ' + str(info.get('planType') or 'N/A').capitalize())
         windows = {w.get('windowDurationMins'):w for w in info.get('windows') or []}
-        for duration, label in [(300, '5-hour'), (10080, 'Weekly')]:
+        is_free = str(info.get('planType') or '').lower() == 'free'
+        slots = [(43200, 'Monthly')] if is_free and (43200 in windows or not any(d in windows for d in (300, 10080))) else [(300, '5-hour'), (10080, 'Weekly')]
+        for duration, label in slots:
             win = windows.get(duration, {})
             used = win.get('usedPercent')
             text = 'N/A' if used is None else f'{bar(100 - used)} {max(0, min(100, round(100 - used)))}% left'

@@ -57,14 +57,45 @@ def version():
     data = {'version':'unknown', 'commit':None, 'commit_date':None, 'commit_msg':None, 'dirty':False}
     try:
         data.update(json.loads((ROOT / 'version.json').read_text()))
+    except (OSError, ValueError):
+        pass
+    try:
         data['commit'] = git('rev-parse', 'HEAD')
         data['short_commit'] = data['commit'][:8]
         stamp = int(git('log', '-1', '--format=%ct'))
         data['commit_date'] = time.strftime('%m/%d %H:%M', time.localtime(stamp))
         data['commit_msg'] = git('log', '-1', '--format=%s')
-        data['dirty'] = bool(git('status', '--porcelain', '--untracked-files=no'))
+        data['dirty'] = bool(git('status', '--porcelain', '--untracked-files=all'))
     except (OSError, ValueError, subprocess.SubprocessError):
-        pass
+        # When running from a deployment directory without .git, use an
+        # explicit operator-provided metadata source or known deployment
+        # locations. Never depend on another developer's absolute checkout.
+        configured_git = os.environ.get('AIPOOL_GIT_DIR')
+        candidates = ([Path(configured_git).expanduser()] if configured_git else [])
+        candidates.extend((ROOT / '.git', Path('/opt/aipool/.git'), Path('/var/lib/aipool/app/.git')))
+        for git_dir in candidates:
+            try:
+                if not git_dir.is_dir():
+                    continue
+                res = subprocess.run(['git', '--git-dir', str(git_dir), 'rev-parse', 'HEAD'], capture_output=True, text=True, timeout=5)
+                if res.returncode != 0 or not res.stdout.strip():
+                    continue
+                data['commit'] = res.stdout.strip()
+                data['short_commit'] = data['commit'][:8]
+                res_date = subprocess.run(['git', '--git-dir', str(git_dir), 'log', '-1', '--format=%ct'], capture_output=True, text=True, timeout=5)
+                if res_date.returncode == 0 and res_date.stdout.strip().isdigit():
+                    data['commit_date'] = time.strftime('%m/%d %H:%M', time.localtime(int(res_date.stdout.strip())))
+                res_msg = subprocess.run(['git', '--git-dir', str(git_dir), 'log', '-1', '--format=%s'], capture_output=True, text=True, timeout=5)
+                if res_msg.returncode == 0:
+                    data['commit_msg'] = res_msg.stdout.strip()
+                break
+            except (OSError, ValueError, subprocess.SubprocessError):
+                continue
+        if not data.get('short_commit') and data.get('commit'):
+            data['short_commit'] = data['commit'][:8]
+        if not data.get('commit'):
+            data['commit'] = 'release'
+            data['short_commit'] = 'release'
     return data
 
 
@@ -103,6 +134,8 @@ def update(cli_only=False, no_dashboard=False):
                 print(git('merge', '--ff-only', 'origin/main'), flush=True)
             result['status'] = 'installing'
             save(result)
+            # Re-run the idempotent installer: dependencies, CLI wrappers, services,
+            # and verified Hermes/OpenClaw provider integration are reconciled together.
             command = [sys.executable, str(ROOT / 'scripts/manage_install.py'), '--update']
             if cli_only:
                 command.append('--cli-only')

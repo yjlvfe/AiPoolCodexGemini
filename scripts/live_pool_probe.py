@@ -1,12 +1,20 @@
 """Explicit live smoke test: small inference, no account/model setting changes."""
 import argparse
 import json
+import os
 import sqlite3
+import sys
 import urllib.request
 import urllib.error
 from pathlib import Path
 
 ROOT=Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / 'cli'))
+from config_env import load
+if 'AIPOOL_CONFIG_ENV' not in os.environ and Path('/etc/aipool/aipool.env').is_file():
+    os.environ['AIPOOL_CONFIG_ENV'] = '/etc/aipool/aipool.env'
+load()
+DB_PATH = Path(os.environ.get('AUTH_DB_PATH', ROOT / 'dashboard/auth.db'))
 p=argparse.ArgumentParser()
 p.add_argument('provider',choices=['codex','antigravity'])
 p.add_argument('model')
@@ -14,7 +22,7 @@ a=p.parse_args()
 port=8124 if a.provider=='codex' else 8123
 pool='Codex' if a.provider=='codex' else 'Antigravity'
 path='/v1/responses' if a.provider=='codex' else '/v1/chat/completions'
-with sqlite3.connect('file:'+str(ROOT/'dashboard/auth.db')+'?mode=ro',uri=True) as c:
+with sqlite3.connect('file:'+str(DB_PATH)+'?mode=ro',uri=True) as c:
     before=c.execute('SELECT coalesce(max(id),0) FROM request_events').fetchone()[0]
 payload={'model':a.model,'stream':False}
 if a.provider=='codex':payload.update(input=[{'role':'user','content':'Reply with exactly POOL_OK.'}],instructions='',store=False)
@@ -37,7 +45,7 @@ assert text.strip()=='POOL_OK', 'Upstream response differs from probe acceptance
 import time
 rows=[]
 for _ in range(30):
-    with sqlite3.connect('file:'+str(ROOT/'dashboard/auth.db')+'?mode=ro',uri=True) as c:
+    with sqlite3.connect('file:'+str(DB_PATH)+'?mode=ro',uri=True) as c:
         rows=c.execute('SELECT id,model,pool,account,status,prompt_tokens,completion_tokens FROM request_events WHERE id>? AND pool=? AND model=? ORDER BY id DESC',(before,pool,a.model)).fetchall()
     if rows:break
     time.sleep(.1)

@@ -1,5 +1,4 @@
 """Built-in Google OAuth, validation and Code Assist onboarding. No Hermes/agy dependency."""
-import ast
 import base64
 import hashlib
 from http.server import BaseHTTPRequestHandler, HTTPServer
@@ -24,18 +23,16 @@ SCOPES = ['https://www.googleapis.com/auth/cloud-platform', 'https://www.googlea
 
 
 def oauth_client():
-    client = os.environ.get('AG_OAUTH_CLIENT_ID')
-    secret = os.environ.get('AG_OAUTH_CLIENT_SECRET')
-    if client and secret:
-        return client, secret
-    # Read the suite's existing installed-application client without executing the bridge.
-    path = Path(__file__).resolve().parents[1] / 'bridges/gemini_bridge.py'
-    tree = ast.parse(path.read_text())
-    constants = {}
-    for node in tree.body:
-        if isinstance(node, ast.Assign) and len(node.targets) == 1 and isinstance(node.targets[0], ast.Name) and node.targets[0].id in ('CLIENT_ID', 'CLIENT_SECRET'):
-            constants[node.targets[0].id] = ast.literal_eval(node.value)
-    return constants['CLIENT_ID'], constants['CLIENT_SECRET']
+    # Resolve from environment first, then the private credentials file; never
+    # parse constants out of source files (secrets must not live in code).
+    import importlib.util
+    loader_path = Path(__file__).resolve().parents[1] / 'bridges/oauth_credentials.py'
+    spec = importlib.util.spec_from_file_location('oauth_credentials', loader_path)
+    if spec is None or spec.loader is None:
+        raise RuntimeError('Unable to load oauth_credentials loader at ' + str(loader_path))
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    return module.oauth_credentials()
 
 
 def request(url, payload=None, access=None, form=False):
