@@ -326,6 +326,24 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             self.send_json_response(get_system_version())
             return
 
+        # API: tokens management
+        if path in ("/aipool/api/tokens/list", "/api/tokens/list"):
+            registry_file = Path(__file__).resolve().parent / "client-identities.json"
+            try:
+                data = json.loads(registry_file.read_text())
+                clients = []
+                for c in data.get("clients", []):
+                    clients.append({
+                        "id": c.get("id"),
+                        "name": c.get("name"),
+                        "enabled": c.get("enabled", True),
+                        "created_at": c.get("created_at", "System"),
+                    })
+                self.send_json_response({"success": True, "tokens": clients})
+            except Exception as e:
+                self.send_json_response({"success": False, "message": str(e)}, status_code=500)
+            return
+
         # API: check for updates from remote GitHub
         if path in ("/aipool/api/settings/check_update", "/api/settings/check_update"):
             self.send_json_response(update_suite.check_updates())
@@ -336,7 +354,36 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             self.send_json_response(get_cli_tools_status())
             return
 
-        # Main view - inject initial data server-side so it renders 100% populated immediately with 0ms delay!
+        if path in ("/aipool/api/tokens/revoke", "/api/tokens/revoke"):
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self.send_json_response({"success": False, "message": str(exc)}, status_code=400)
+                return
+            target_id = str(payload.get("id", "")).strip()
+            if target_id in ("hermes", "openclaw", "localtooling"):
+                self.send_json_response({"success": False, "message": "Cannot revoke system internal keys"}, status_code=403)
+                return
+            registry_file = Path(__file__).resolve().parent / "client-identities.json"
+            try:
+                data = json.loads(registry_file.read_text())
+                clients = [c for c in data.get("clients", []) if c.get("id") != target_id]
+                data["clients"] = clients
+                registry_file.write_text(json.dumps(data, indent=2))
+                alt_dest = Path("/var/lib/aipool/app/dashboard/client-identities.json")
+                if alt_dest.parent.is_dir() and alt_dest.resolve() != registry_file.resolve():
+                    alt_dest.write_text(json.dumps(data, indent=2))
+                self.send_json_response({"success": True, "message": f"Token {target_id} revoked"})
+            except Exception as e:
+                self.send_json_response({"success": False, "message": str(e)}, status_code=500)
+            return
+
+        # Main view / Single Page Routing: /, /api, /settings
+        if path in ("/", "/aipool", "/aipool/", "/api", "/api/", "/settings", "/settings/"):
+            pass
+        elif not path.startswith("/api/"):
+            # Unknown page -> serve app (SPA fallback)
+            pass
         initial_data = pm.get_usage_logs_report()
         initial_json = _safe_json_for_script(initial_data)
         sess_val = effective_session or new_session_id or ""

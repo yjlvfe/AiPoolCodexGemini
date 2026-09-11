@@ -1547,44 +1547,44 @@
         <!-- API View Section -->
         <section id="api-view-section" style="display: none; flex-direction: column; gap: 16px;">
             <!-- Public Base URLs Card -->
-            <div class="glass-card settings-card" style="border: 1px solid rgba(0, 242, 254, 0.25); background: linear-gradient(135deg, rgba(0, 242, 254, 0.04), rgba(157, 78, 221, 0.04));">
+            <div class="glass-card settings-card" style="border: 1px solid rgba(0, 242, 254, 0.25); background: linear-gradient(135deg, rgba(0, 242, 254, 0.03), rgba(157, 78, 221, 0.03));">
                 <div class="settings-card-header">
-                    <div style="display:flex; align-items:center; gap: 10px;">
-                        <span style="font-size: 22px;">🌐</span>
+                    <div style="display:flex; align-items:center; gap: 8px;">
+                        <span style="font-size: 20px;">🌐</span>
                         <div>
-                            <div class="settings-card-title" style="color: #fff;">Public Remote Endpoints (Base URLs)</div>
-                            <div class="settings-card-sub">Standard OpenAI-compatible endpoints with SSL encryption for remote apps & agents</div>
+                            <div class="settings-card-title" style="font-size: 15px; color: #fff;">Public Endpoints</div>
+                            <div class="settings-card-sub" style="font-size: 11px;">OpenAI-compatible Base URLs for external tools</div>
                         </div>
                     </div>
-                    <span class="endpoint-pill-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3);">🟢 SSL LIVE</span>
+                    <span class="endpoint-pill-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 10px; padding: 2px 7px;">🟢 SSL LIVE</span>
                 </div>
 
-                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-top: 14px;">
+                <div class="api-endpoints-grid" style="display: flex; flex-direction: column; gap: 10px; margin-top: 12px;">
                     <!-- Codex Base URL -->
-                    <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(139, 92, 246, 0.3); border-radius: 14px; padding: 14px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-                            <span style="font-weight: 700; color: #d8b4fe; font-size: 13px;">🟣 Codex Base URL (ChatGPT Models)</span>
-                            <button onclick="copyToClipboard('https://masteryj.shop/api/v1/codex/')" class="refresh-btn" style="padding: 4px 8px; font-size: 11px;">📋 Copy</button>
+                    <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 12px; padding: 12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+                            <span style="font-weight: 700; color: #d8b4fe; font-size: 12.5px;">🟣 ChatGPT / Codex Base URL</span>
+                            <button onclick="copyToClipboard('https://masteryj.shop/api/v1/codex/')" class="settings-top-btn" style="height:24px; padding:2px 8px; font-size:10.5px;">📋 Copy</button>
                         </div>
-                        <div style="font-family:'JetBrains Mono',monospace; font-size: 12px; color: #f8fafc; word-break: break-all; background: rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 8px;">
+                        <div style="font-family:'JetBrains Mono',monospace; font-size: 11.5px; color: #f8fafc; word-break: break-all; background: rgba(255,255,255,0.04); padding: 7px 9px; border-radius: 6px;">
                             https://masteryj.shop/api/v1/codex/
                         </div>
-                        <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 6px;">
-                            Supported Models: <span style="color: #c084fc;">gpt-5.6-luna, gpt-5.6-sol, gpt-5.5</span>
+                        <div style="font-size: 10.5px; color: var(--text-tertiary); margin-top: 5px;">
+                            Models: <span style="color: #c084fc; font-weight:600;">gpt-5.6-luna, gpt-5.6-sol, gpt-5.5</span>
                         </div>
                     </div>
 
                     <!-- Gemini Base URL -->
-                    <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(6, 182, 212, 0.3); border-radius: 14px; padding: 14px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
-                            <span style="font-weight: 700; color: #67e8f9; font-size: 13px;">🟢 Gemini Base URL (Antigravity Models)</span>
-                            <button onclick="copyToClipboard('https://masteryj.shop/api/v1/gemini/')" class="refresh-btn" style="padding: 4px 8px; font-size: 11px;">📋 Copy</button>
+                    <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(6, 182, 212, 0.25); border-radius: 12px; padding: 12px;">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
+                            <span style="font-weight: 700; color: #67e8f9; font-size: 12.5px;">🟢 Google Gemini Base URL</span>
+                            <button onclick="copyToClipboard('https://masteryj.shop/api/v1/gemini/')" class="settings-top-btn" style="height:24px; padding:2px 8px; font-size:10.5px;">📋 Copy</button>
                         </div>
-                        <div style="font-family:'JetBrains Mono',monospace; font-size: 12px; color: #f8fafc; word-break: break-all; background: rgba(255,255,255,0.05); padding: 8px 10px; border-radius: 8px;">
+                        <div style="font-family:'JetBrains Mono',monospace; font-size: 11.5px; color: #f8fafc; word-break: break-all; background: rgba(255,255,255,0.04); padding: 7px 9px; border-radius: 6px;">
                             https://masteryj.shop/api/v1/gemini/
                         </div>
-                        <div style="font-size: 11px; color: var(--text-tertiary); margin-top: 6px;">
-                            Supported Models: <span style="color: #38bdf8;">gemini-3.8-flash, gemini-3.1-pro, claude-opus-4-6-thinking</span>
+                        <div style="font-size: 10.5px; color: var(--text-tertiary); margin-top: 5px;">
+                            Models: <span style="color: #38bdf8; font-weight:600;">gemini-3.8-flash, gemini-3.1-pro, claude-opus-4-6-thinking</span>
                         </div>
                     </div>
                 </div>
@@ -1594,36 +1594,27 @@
             <div class="glass-card settings-card">
                 <div class="settings-card-header">
                     <div>
-                        <div class="settings-card-title">🔑 API Keys & Clients Management</div>
-                        <div class="settings-card-sub">Generate and manage bearer credentials for remote users and external systems</div>
+                        <div class="settings-card-title" style="font-size: 15px;">🔑 API Keys Management</div>
+                        <div class="settings-card-sub" style="font-size: 11px;">Create tokens to authorize remote clients</div>
                     </div>
-                    <button class="settings-btn" onclick="promptCreateApiKey()" style="background: linear-gradient(135deg, #6366f1, #06b6d4); color: #fff; font-weight: 700;">
-                        ➕ Create New Key
+                    <button class="settings-btn" onclick="promptCreateApiKey()" style="background: linear-gradient(135deg, #6366f1, #06b6d4); color: #fff; font-weight: 700; font-size: 11.5px; padding: 6px 12px;">
+                        ➕ New Key
                     </button>
                 </div>
 
-                <div id="new-key-alert-box" style="display:none; margin-top:14px; padding:12px 14px; background: rgba(16, 185, 129, 0.15); border: 1px solid rgba(16, 185, 129, 0.3); border-radius: 12px;">
-                    <div style="font-size: 12px; font-weight: 700; color: #34d399; margin-bottom: 4px;">🎉 Key Created Successfully! Make sure to copy it now:</div>
-                    <div style="display:flex; gap: 8px; align-items: center;">
-                        <input type="text" id="new-created-key-input" readonly style="flex:1; font-family:'JetBrains Mono'; font-size:12px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); color:#fff; padding:6px 10px; border-radius:8px;">
-                        <button onclick="copyCreatedKey()" class="refresh-btn" style="padding: 6px 12px;">Copy</button>
+                <div id="new-key-alert-box" style="display:none; margin-top:12px; padding:10px 12px; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.25); border-radius: 10px;">
+                    <div style="font-size: 11.5px; font-weight: 700; color: #34d399; margin-bottom: 4px;">🎉 Key Created! Copy it now:</div>
+                    <div style="display:flex; gap: 6px; align-items: center;">
+                        <input type="text" id="new-created-key-input" readonly style="flex:1; font-family:'JetBrains Mono'; font-size:11px; background:rgba(0,0,0,0.5); border:1px solid rgba(255,255,255,0.1); color:#fff; padding:5px 8px; border-radius:6px;">
+                        <button onclick="copyCreatedKey()" class="settings-top-btn" style="padding: 4px 10px; height: 26px;">Copy</button>
                     </div>
                 </div>
 
-                <div style="margin-top: 14px; overflow-x: auto;">
-                    <table style="width: 100%; border-collapse: collapse; font-size: 12.5px; text-align: left;">
-                        <thead>
-                            <tr style="border-bottom: 1px solid rgba(255,255,255,0.08); color: var(--text-tertiary);">
-                                <th style="padding: 10px 8px;">Client / Key Name</th>
-                                <th style="padding: 10px 8px;">Key ID</th>
-                                <th style="padding: 10px 8px;">Status</th>
-                                <th style="padding: 10px 8px; text-align: right;">Actions</th>
-                            </tr>
-                        </thead>
-                        <tbody id="api-tokens-table-body">
-                            <tr><td colspan="4" style="padding: 16px; text-align:center; color: var(--text-tertiary);">Loading API keys...</td></tr>
-                        </tbody>
-                    </table>
+                <div style="margin-top: 12px;" id="api-tokens-cards-wrap">
+                    <!-- Loaded dynamically via cards instead of cramped table -->
+                    <div id="api-tokens-table-body" style="display: flex; flex-direction: column; gap: 8px;">
+                        <div style="padding: 16px; text-align:center; color: var(--text-tertiary); font-size: 12px;">Loading keys...</div>
+                    </div>
                 </div>
             </div>
 
@@ -1860,10 +1851,27 @@
         let isSettingsOpen = false;
         let isApiViewOpen = false;
 
-        function toggleApiView() {
+        function updateUrlPath(page) {
+            let path = '/';
+            if (page === 'api') path = '/api';
+            else if (page === 'settings') path = '/settings';
+            
+            const url = new URL(window.location);
+            url.pathname = path;
+            window.history.pushState({ page }, '', url);
+        }
+
+        function toggleApiView(fromPopState = false) {
             isApiViewOpen = !isApiViewOpen;
             if (isApiViewOpen && isSettingsOpen) {
-                toggleSettingsView();
+                isSettingsOpen = false;
+                const setBtn = document.getElementById('settings-toggle-btn');
+                if (setBtn) {
+                    setBtn.classList.remove('active');
+                    document.getElementById('settings-btn-icon').innerText = '⚙️';
+                    document.getElementById('settings-btn-text').innerText = 'Settings';
+                }
+                document.getElementById('settings-view-section').style.display = 'none';
             }
             const btn = document.getElementById('api-page-toggle-btn');
             const providerBar = document.getElementById('provider-segmented-bar');
@@ -1878,6 +1886,7 @@
                 poolSec.style.display = 'none';
                 streamSec.style.display = 'none';
                 apiSec.style.display = 'flex';
+                if (!fromPopState) updateUrlPath('api');
                 loadApiTokens();
             } else {
                 btn.classList.remove('active');
@@ -1886,38 +1895,41 @@
                 poolSec.style.display = 'block';
                 streamSec.style.display = 'block';
                 apiSec.style.display = 'none';
+                if (!fromPopState) updateUrlPath('home');
                 switchProvider(currentProvider);
             }
         }
 
         async function loadApiTokens() {
-            const tbody = document.getElementById('api-tokens-table-body');
+            const container = document.getElementById('api-tokens-table-body');
             try {
                 const res = await fetch(resolveApiUrl('/api/tokens/list'), { headers: apiHeaders() });
                 const data = await res.json();
                 if (!data.success) throw new Error(data.message);
                 if (!data.tokens || data.tokens.length === 0) {
-                    tbody.innerHTML = '<tr><td colspan="4" style="padding:16px; text-align:center; color:var(--text-tertiary);">No custom API keys created yet.</td></tr>';
+                    container.innerHTML = '<div style="padding:14px; text-align:center; color:var(--text-tertiary); font-size:12px;">No custom API keys created yet.</div>';
                     return;
                 }
-                tbody.innerHTML = data.tokens.map(t => {
+                container.innerHTML = data.tokens.map(t => {
                     const isSystem = ['hermes', 'openclaw', 'localtooling'].includes(t.id);
                     return `
-                        <tr style="border-bottom: 1px solid rgba(255,255,255,0.05);">
-                            <td style="padding: 10px 8px; font-weight: 600; color: #fff;">${t.name || 'Key'}</td>
-                            <td style="padding: 10px 8px; font-family:'JetBrains Mono'; font-size:11.5px; color: var(--accent-cyan);">${t.id}</td>
-                            <td style="padding: 10px 8px;">
-                                <span style="font-size:11px; padding: 3px 8px; border-radius: 6px; background: rgba(16,185,129,0.15); color: #34d399;">Active</span>
-                            </td>
-                            <td style="padding: 10px 8px; text-align: right;">
-                                ${isSystem ? '<span style="font-size:11px; color:var(--text-tertiary);">Internal System</span>' : 
-                                  `<button onclick="revokeApiKey('${t.id}')" style="background: rgba(239, 68, 68, 0.15); border: 1px solid rgba(239, 68, 68, 0.3); color: #f87171; border-radius: 6px; padding: 4px 8px; font-size: 11px; cursor: pointer;">Revoke</button>`}
-                            </td>
-                        </tr>
+                        <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                            <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden;">
+                                <div style="font-weight: 700; color: #fff; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${t.name || 'Key'}</div>
+                                <div style="display: flex; align-items: center; gap: 6px;">
+                                    <span style="font-family:'JetBrains Mono'; font-size: 11px; color: var(--accent-cyan);">${t.id}</span>
+                                    <span style="font-size: 9.5px; padding: 1px 5px; border-radius: 4px; background: rgba(16,185,129,0.15); color: #34d399;">Active</span>
+                                </div>
+                            </div>
+                            <div style="flex-shrink: 0;">
+                                ${isSystem ? '<span style="font-size: 10.5px; color:var(--text-tertiary);">System</span>' : 
+                                  `<button onclick="revokeApiKey('${t.id}')" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.25); color: #f87171; border-radius: 6px; padding: 3px 8px; font-size: 10.5px; cursor: pointer;">Revoke</button>`}
+                            </div>
+                        </div>
                     `;
                 }).join('');
             } catch (e) {
-                tbody.innerHTML = `<tr><td colspan="4" style="padding:16px; text-align:center; color:#f87171;">Failed to load keys: ${e.message}</td></tr>`;
+                container.innerHTML = `<div style="padding:14px; text-align:center; color:#f87171; font-size:12px;">Failed to load keys: ${e.message}</div>`;
             }
         }
 
@@ -1975,10 +1987,16 @@
             }
         }
 
-        function toggleSettingsView() {
+        function toggleSettingsView(fromPopState = false) {
             isSettingsOpen = !isSettingsOpen;
             if (isSettingsOpen && isApiViewOpen) {
-                toggleApiView();
+                isApiViewOpen = false;
+                const apiBtn = document.getElementById('api-page-toggle-btn');
+                if (apiBtn) {
+                    apiBtn.classList.remove('active');
+                    apiBtn.innerHTML = '<span class="btn-icon">🌐</span><span class="btn-label">API</span>';
+                }
+                document.getElementById('api-view-section').style.display = 'none';
             }
             const btn = document.getElementById('settings-toggle-btn');
             const btnIcon = document.getElementById('settings-btn-icon');
@@ -1996,6 +2014,7 @@
                 poolSec.style.display = 'none';
                 streamSec.style.display = 'none';
                 settingsSec.style.display = 'flex';
+                if (!fromPopState) updateUrlPath('settings');
                 fetchSettingsStatus();
                 fetchCliToolsStatus();
             } else {
@@ -2006,9 +2025,32 @@
                 streamSec.style.display = 'block';
                 poolSec.style.display = 'block';
                 settingsSec.style.display = 'none';
+                if (!fromPopState) updateUrlPath('home');
                 switchProvider(currentProvider);
             }
         }
+
+        window.addEventListener('popstate', (e) => {
+            const path = window.location.pathname.toLowerCase();
+            if (path.includes('/api')) {
+                if (!isApiViewOpen) toggleApiView(true);
+            } else if (path.includes('/settings')) {
+                if (!isSettingsOpen) toggleSettingsView(true);
+            } else {
+                if (isApiViewOpen) toggleApiView(true);
+                if (isSettingsOpen) toggleSettingsView(true);
+            }
+        });
+
+        // Initialize route on first load
+        document.addEventListener('DOMContentLoaded', () => {
+            const path = window.location.pathname.toLowerCase();
+            if (path.includes('/api')) {
+                toggleApiView(true);
+            } else if (path.includes('/settings')) {
+                toggleSettingsView(true);
+            }
+        });
 
         function switchProvider(prov, force = false) {
             if (currentProvider === prov && !force) return;
