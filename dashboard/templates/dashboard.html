@@ -158,19 +158,30 @@
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.12);
             color: var(--text-main);
-            padding: 5px 10px;
-            border-radius: 10px;
-            font-size: 11.5px;
+            padding: 0 10px;
+            border-radius: 8px;
+            font-size: 11px;
             font-weight: 700;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 4px;
+            gap: 5px;
             cursor: pointer;
             transition: var(--transition-smooth);
             font-family: inherit;
             white-space: nowrap;
-            height: 30px;
+            height: 28px;
+            box-sizing: border-box;
+            flex-shrink: 0;
+        }
+        .settings-top-btn .btn-icon {
+            font-size: 13px;
+            line-height: 1;
+            display: inline-block;
+        }
+        .settings-top-btn .btn-label {
+            display: inline-block;
+            line-height: 1;
         }
         .settings-top-btn.api-nav-btn {
             background: linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(99, 102, 241, 0.15));
@@ -1881,7 +1892,7 @@
 
             if (isApiViewOpen) {
                 btn.classList.add('active');
-                btn.innerHTML = '<span class="btn-icon">📊</span><span class="btn-label">Dashboard</span>';
+                btn.innerHTML = '<span class="btn-icon">📊</span><span class="btn-label">Home</span>';
                 providerBar.style.display = 'none';
                 poolSec.style.display = 'none';
                 streamSec.style.display = 'none';
@@ -2009,7 +2020,7 @@
             if (isSettingsOpen) {
                 btn.classList.add('active');
                 btnIcon.innerText = '📊';
-                btnText.innerText = 'Dashboard';
+                btnText.innerText = 'Home';
                 providerBar.style.display = 'none';
                 poolSec.style.display = 'none';
                 streamSec.style.display = 'none';

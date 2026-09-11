@@ -384,6 +384,14 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
         elif not path.startswith("/api/"):
             # Unknown page -> serve app (SPA fallback)
             pass
+        # Determine active view from requested URL path for zero-flicker SSR rendering!
+        active_view = "dashboard"
+        norm_path = path.lower().rstrip("/")
+        if norm_path.endswith("/api"):
+            active_view = "api"
+        elif norm_path.endswith("/settings"):
+            active_view = "settings"
+
         initial_data = pm.get_usage_logs_report()
         initial_json = _safe_json_for_script(initial_data)
         sess_val = effective_session or new_session_id or ""
@@ -391,6 +399,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
         injected_script = f"""<script>
             window.__INITIAL_DATA__ = {initial_json};
             window.__SESSION_ID__ = {session_json};
+            window.__ACTIVE_VIEW__ = "{active_view}";
             if ({session_json}) {{ 
                 try {{ 
                     localStorage.setItem('yj_aipool_session', {session_json}); 
@@ -398,7 +407,23 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                 }} catch(e){{}} 
             }}
         </script>"""
-        html_to_serve = HTML_LOGS_TEMPLATE.replace("</head>", f"{injected_script}\n</head>")
+        
+        # Pre-apply CSS display rules server-side so there is ZERO 1-second flicker
+        html_rendered = HTML_LOGS_TEMPLATE
+        if active_view == "api":
+            html_rendered = html_rendered.replace('id="provider-segmented-bar"', 'id="provider-segmented-bar" style="display:none;"')
+            html_rendered = html_rendered.replace('id="pool-overview-section"', 'id="pool-overview-section" style="display:none;"')
+            html_rendered = html_rendered.replace('id="stream-section"', 'id="stream-section" style="display:none;"')
+            html_rendered = html_rendered.replace('id="api-view-section" style="display: none;', 'id="api-view-section" style="display: flex;')
+            html_rendered = html_rendered.replace('id="api-page-toggle-btn" class="settings-top-btn api-nav-btn"', 'id="api-page-toggle-btn" class="settings-top-btn api-nav-btn active"')
+        elif active_view == "settings":
+            html_rendered = html_rendered.replace('id="provider-segmented-bar"', 'id="provider-segmented-bar" style="display:none;"')
+            html_rendered = html_rendered.replace('id="pool-overview-section"', 'id="pool-overview-section" style="display:none;"')
+            html_rendered = html_rendered.replace('id="stream-section"', 'id="stream-section" style="display:none;"')
+            html_rendered = html_rendered.replace('id="settings-view-section" style="display: none;', 'id="settings-view-section" style="display: flex;')
+            html_rendered = html_rendered.replace('id="settings-toggle-btn" class="settings-top-btn"', 'id="settings-toggle-btn" class="settings-top-btn active"')
+
+        html_to_serve = html_rendered.replace("</head>", f"{injected_script}\n</head>")
         html_to_serve = html_to_serve.replace("</body>", '<script src="/aipool/assets/update.js"></script></body>')
         body = html_to_serve.encode("utf-8")
 
