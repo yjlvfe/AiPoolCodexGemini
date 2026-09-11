@@ -873,6 +873,10 @@
             align-items: center;
             gap: 8px;
         }
+        #toast-notification.error {
+            background: rgba(239, 68, 68, 0.95) !important;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.4), 0 0 16px rgba(239, 68, 68, 0.3) !important;
+        }
         #toast-notification.show {
             opacity: 1;
             transform: translateX(-50%) translateY(0);
@@ -1629,6 +1633,19 @@
                 </div>
             </div>
 
+            <!-- Standalone API Remote Requests Stream -->
+            <div class="glass-card" id="api-stream-section">
+                <div class="stream-header" style="margin-bottom: 12px;">
+                    <div class="stream-title-text">
+                        <span>⚡</span>
+                        <span>API Remote Requests & Clients Activity</span>
+                    </div>
+                </div>
+                <div class="stream-list" id="api-activity-stream-list">
+                    <!-- Dynamic API stream records -->
+                </div>
+            </div>
+
             <!-- Quick Integration Guide -->
             <div class="glass-card settings-card">
                 <div class="settings-card-header">
@@ -1944,6 +1961,14 @@
             }
         }
 
+        function jsonStringifySafely(obj) {
+            try {
+                return JSON.stringify(obj);
+            } catch (e) {
+                return '{}';
+            }
+        }
+
         async function promptCreateApiKey() {
             const name = prompt('Enter a label/client name for this API Key (e.g. Youssef Friend, Cursor, LibreChat):');
             if (!name) return;
@@ -1951,7 +1976,7 @@
                 const res = await fetch(resolveApiUrl('/api/tokens/create'), {
                     method: 'POST',
                     headers: apiHeaders({ 'Content-Type': 'application/json' }),
-                    body: jsonStringifySafely({ name })
+                    body: JSON.stringify({ name })
                 });
                 const data = await res.json();
                 if (data.success && data.token) {
@@ -1960,23 +1985,24 @@
                     input.value = data.token;
                     alertBox.style.display = 'block';
                     loadApiTokens();
+                    showToast('🎉 Key Created Successfully!');
                 } else {
-                    alert('Error creating key: ' + (data.message || 'Unknown'));
+                    showToast('⚠️ Error: ' + (data.message || 'Failed to create key'), true);
                 }
             } catch (e) {
-                alert('Request failed: ' + e.message);
+                showToast('❌ Request Failed: ' + e.message, true);
             }
         }
 
         function copyCreatedKey() {
             const input = document.getElementById('new-created-key-input');
             navigator.clipboard.writeText(input.value);
-            alert('API Key copied to clipboard!');
+            showToast('📋 API Key copied to clipboard!');
         }
 
         function copyToClipboard(text) {
             navigator.clipboard.writeText(text);
-            alert('Base URL copied to clipboard: ' + text);
+            showToast('📋 Copied: ' + text);
         }
 
         async function revokeApiKey(id) {
@@ -1985,16 +2011,17 @@
                 const res = await fetch(resolveApiUrl('/api/tokens/revoke'), {
                     method: 'POST',
                     headers: apiHeaders({ 'Content-Type': 'application/json' }),
-                    body: jsonStringifySafely({ id })
+                    body: JSON.stringify({ id })
                 });
                 const data = await res.json();
                 if (data.success) {
+                    showToast(`🗑️ Key '${id}' revoked successfully`);
                     loadApiTokens();
                 } else {
-                    alert('Error revoking key: ' + data.message);
+                    showToast('⚠️ Revoke failed: ' + (data.message || 'Unknown error'), true);
                 }
             } catch (e) {
-                alert('Request failed: ' + e.message);
+                showToast('❌ Network error: ' + e.message, true);
             }
         }
 
@@ -2725,15 +2752,21 @@
             if (accountsVisibleByProvider[currentProvider]) renderAccountsList();
         }
 
-        function showToast(msg) {
+        function showToast(msg, isError = false) {
             const toast = document.getElementById('toast-notification');
             const toastText = document.getElementById('toast-text');
             if (!toast) return;
             if (toastText) toastText.innerText = msg;
+            if (isError) {
+                toast.classList.add('error');
+            } else {
+                toast.classList.remove('error');
+            }
             toast.classList.add('show');
             setTimeout(() => {
                 toast.classList.remove('show');
-            }, 2200);
+                toast.classList.remove('error');
+            }, 3000);
         }
 
         function escapeHtml(value) {
@@ -2743,15 +2776,21 @@
         }
         function renderGeneralActivityStream(recentRequests) {
             const listContainer = document.getElementById('activity-stream-list');
-            listContainer.innerHTML = '';
+            const apiListContainer = document.getElementById('api-activity-stream-list');
+            if (listContainer) listContainer.innerHTML = '';
+            if (apiListContainer) apiListContainer.innerHTML = '';
 
             // Combined activity stream showing both Gemini and Codex / ChatGPT in one unified chronological feed
             const requests = recentRequests || [];
 
             if (requests.length === 0) {
-                listContainer.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-tertiary);">No activity records yet</div>';
+                const emptyHtml = '<div style="text-align:center; padding: 20px; color: var(--text-tertiary);">No activity records yet</div>';
+                if (listContainer) listContainer.innerHTML = emptyHtml;
+                if (apiListContainer) apiListContainer.innerHTML = emptyHtml;
                 return;
             }
+
+            let apiCount = 0;
 
             requests.forEach(req => {
                 const item = document.createElement('div');
@@ -2805,8 +2844,24 @@
                 detail.textContent = 'Inspect request ↗';
                 detail.addEventListener('click', () => openRequestInspector(req));
                 item.appendChild(detail);
-                listContainer.appendChild(item);
+                if (listContainer) listContainer.appendChild(item);
+
+                // Clone for API view if from an external or remote API client
+                if (apiListContainer) {
+                    const client = (req.audit?.client_label || '').toLowerCase();
+                    const isApiReq = client !== 'internal' || req.audit?.peer_ip;
+                    if (isApiReq) {
+                        apiCount++;
+                        const apiItem = item.cloneNode(true);
+                        apiItem.querySelector('.request-detail-trigger').addEventListener('click', () => openRequestInspector(req));
+                        apiListContainer.appendChild(apiItem);
+                    }
+                }
             });
+
+            if (apiListContainer && apiCount === 0) {
+                apiListContainer.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-tertiary); font-size:12px;">No remote API requests recorded yet. External requests will appear here live.</div>';
+            }
         }
 
         async function switchAccount(accountNum, btnEl) {
@@ -3002,12 +3057,27 @@ function openRequestInspector(request) {
         ['Account', req.account]
     ]);
 
-    section('02 · Origin & application', [
-        ['Application', audit.client_label || 'Direct API'],
-        ['TCP peer', audit.peer_ip],
-        ['Endpoint', audit.endpoint],
-        ['User-Agent', audit.user_agent]
-    ]);
+        // Helper to detect device type from User-Agent
+        function detectDeviceType(ua) {
+            if (!ua) return 'Unknown';
+            const u = ua.toLowerCase();
+            if (u.includes('iphone') || u.includes('ipad') || u.includes('ipod')) return 'Apple iOS';
+            if (u.includes('android')) return 'Android Mobile';
+            if (u.includes('macintosh') || u.includes('mac os')) return 'Mac OS';
+            if (u.includes('windows')) return 'Windows PC';
+            if (u.includes('linux')) return 'Linux OS';
+            if (u.includes('curl')) return 'cURL CLI';
+            if (u.includes('python')) return 'Python Script';
+            return 'Desktop / CLI';
+        }
+
+        section('02 · Origin & application', [
+            ['Client identity', audit.client_label || 'Direct API'],
+            ['Remote IP', audit.forwarded_ip || audit.peer_ip || 'Direct / Localhost'],
+            ['Device / OS', detectDeviceType(audit.user_agent)],
+            ['Endpoint', audit.endpoint],
+            ['User-Agent', audit.user_agent]
+        ]);
 
     section('03 · Usage & token savings', [
         ['Input tokens', req.prompt == null ? '—' : Number(req.prompt).toLocaleString()],

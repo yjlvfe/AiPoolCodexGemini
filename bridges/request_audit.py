@@ -229,8 +229,11 @@ def capture(handler, raw_payload, provider_payload=None):
     raw_text, raw_truncated = _bounded_prompt(raw_text, limit)
     provider_text, provider_truncated = _bounded_prompt(provider_text, limit)
     client_address = getattr(handler, "client_address", ("",))[0]
-    request_path = str(getattr(handler, "path", "")).split("?", 1)[0][:256]
     headers = getattr(handler, "headers", {})
+    forwarded_peer = None
+    if hasattr(headers, "get"):
+        forwarded_peer = headers.get("X-Real-IP")
+    request_path = str(getattr(handler, "path", "")).split("?", 1)[0][:256]
     artifact_refs = []
     messages = raw.get("messages") if isinstance(raw, dict) else None
     if isinstance(messages, list):
@@ -247,6 +250,7 @@ def capture(handler, raw_payload, provider_payload=None):
         "request_id": str(uuid.uuid4()),
         "payload_sha256": hashlib.sha256(canonical).hexdigest(),
         "peer_ip": str(client_address),
+        "forwarded_ip": str(forwarded_peer) if forwarded_peer else None,
         "endpoint": request_path,
         "client_label": detect_application(headers, getattr(handler, "_client_identity", None)),
         "user_agent": redact(headers.get("User-Agent", ""))[:256],
