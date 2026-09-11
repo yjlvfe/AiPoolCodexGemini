@@ -1464,7 +1464,6 @@
                     <div class="brand-logo">⚡</div>
                     <div class="brand-title">
                         <span>AI Pool Guardian</span>
-                        <span class="live-pill"><span class="live-dot"></span>LIVE</span>
                     </div>
                 </div>
                 <div class="top-nav-actions">
@@ -1632,13 +1631,14 @@
 
             <!-- API Keys Management Card -->
             <div class="glass-card settings-card">
-                <div class="settings-card-header">
+                <div class="settings-card-header" style="display:flex; justify-content:space-between; align-items:center; gap: 8px;">
                     <div>
-                        <div class="settings-card-title" style="font-size: 15px;">🔑 API Keys Management</div>
+                        <div class="settings-card-title" style="font-size: 14.5px;">🔑 API Keys Management</div>
                         <div class="settings-card-sub" style="font-size: 11px;">Create tokens to authorize remote clients</div>
                     </div>
-                    <button class="settings-btn" onclick="promptCreateApiKey()" style="background: linear-gradient(135deg, #6366f1, #06b6d4); color: #fff; font-weight: 700; font-size: 11.5px; padding: 6px 12px;">
-                        ➕ New Key
+                    <button class="settings-top-btn api-nav-btn" onclick="promptCreateApiKey()" style="height: 30px; padding: 0 12px; font-size: 11.5px; gap: 5px; font-weight: 700; border-radius: 8px; flex-shrink: 0;">
+                        <span>✨</span>
+                        <span>New Key</span>
                     </button>
                 </div>
 
@@ -1964,23 +1964,30 @@
                 const data = await res.json();
                 if (!data.success) throw new Error(data.message);
                 if (!data.tokens || data.tokens.length === 0) {
-                    container.innerHTML = '<div style="padding:14px; text-align:center; color:var(--text-tertiary); font-size:12px;">No custom API keys created yet.</div>';
+                    container.innerHTML = '<div style="padding:18px; text-align:center; color:var(--text-tertiary); font-size:12px;">No custom API keys created yet. Click "+ New Key" above to generate one.</div>';
                     return;
                 }
                 container.innerHTML = data.tokens.map(t => {
+                    const tokenToCopy = t.raw_token || t.id;
                     const isSystem = ['hermes', 'openclaw', 'localtooling'].includes(t.id);
+                    if (isSystem) return ''; // Extra guard against system keys
                     return `
-                        <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                            <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden;">
-                                <div style="font-weight: 700; color: #fff; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${t.name || 'Key'}</div>
+                        <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                            <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden; min-width: 0;">
+                                <div style="font-weight: 700; color: #fff; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(t.name || 'Key')}</div>
                                 <div style="display: flex; align-items: center; gap: 6px;">
-                                    <span style="font-family:'JetBrains Mono'; font-size: 11px; color: var(--accent-cyan);">${t.id}</span>
-                                    <span style="font-size: 9.5px; padding: 1px 5px; border-radius: 4px; background: rgba(16,185,129,0.15); color: #34d399;">Active</span>
+                                    <span style="font-family:'JetBrains Mono'; font-size: 10.5px; color: var(--accent-cyan);">${escapeHtml(t.id)}</span>
+                                    <span style="font-size: 9px; padding: 1px 5px; border-radius: 4px; background: rgba(16,185,129,0.15); color: #34d399; font-weight: 600;">ACTIVE</span>
+                                    <span style="font-size: 9px; color: var(--text-tertiary);">${escapeHtml(t.created_at || '')}</span>
                                 </div>
                             </div>
-                            <div style="flex-shrink: 0;">
-                                ${isSystem ? '<span style="font-size: 10.5px; color:var(--text-tertiary);">System</span>' : 
-                                  `<button onclick="revokeApiKey('${t.id}')" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.25); color: #f87171; border-radius: 6px; padding: 3px 8px; font-size: 10.5px; cursor: pointer;">Revoke</button>`}
+                            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                                <button onclick="copyToClipboard('${tokenToCopy}')" class="settings-top-btn" style="height: 26px; padding: 0 8px; font-size: 10.5px; background: rgba(56,189,248,0.1); border-color: rgba(56,189,248,0.3); color: #38bdf8;" title="Copy Token for API use">
+                                    <span>📋</span><span>Copy</span>
+                                </button>
+                                <button onclick="revokeApiKey('${t.id}')" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.25); color: #f87171; border-radius: 8px; padding: 0 8px; height: 26px; font-size: 10.5px; cursor: pointer; display: inline-flex; align-items: center;" title="Revoke Key">
+                                    <span>🗑️</span>
+                                </button>
                             </div>
                         </div>
                     `;

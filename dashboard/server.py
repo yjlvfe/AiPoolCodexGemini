@@ -332,12 +332,17 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             try:
                 data = json.loads(registry_file.read_text())
                 clients = []
+                system_keys = ("hermes", "openclaw", "localtooling")
                 for c in data.get("clients", []):
+                    # Hide internal system keys from public API page
+                    if c.get("id") in system_keys:
+                        continue
                     clients.append({
                         "id": c.get("id"),
                         "name": c.get("name"),
+                        "raw_token": c.get("raw_token"),  # Persistent token for copying anytime
                         "enabled": c.get("enabled", True),
-                        "created_at": c.get("created_at", "System"),
+                        "created_at": c.get("created_at", "Custom Key"),
                     })
                 self.send_json_response({"success": True, "tokens": clients})
             except Exception as e:
@@ -601,6 +606,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                 clients.append({
                     "id": new_id,
                     "name": name,
+                    "raw_token": raw_token,
                     "enabled": True,
                     "created_at": time.strftime("%Y-%m-%d %H:%M"),
                     "sha256": digest
