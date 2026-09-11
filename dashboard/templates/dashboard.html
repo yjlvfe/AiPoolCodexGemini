@@ -148,25 +148,43 @@
             0%, 100% { opacity: 1; transform: scale(1); }
             50% { opacity: 0.4; transform: scale(0.8); }
         }
+        .top-nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            flex-shrink: 0;
+        }
         .settings-top-btn {
             background: rgba(255, 255, 255, 0.05);
             border: 1px solid rgba(255, 255, 255, 0.12);
             color: var(--text-main);
-            padding: 6px 12px;
-            border-radius: 14px;
-            font-size: 12px;
+            padding: 5px 10px;
+            border-radius: 10px;
+            font-size: 11.5px;
             font-weight: 700;
             display: inline-flex;
             align-items: center;
-            gap: 5px;
+            justify-content: center;
+            gap: 4px;
             cursor: pointer;
             transition: var(--transition-smooth);
             font-family: inherit;
-            flex-shrink: 0;
+            white-space: nowrap;
+            height: 30px;
+        }
+        .settings-top-btn.api-nav-btn {
+            background: linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(99, 102, 241, 0.15));
+            border-color: rgba(6, 182, 212, 0.35);
+            color: #67e8f9;
+        }
+        .settings-top-btn.api-nav-btn:hover {
+            background: linear-gradient(135deg, rgba(6, 182, 212, 0.25), rgba(99, 102, 241, 0.25));
+            border-color: rgba(6, 182, 212, 0.5);
+            color: #fff;
         }
         .settings-top-btn:hover {
-            background: rgba(255, 255, 255, 0.12);
-            border-color: rgba(255, 255, 255, 0.25);
+            background: rgba(255, 255, 255, 0.1);
+            border-color: rgba(255, 255, 255, 0.22);
             transform: translateY(-1px);
         }
         .settings-top-btn.active {
@@ -1132,36 +1150,62 @@
         /* Responsive Mobile Styles */
         @media (max-width: 640px) {
             .app-container {
-                padding: 12px 10px 40px 10px;
-                gap: 12px;
+                padding: 10px 8px 30px 8px;
+                gap: 10px;
             }
             .glass-card {
-                padding: 16px 14px !important;
+                padding: 14px 12px !important;
                 border-radius: 14px;
             }
             .top-navbar {
-                padding: 14px 14px 10px 14px;
+                padding: 10px 12px 8px 12px;
+                border-radius: 16px;
+            }
+            .brand-logo {
+                width: 32px;
+                height: 32px;
+                min-width: 32px;
+                font-size: 16px;
+                border-radius: 9px;
+            }
+            .brand-title {
+                font-size: 13.5px;
+            }
+            .brand-section {
+                gap: 8px;
+            }
+            .settings-top-btn {
+                height: 28px;
+                padding: 4px 8px;
+                font-size: 11px;
+                border-radius: 8px;
+            }
+            .top-nav-actions {
+                gap: 4px;
             }
             .header-sub-row {
                 flex-direction: row !important;
                 align-items: center !important;
                 justify-content: space-between !important;
-                gap: 8px;
+                gap: 6px;
+                padding-top: 5px;
             }
             .brand-subtitle {
                 white-space: nowrap;
                 overflow: hidden;
                 text-overflow: ellipsis;
-                font-size: 11px;
+                font-size: 10px;
                 line-height: 1.2;
             }
             .version-badge {
                 align-self: center !important;
                 flex-shrink: 0;
+                font-size: 9px;
+                padding: 1px 5px;
             }
             .provider-tab-btn {
-                font-size: 13px;
-                padding: 8px 10px;
+                font-size: 13.5px;
+                padding: 10px 12px;
             }
             .settings-card-title {
                 font-size: 14px;
@@ -1383,14 +1427,14 @@
                         <span class="live-pill"><span class="live-dot"></span>LIVE</span>
                     </div>
                 </div>
-                <div style="display: flex; align-items: center; gap: 8px;">
-                    <button id="api-page-toggle-btn" class="settings-top-btn" onclick="toggleApiView()" style="background: linear-gradient(135deg, rgba(0, 242, 254, 0.15), rgba(157, 78, 221, 0.15)); border-color: rgba(0, 242, 254, 0.3); color: #fff;">
-                        <span>🌐</span>
-                        <span>Public API</span>
+                <div class="top-nav-actions">
+                    <button id="api-page-toggle-btn" class="settings-top-btn api-nav-btn" onclick="toggleApiView()" title="Public API & Keys">
+                        <span class="btn-icon">🌐</span>
+                        <span class="btn-label">API</span>
                     </button>
-                    <button id="settings-toggle-btn" class="settings-top-btn" onclick="toggleSettingsView()">
-                        <span id="settings-btn-icon">⚙️</span>
-                        <span id="settings-btn-text">Settings</span>
+                    <button id="settings-toggle-btn" class="settings-top-btn" onclick="toggleSettingsView()" title="System Settings">
+                        <span id="settings-btn-icon" class="btn-icon">⚙️</span>
+                        <span id="settings-btn-text" class="btn-label">Settings</span>
                     </button>
                 </div>
             </div>
@@ -1829,7 +1873,7 @@
 
             if (isApiViewOpen) {
                 btn.classList.add('active');
-                btn.innerHTML = '<span>📊</span><span>Dashboard</span>';
+                btn.innerHTML = '<span class="btn-icon">📊</span><span class="btn-label">Dashboard</span>';
                 providerBar.style.display = 'none';
                 poolSec.style.display = 'none';
                 streamSec.style.display = 'none';
@@ -1837,7 +1881,7 @@
                 loadApiTokens();
             } else {
                 btn.classList.remove('active');
-                btn.innerHTML = '<span>🌐</span><span>Public API</span>';
+                btn.innerHTML = '<span class="btn-icon">🌐</span><span class="btn-label">API</span>';
                 providerBar.style.display = '';
                 poolSec.style.display = 'block';
                 streamSec.style.display = 'block';
