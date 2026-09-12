@@ -4193,6 +4193,25 @@
             if (!cachedReportData) initDashboard();
         });
         setInterval(fetchLiveLogs, 10000);
+
+        // Auto Live-Reload on deployment: polls build hash every 3 seconds
+        let currentBuildHash = null;
+        async function checkLiveDeploy() {
+            try {
+                const res = await fetch(resolveApiUrl('/api/build-hash'));
+                if (!res.ok) return;
+                const data = await res.json();
+                if (data && data.build_hash) {
+                    if (currentBuildHash && currentBuildHash !== data.build_hash) {
+                        window.location.reload();
+                    } else {
+                        currentBuildHash = data.build_hash;
+                    }
+                }
+            } catch (e) {}
+        }
+        setInterval(checkLiveDeploy, 3000);
+        checkLiveDeploy();
     </script>
 <dialog id="request-inspector" aria-labelledby="ri-title">
     <header class="ri-header">

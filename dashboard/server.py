@@ -326,6 +326,13 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             self.send_json_response(get_system_version())
             return
 
+        # API: app build hash / live reload poll
+        if path in ("/aipool/api/build-hash", "/api/build-hash"):
+            tmpl_path = Path(__file__).resolve().parent / "templates/dashboard.html"
+            mtime = tmpl_path.stat().st_mtime if tmpl_path.exists() else 0
+            self.send_json_response({"build_hash": f"{RUNNING_BUILD.get('commit', '')}_{mtime}"})
+            return
+
         # API: tokens management
         if path in ("/aipool/api/tokens/list", "/api/tokens/list"):
             registry_file = Path(__file__).resolve().parent / "client-identities.json"
