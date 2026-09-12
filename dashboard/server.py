@@ -333,16 +333,42 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                 data = json.loads(registry_file.read_text())
                 clients = []
                 system_keys = ("hermes", "openclaw", "localtooling")
+
+                # Compute aggregated token usage per client from request_events DB
+                usage_by_client = {}
+                db_path = os.environ.get("AUTH_DB_PATH") or str(Path(__file__).resolve().parents[1] / "bridges/auth.db")
+                if os.path.isfile(db_path):
+                    try:
+                        import sqlite3
+                        with sqlite3.connect(db_path, timeout=5) as conn:
+                            conn.row_factory = sqlite3.Row
+                            cur = conn.execute("SELECT audit_json, total_tokens FROM request_events WHERE audit_json IS NOT NULL AND audit_json != ''")
+                            for r in cur.fetchall():
+                                try:
+                                    aud = json.loads(r["audit_json"])
+                                    cl = aud.get("client_label")
+                                    if cl:
+                                        toks = int(r["total_tokens"] or 0)
+                                        usage_by_client[cl.lower()] = usage_by_client.get(cl.lower(), 0) + toks
+                                except Exception:
+                                    pass
+                    except Exception:
+                        pass
+
                 for c in data.get("clients", []):
                     # Hide internal system keys from public API page
                     if c.get("id") in system_keys:
                         continue
+                    c_name = c.get("name", "")
+                    c_id = c.get("id", "")
+                    used = usage_by_client.get(c_name.lower(), 0) or usage_by_client.get(c_id.lower(), 0)
                     clients.append({
                         "id": c.get("id"),
-                        "name": c.get("name"),
+                        "name": c_name,
                         "raw_token": c.get("raw_token"),  # Persistent token for copying anytime
                         "enabled": c.get("enabled", True),
                         "created_at": c.get("created_at", "Custom Key"),
+                        "total_tokens": used
                     })
                 self.send_json_response({"success": True, "tokens": clients})
             except Exception as e:
