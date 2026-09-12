@@ -1628,14 +1628,14 @@
 
                     <!-- Allowed Providers Toggle -->
                     <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px;">
-                        <label style="display: block; color: #e2e8f0; font-size: 12.5px; margin-bottom: 8px; font-weight: 700;">🌐 Allowed Providers:</label>
-                        <div style="display: flex; gap: 12px;">
-                            <label style="display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 13px; cursor: pointer;">
-                                <input type="checkbox" id="modal-edit-prov-codex" checked style="accent-color: #a855f7; width: 16px; height: 16px;" />
+                        <label style="display: block; color: #e2e8f0; font-size: 12px; margin-bottom: 8px; font-weight: 700;">🌐 Allowed Providers:</label>
+                        <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                            <label style="display: flex; align-items: center; gap: 7px; color: #cbd5e1; font-size: 12px; cursor: pointer; background: rgba(255,255,255,0.02); padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                                <input type="checkbox" id="modal-edit-prov-codex" checked style="accent-color: #a855f7; width: 15px; height: 15px;" />
                                 <span style="font-weight: 600; color: #c084fc;">ChatGPT / Codex</span>
                             </label>
-                            <label style="display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 13px; cursor: pointer;">
-                                <input type="checkbox" id="modal-edit-prov-gemini" checked style="accent-color: #06b6d4; width: 16px; height: 16px;" />
+                            <label style="display: flex; align-items: center; gap: 7px; color: #cbd5e1; font-size: 12px; cursor: pointer; background: rgba(255,255,255,0.02); padding: 5px 10px; border-radius: 6px; border: 1px solid rgba(255,255,255,0.05);">
+                                <input type="checkbox" id="modal-edit-prov-gemini" checked style="accent-color: #06b6d4; width: 15px; height: 15px;" />
                                 <span style="font-weight: 600; color: #38bdf8;">Google Gemini</span>
                             </label>
                         </div>
@@ -1643,11 +1643,11 @@
 
                     <!-- Allowed Models Selector (Always visible directly, with provider accordions) -->
                     <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
-                            <label style="color: #e2e8f0; font-size: 12.5px; font-weight: 700;">🤖 Allowed Models Filter:</label>
-                            <div style="display: flex; align-items: center; gap: 8px;">
-                                <span id="modal-edit-models-count" style="font-size: 11px; color: #34d399; font-weight: 600;">All models enabled</span>
-                                <button type="button" id="btn-reset-all-models" onclick="resetAllModelsToDefault()" style="display: none; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; border-radius: 6px; padding: 2px 8px; font-size: 10.5px; cursor: pointer;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 10px; flex-wrap: nowrap;">
+                            <label style="color: #e2e8f0; font-size: 12px; font-weight: 700; white-space: nowrap; margin: 0;">🤖 Allowed Models:</label>
+                            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
+                                <span id="modal-edit-models-count" style="font-size: 10.5px; color: #34d399; font-weight: 600; white-space: nowrap;">12 / 12</span>
+                                <button type="button" id="btn-reset-all-models" onclick="resetAllModelsToDefault()" style="display: none; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; border-radius: 5px; padding: 2px 6px; font-size: 10px; cursor: pointer; white-space: nowrap;">
                                     Reset
                                 </button>
                             </div>
@@ -2498,21 +2498,23 @@
             const totalCount = checkboxes.length;
             const checkedCount = Array.from(checkboxes).filter(c => c.checked).length;
             if (countSpan) {
-                countSpan.textContent = `Models Allowed: ${checkedCount} / ${totalCount}`;
+                countSpan.textContent = `${checkedCount} / ${totalCount} Active`;
                 if (checkedCount === totalCount) {
                     countSpan.style.color = '#34d399';
                     countSpan.style.background = 'rgba(16,185,129,0.12)';
                     countSpan.style.border = '1px solid rgba(16,185,129,0.25)';
                     if (resetBtn) resetBtn.style.display = 'none';
                 } else {
+                    countSpan.textContent = `${checkedCount} / ${totalCount} Allowed`;
                     countSpan.style.color = '#fbbf24';
                     countSpan.style.background = 'rgba(245,158,11,0.12)';
                     countSpan.style.border = '1px solid rgba(245,158,11,0.25)';
                     if (resetBtn) resetBtn.style.display = 'inline-block';
                 }
-                countSpan.style.padding = '2px 8px';
-                countSpan.style.borderRadius = '6px';
+                countSpan.style.padding = '2px 7px';
+                countSpan.style.borderRadius = '5px';
                 countSpan.style.fontFamily = "'JetBrains Mono', monospace";
+                countSpan.style.whiteSpace = 'nowrap';
             }
         }
 
