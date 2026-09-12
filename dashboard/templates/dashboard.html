@@ -1561,6 +1561,28 @@
                         <div id="details-key-status-badge"></div>
                     </div>
 
+                    <!-- Current Key Configuration -->
+                    <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(56,189,248,0.16); border-radius: 10px; padding: 12px;">
+                        <span style="display: block; font-size: 12px; font-weight: 700; color: #e2e8f0; margin-bottom: 9px;">⚙️ Key Configuration</span>
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                            <div><span style="display:block;color:#64748b;font-size:10px;">Created</span><span id="details-created-at" style="color:#cbd5e1;font-size:11px;white-space:nowrap;">—</span></div>
+                            <div><span style="display:block;color:#64748b;font-size:10px;">Last Updated</span><span id="details-updated-at" style="color:#cbd5e1;font-size:11px;white-space:nowrap;">—</span></div>
+                            <div><span style="display:block;color:#64748b;font-size:10px;">Quota</span><span id="details-quota" style="color:#fbbf24;font-size:11px;font-weight:700;white-space:nowrap;">Unlimited</span></div>
+                            <div><span style="display:block;color:#64748b;font-size:10px;">Remaining</span><span id="details-config-remaining" style="color:#34d399;font-size:11px;font-weight:700;white-space:nowrap;">Unlimited</span></div>
+                            <div><span style="display:block;color:#64748b;font-size:10px;">Auto-Refill</span><span id="details-refill" style="color:#38bdf8;font-size:11px;font-weight:700;white-space:nowrap;">One-Time</span></div>
+                            <div><span style="display:block;color:#64748b;font-size:10px;">Next Refill</span><span id="details-next-refill" style="color:#38bdf8;font-size:11px;font-weight:700;white-space:nowrap;">—</span></div>
+                            <div><span style="display:block;color:#64748b;font-size:10px;">Expires</span><span id="details-expires-at" style="color:#c084fc;font-size:11px;font-weight:700;white-space:nowrap;">Never</span></div>
+                            <div><span style="display:block;color:#64748b;font-size:10px;">Providers / Models</span><span id="details-access" style="color:#cbd5e1;font-size:11px;font-weight:700;white-space:nowrap;">—</span></div>
+                            <div style="grid-column:1/-1;"><span style="display:block;color:#64748b;font-size:10px;">Provider Limits</span><span id="details-provider-limits" style="color:#fbbf24;font-size:11px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;display:block;">Unlimited</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Change History -->
+                    <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px;">
+                        <span style="display:block;font-size:12px;font-weight:700;color:#e2e8f0;margin-bottom:8px;">🕒 Change History</span>
+                        <div id="details-history-container" style="display:flex;flex-direction:column;gap:6px;"></div>
+                    </div>
+
                     <!-- Usage Stats Grid -->
                     <div id="details-stats-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                         <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(56,189,248,0.2); border-radius: 10px; padding: 12px; text-align: center;">
@@ -2813,6 +2835,48 @@
 
                 document.getElementById('details-key-name').textContent = d.name || 'Key';
                 document.getElementById('details-key-id').textContent = d.id;
+
+                const fmtDate = (ts, fallback = '—') => {
+                    if (!ts) return fallback;
+                    const n = typeof ts === 'number' ? ts * 1000 : ts;
+                    const date = new Date(n);
+                    return Number.isNaN(date.getTime()) ? fallback : date.toLocaleString([], { dateStyle: 'medium', timeStyle: 'short' });
+                };
+                const refillLabel = d.refill_val && d.refill_unit ? `Every ${d.refill_val} ${d.refill_unit}` : 'One-Time';
+                const quotaLabel = d.max_tokens ? `${formatTokenCount(d.max_tokens)} Tokens` : 'Unlimited';
+                const remainingLabel = d.remaining_tokens == null ? 'Unlimited' : formatTokenCount(d.remaining_tokens);
+                const formatRemaining = (seconds) => {
+                    if (seconds == null) return '—';
+                    if (seconds <= 0) return 'Expired';
+                    const days = Math.floor(seconds / 86400);
+                    const hours = Math.floor((seconds % 86400) / 3600);
+                    const minutes = Math.floor((seconds % 3600) / 60);
+                    return days ? `in ${days}d ${hours}h` : hours ? `in ${hours}h ${minutes}m` : `in ${minutes}m`;
+                };
+                const nextRefillLabel = d.next_refill_ts ? `${fmtDate(d.next_refill_ts)} · ${formatRemaining(Math.max(0, d.next_refill_ts - Date.now() / 1000))}` : '—';
+                const expiryLabel = d.expires_at ? `${fmtDate(d.expires_at)} · ${d.expired ? 'Expired' : formatRemaining(d.expiry_remaining_seconds)}` : 'Never';
+                const accessLabel = `${(d.allowed_providers || []).length} providers · ${d.allowed_models?.length ? d.allowed_models.length + ' models' : 'All models'}`;
+                document.getElementById('details-created-at').textContent = fmtDate(d.created_at_ts, d.created_at || '—');
+                document.getElementById('details-updated-at').textContent = fmtDate(d.updated_at_ts);
+                document.getElementById('details-quota').textContent = quotaLabel;
+                document.getElementById('details-config-remaining').textContent = remainingLabel;
+                document.getElementById('details-refill').textContent = refillLabel;
+                document.getElementById('details-next-refill').textContent = nextRefillLabel;
+                document.getElementById('details-expires-at').textContent = expiryLabel;
+                document.getElementById('details-access').textContent = accessLabel;
+                const providerLimits = Object.entries(d.token_limits || {})
+                    .filter(([, value]) => value != null)
+                    .map(([provider, value]) => `${provider}: ${formatTokenCount(value)}`)
+                    .join(' · ');
+                document.getElementById('details-provider-limits').textContent = providerLimits || 'Unlimited';
+                const history = document.getElementById('details-history-container');
+                if (history) {
+                    const entries = d.timeline || [];
+                    history.innerHTML = entries.length ? entries.slice().reverse().map(item => {
+                        const changed = Object.keys(item.changes || {}).join(', ') || item.action || 'created';
+                        return `<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;background:rgba(0,0,0,0.3);padding:7px 9px;border-radius:7px;font-size:10.5px;"><span style="color:#cbd5e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(changed)}</span><span style="color:#64748b;white-space:nowrap;">${fmtDate(item.timestamp)}</span></div>`;
+                    }).join('') : '<span style="color:#64748b;font-size:11px;">No changes recorded yet.</span>';
+                }
                 
                 const statusBadge = document.getElementById('details-key-status-badge');
                 if (statusBadge) {

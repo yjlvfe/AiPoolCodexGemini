@@ -12,6 +12,7 @@ import subprocess
 import sys
 import secrets
 import hashlib
+import sqlite3
 from pathlib import Path
 BRIDGES_DIR = str(Path(__file__).resolve().parents[1] / 'bridges')
 if BRIDGES_DIR not in sys.path:
@@ -660,6 +661,9 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                     "raw_token": raw_token,
                     "enabled": True,
                     "created_at": time.strftime("%Y-%m-%d %H:%M"),
+                    "created_at_ts": time.time(),
+                    "updated_at_ts": time.time(),
+                    "change_history": [{"timestamp": time.time(), "action": "created", "changes": {}}],
                     "sha256": digest
                 })
                 data["clients"] = clients
@@ -757,27 +761,73 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
 
                 # Sort top models by tokens used (or requests)
                 top_models = sorted([{"model": m, "tokens": toks} for m, toks in by_model.items()], key=lambda x: x["tokens"], reverse=True)[:3]
-
+                now = time.time()
+                created_at_ts = found_client.get("created_at_ts")
+                try:
+                    created_at_ts = float(created_at_ts) if created_at_ts else None
+                except (TypeError, ValueError):
+                    created_at_ts = None
+                refill_seconds = found_client.get("refill_period_seconds")
+                cycle_start_ts = None
+                if refill_seconds and created_at_ts:
+                    cycle_start_ts = created_at_ts + (int(max(0, now - created_at_ts) // float(refill_seconds)) * float(refill_seconds))
+                cycle_used = 0
+                if cycle_start_ts is not None and os.path.isfile(db_path):
+                    try:
+                        with sqlite3.connect(db_path, timeout=5) as conn:
+                            for row in conn.execute("SELECT audit_json, total_tokens, timestamp FROM request_events WHERE audit_json IS NOT NULL AND audit_json != ''"):
+                                try:
+                                    aud = json.loads(row[0])
+                                    if (aud.get("client_label") or "").lower() not in (c_name, c_id):
+                                        continue
+                                    ts = row[2]
+                                    if isinstance(ts, str):
+                                        import datetime
+                                        ts = datetime.datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+                                    if float(ts or 0) >= cycle_start_ts:
+                                        cycle_used += int(row[1] or 0)
+                                except Exception:
+                                    pass
+                    except Exception:
+                        pass
+                expires_at = found_client.get("expires_at")
+                try:
+                    expires_at = float(expires_at) if expires_at is not None else None
+                except (TypeError, ValueError):
+                    expires_at = None
+                details_max = found_client.get("max_tokens")
+                remaining_tokens = max(0, int(details_max) - cycle_used) if details_max is not None and cycle_start_ts is not None else (max(0, int(details_max) - total_tokens) if details_max is not None else None)
+                provider_remaining = {}
+                for provider, limit in (found_client.get("token_limits") or {}).items():
+                    used = int((by_provider.get(str(provider).lower()) or {}).get("tokens", 0))
+                    provider_remaining[str(provider).lower()] = {
+                        "limit": limit,
+                        "used": used,
+                        "remaining": max(0, int(limit) - used) if limit is not None else None
+                    }
                 self.send_json_response({
                     "success": True,
                     "details": {
-                        "id": found_client.get("id"),
-                        "name": found_client.get("name"),
+                        "id": found_client.get("id"), "name": found_client.get("name"),
                         "enabled": found_client.get("enabled", True),
                         "created_at": found_client.get("created_at", "Custom Key"),
+                        "created_at_ts": created_at_ts, "updated_at_ts": found_client.get("updated_at_ts"),
                         "allowed_providers": found_client.get("allowed_providers", ["codex", "gemini"]),
                         "allowed_models": found_client.get("allowed_models", []),
-                        "token_limits": found_client.get("token_limits", {}),
-                        "max_tokens": found_client.get("max_tokens"),
-                        "refill_period": found_client.get("refill_period"),
-                        "refill_period_seconds": found_client.get("refill_period_seconds"),
+                        "token_limits": found_client.get("token_limits", {}), "provider_remaining": provider_remaining, "max_tokens": details_max,
+                        "remaining_tokens": remaining_tokens, "cycle_used_tokens": cycle_used,
+                        "refill_period": found_client.get("refill_period"), "refill_period_seconds": refill_seconds,
+                        "refill_unit": found_client.get("refill_unit"), "refill_val": found_client.get("refill_val"),
+                        "cycle_start_ts": cycle_start_ts,
+                        "next_refill_ts": cycle_start_ts + float(refill_seconds) if cycle_start_ts is not None else None,
                         "expiration_duration": found_client.get("expiration_duration"),
-                        "expires_at": found_client.get("expires_at"),
-                        "expired": bool(found_client.get("expires_at") and time.time() > float(found_client.get("expires_at"))),
-                        "total_tokens": total_tokens,
-                        "total_requests": total_requests,
-                        "by_provider": by_provider,
-                        "top_models": top_models
+                        "expiration_unit": found_client.get("expiration_unit"), "expiration_val": found_client.get("expiration_val"),
+                        "expires_at": expires_at, "expired": bool(expires_at and now > expires_at),
+                        "expiry_remaining_seconds": max(0, int(expires_at - now)) if expires_at else None,
+                        "allowed_models_count": len(found_client.get("allowed_models") or []),
+                        "total_tokens": total_tokens, "total_requests": total_requests,
+                        "by_provider": by_provider, "top_models": top_models,
+                        "timeline": found_client.get("change_history", [])[-20:]
                     }
                 })
             except Exception as e:
@@ -816,6 +866,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                 for c in data.get("clients", []):
                     if c.get("id") == target_id:
                         found = True
+                        before = {k: c.get(k) for k in ("name", "enabled", "allowed_providers", "allowed_models", "token_limits", "max_tokens", "refill_unit", "refill_val", "refill_period_seconds", "expiration_unit", "expiration_val", "expiration_duration", "expires_at")}
                         if new_name is not None:
                             clean_n = str(new_name).strip()
                             if clean_n:
@@ -848,6 +899,16 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                             c["expires_at"] = float(expires_at) if expires_at is not None else None
                         if not c.get("created_at_ts"):
                             c["created_at_ts"] = time.time()
+                        now_ts = time.time()
+                        changes = {}
+                        for key, old_value in before.items():
+                            new_value = c.get(key)
+                            if old_value != new_value:
+                                changes[key] = {"old": old_value, "new": new_value}
+                        c["updated_at_ts"] = now_ts
+                        if changes:
+                            c.setdefault("change_history", []).append({"timestamp": now_ts, "action": "updated", "changes": changes})
+                            c["change_history"] = c["change_history"][-50:]
                         break
                 if not found:
                     self.send_json_response({"success": False, "message": f"Token {target_id} not found"}, status_code=404)
