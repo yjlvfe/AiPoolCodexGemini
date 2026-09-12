@@ -6,6 +6,7 @@ config.env
 
 # Live account storage and credentials
 accounts_backup/
+/dashboard/*.db*
 auth.db
 *.db
 *.sqlite3

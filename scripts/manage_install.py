@@ -14,8 +14,67 @@ ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0,str(ROOT / "cli"))
 from config_env import load
 load()
-SERVICES = {'ai-gemini-bridge': 'bridges/gemini_bridge.py', 'ai-codex-bridge': 'bridges/codex_bridge.py', 'ai-dashboard': 'dashboard/server.py', 'ai-bot': 'dashboard/bot_service.py'}
-STATE = Path.home() / '.local/state/aipool'
+SERVICES = {
+    'codex': 'bridges/codex_bridge.py',
+    'gemini': 'bridges/gemini_bridge.py',
+    'dashboard': 'dashboard/server.py',
+}
+SYSTEM_UNIT_DIR = Path('/etc/systemd/system')
+USER_UNIT_DIRS = (Path('/etc/systemd/user'), Path.home() / '.config/systemd/user')
+DEPLOY_ROOT = Path('/var/lib/aipool/app')
+DEPLOY_VENV = Path('/var/lib/aipool/venv')
+STATE = Path('/var/lib/aipool/runtime')
+SERVICE_USERS = {'codex': 'aipool', 'gemini': 'aipool', 'dashboard': 'root'}
+LEGACY_BY_SERVICE = {
+    'codex': (
+        'ai-codex.service', 'ai-codex-bridge.service',
+        'aipool-codex.service', 'aipool-codex-bridge.service',
+    ),
+    'gemini': (
+        'ai-gemini.service', 'ai-gemini-bridge.service',
+        'aipool-gemini.service', 'aipool-gemini-bridge.service',
+    ),
+    'dashboard': (
+        'ai-dashboard.service', 'ai-bot.service', 'aipool-dashboard.service',
+    ),
+}
+HARDENED_COMMON = (
+    'NoNewPrivileges=true', 'PrivateTmp=true', 'ProtectSystem=strict', 'ProtectHome=true',
+    'ReadWritePaths=/var/lib/aipool/runtime /var/lib/aipool/accounts',
+    'RestrictAddressFamilies=AF_UNIX AF_INET AF_INET6', 'CapabilityBoundingSet=',
+    'LockPersonality=true', 'MemoryDenyWriteExecute=true', 'RestrictSUIDSGID=true', 'UMask=0077',
+)
+
+def unit_paths(name):
+    return (SYSTEM_UNIT_DIR / name, *(directory / name for directory in USER_UNIT_DIRS))
+
+
+def legacy_units(services=None):
+    services = tuple(services or SERVICES)
+    candidates = tuple(unit for service in services for unit in LEGACY_BY_SERVICE[service])
+    found = set()
+    for command in (
+        ['systemctl', 'list-unit-files', '--all', '--no-legend'],
+        ['systemctl', '--user', 'list-unit-files', '--all', '--no-legend'],
+    ):
+        result = subprocess.run(command, capture_output=True, text=True, check=False)
+        found.update(line.split(None, 1)[0] for line in result.stdout.splitlines())
+    for name in candidates:
+        if any(path.exists() for path in unit_paths(name)):
+            found.add(name)
+    return tuple(name for name in candidates if name in found)
+
+
+def retire_legacy_units(names):
+    for name in names:
+        for scope in ([], ['--user']):
+            subprocess.run(['systemctl', *scope, 'stop', name], check=False, timeout=60)
+            subprocess.run(['systemctl', *scope, 'disable', name], check=False, timeout=60)
+        for path in unit_paths(name):
+            path.unlink(missing_ok=True)
+    run(['systemctl', 'daemon-reload'])
+    subprocess.run(['systemctl', 'reset-failed'], check=False, timeout=60)
+    subprocess.run(['systemctl', '--user', 'daemon-reload'], check=False, timeout=60)
 
 
 def quote(value):
@@ -90,12 +149,10 @@ def install_cli(prefix):
 
 
 def service_available():
-    runtime = Path(f'/run/user/{os.getuid()}')
-    if runtime.exists():
-        os.environ.setdefault('XDG_RUNTIME_DIR', str(runtime))
-        os.environ.setdefault('DBUS_SESSION_BUS_ADDRESS', f'unix:path={runtime}/bus')
-    return shutil.which('systemctl') and subprocess.run(['systemctl', '--user', 'show-environment'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
-
+    return os.geteuid() == 0 and shutil.which('systemctl') and subprocess.run(
+        ['systemctl', 'show-environment'], stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL, check=False
+    ).returncode == 0
 
 def ensure_dependencies():
     runtime = ROOT / '.venv/bin/python'
@@ -190,34 +247,42 @@ def ensure_dependencies():
     return runtime
 
 
-def render_unit(name, relative, prefix):
-    script = ROOT / relative
-    path = os.pathsep.join([str(prefix / 'bin'), str(Path.home() / '.local/bin'), '/usr/local/bin', '/usr/bin', '/bin'])
-    env_files = [f'EnvironmentFile=-{str(ROOT / "config.env").replace("%", "%%")}']
-    # The Telegram bot must issue tokens into the same auth DB consumed by
-    # the deployed dashboard.  Keep this optional for generic installations.
-    if name == 'ai-bot':
-        env_files.append('EnvironmentFile=-/etc/aipool/aipool.env')
-    lines = [
-        '[Unit]',
-        f'Description=AiPool - {name}',
-        'After=network.target',
-        '',
-        '[Service]',
-        'Type=simple',
-        f'WorkingDirectory={str(script.parent).replace("%", "%%")}',
-        f'ExecStart={quote(ROOT / ".venv/bin/python")} {quote(script)}',
-        f'Environment={quote("PATH=" + path)}',
-        *env_files,
-        'Restart=on-failure',
-        'RestartSec=3',
-        '',
-        '[Install]',
-        'WantedBy=default.target',
-        '',
-    ]
-    return '\\n'.join(lines)
+def render_unit(name, relative):
+    script = DEPLOY_ROOT / relative
+    python = DEPLOY_VENV / 'bin/python'
+    user = SERVICE_USERS[name]
+    environment = ['EnvironmentFile=/etc/aipool/aipool.env']
+    if name == 'dashboard':
+        environment += [
+            'Environment=HOME=/root',
+            'Environment=PYTHONUNBUFFERED=1',
+            'Environment=PYTHONPATH=/var/lib/aipool/app/cli:/var/lib/aipool/app/bridges:/var/lib/aipool/app/scripts',
+            'Environment=PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        ]
+    else:
+        environment.append('Environment=HOME=/var/lib/aipool')
+    return "\n".join([
+        '[Unit]', f'Description=AiPool {name} service',
+        'After=network-online.target', 'Wants=network-online.target', '',
+        '[Service]', 'Type=simple', f'User={user}', f'Group={user}',
+        f'WorkingDirectory={script.parent}',
+        f'ExecStart={quote(python)}' + (' -u' if name == 'dashboard' else '') + f' {quote(script)}',
+        *environment, 'Restart=on-failure', 'RestartSec=3', *HARDENED_COMMON, '',
+        '[Install]', 'WantedBy=multi-user.target', '',
+    ])
 
+
+def install_system_services(include_dashboard=True):
+    names = tuple(SERVICES) if include_dashboard else ('codex', 'gemini')
+    SYSTEM_UNIT_DIR.mkdir(parents=True, exist_ok=True)
+    for name in names:
+        (SYSTEM_UNIT_DIR / f'{name}.service').write_text(render_unit(name, SERVICES[name]))
+    run(['systemctl', 'daemon-reload'])
+    for name in names:
+        run(['systemctl', 'enable', '--now', f'{name}.service'])
+        run(['systemctl', 'is-active', '--quiet', f'{name}.service'])
+        run(['systemctl', 'is-enabled', '--quiet', f'{name}.service'])
+    retire_legacy_units(legacy_units(names))
 
 def installed_prefix():
     try:
@@ -244,11 +309,9 @@ def main():
             raise ValueError('Installation belongs to another clone; nothing removed')
         if not args.cli_only and manifest.get('services'):
             for name in SERVICES:
-                run(['systemctl', '--user', 'disable', '--now', name + '.service'])
-                unit = Path.home() / '.config/systemd/user' / (name + '.service')
-                if unit.is_file() and str(ROOT) in unit.read_text():
-                    unit.unlink()
-            run(['systemctl', '--user', 'daemon-reload'])
+                subprocess.run(['systemctl', 'disable', '--now', name + '.service'], check=False)
+                (SYSTEM_UNIT_DIR / (name + '.service')).unlink(missing_ok=True)
+            run(['systemctl', 'daemon-reload'])
         for value in manifest['links']:
             path = Path(value)
             if path.is_symlink() and path.resolve().parent == ROOT / 'cli':
@@ -259,7 +322,7 @@ def main():
     if sys.version_info < (3, 10):
         raise ValueError('Python 3.10+ is required')
     if not args.cli_only and not service_available():
-        raise ValueError('No systemd user session. Run install.sh --cli-only for CLI tools; enable a user systemd session before installing background services. Do not run with sudo on a desktop.')
+        raise ValueError('systemd is unavailable; use --cli-only for CLI tools')
     prefix = (args.prefix or Path(os.environ['AIPOOL_PREFIX']) if os.environ.get('AIPOOL_PREFIX') else args.prefix or installed_prefix()).expanduser().absolute()
     if args.update:
         state_file = STATE / 'installation.json'
@@ -286,32 +349,7 @@ def main():
     if args.cli_only:
         print('CLI-only installation completed. No services or account files changed.')
         return
-    units = Path.home() / '.config/systemd/user'
-    units.mkdir(parents=True, exist_ok=True)
-    for name, relative in SERVICES.items():
-        unit = units / (name + '.service')
-        if unit.is_symlink():
-            unit.unlink()
-        content = render_unit(name, relative, prefix)
-        if unit.is_file() and unit.read_text() != content:
-            shutil.copy2(unit,unit.with_name(unit.name+f'.aipool-{time.time_ns()}.bak'))
-        unit.write_text(content)
-    run(['systemctl', '--user', 'daemon-reload'])
-    for name in SERVICES:
-        if args.no_dashboard and name == 'ai-dashboard':
-            continue
-        # An unconfigured bot is optional; preserve an existing configured instance.
-        if name == 'ai-bot' and not (os.environ.get('TG_BOT_TOKEN') or os.environ.get('BOT_TOKEN')):
-            active = subprocess.run(['systemctl', '--user', 'is-active', '--quiet', name + '.service']).returncode == 0
-            if not active:
-                print('Telegram bot not configured; skipped.')
-                continue
-        run(['systemctl', '--user', 'enable', name + '.service'])
-        run(['systemctl', '--user', 'restart', name + '.service'])
-        run(['systemctl', '--user', 'is-active', '--quiet', name + '.service'])
-    if not args.cli_only:
-        integration_status = integrate_installed_agents()
-        print('Agent integrations:', json.dumps(integration_status, ensure_ascii=False))
+    install_system_services(include_dashboard=not args.no_dashboard)
     if not args.no_dashboard:
         port = os.environ.get('DASHBOARD_PORT', '8444')
         deadline = time.monotonic() + 45
@@ -323,7 +361,7 @@ def main():
                 break
             except OSError:
                 if time.monotonic() >= deadline:
-                    raise ValueError('Dashboard is not reachable; installation is NOT complete. Check systemctl --user status ai-dashboard')
+                    raise ValueError('Dashboard is not reachable; installation is NOT complete. Check systemctl status dashboard.service')
                 time.sleep(0.5)
         print(f'Dashboard reachable: http://127.0.0.1:{port}')
     print('Installation completed. Account authentication is checked separately with cusage / agusage.')

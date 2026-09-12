@@ -12,7 +12,7 @@ from pool_runtime import AccountPool
 
 class PoolRuntimeTests(unittest.TestCase):
     def test_expiry_normalizes_seconds_milliseconds_and_invalid_values(self):
-        pool = AccountPool('antigravity')
+        pool = AccountPool('gemini')
         self.assertEqual(pool._expiry_seconds({'expires_at': 1_700_000_000}, {}), 1_700_000_000)
         self.assertEqual(pool._expiry_seconds({'expires_at': 1_700_000_000_000}, {}), 1_700_000_000)
         self.assertEqual(pool._expiry_seconds({'expires_at': 'not-a-time'}, {}), 0.0)

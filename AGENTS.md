@@ -22,9 +22,9 @@
 - **قاعدة بيانات الجلسات والتوثيق:** `/var/lib/aipool/runtime/auth.db` و `/var/lib/aipool/runtime/pool_snapshot.json`
 
 ### 2. خدمات النظام (System Services):
-- `aipool-codex-bridge.service`: جسر OpenAI/Codex على المنفذ **8124** (المستخدم: `aipool`).
-- `aipool-gemini-bridge.service`: جسر Google Antigravity على المنفذ **8123** (المستخدم: `aipool`).
-- `aipool-dashboard.service`: سيرفر لوحة التحكم Web UI على المنفذ **8444** (المستخدم: `aipool`).
+- `codex.service`: جسر OpenAI/Codex على المنفذ **8124** (المستخدم: `aipool`).
+- `gemini.service`: جسر Google Antigravity على المنفذ **8123** (المستخدم: `aipool`).
+- `dashboard.service`: سيرفر لوحة التحكم Web UI على المنفذ **8444** (المستخدم: `aipool`).
 
 ---
 
@@ -59,5 +59,5 @@
      ```bash
      chown -R aipool:aipool /var/lib/aipool/accounts /var/lib/aipool/runtime
      ```
-  3. أعد تشغيل الخدمات المعنية (`systemctl restart aipool-*.service`).
+  3. أعد تشغيل الخدمات المعنية (`systemctl restart codex.service gemini.service`).
   4. تحقق من مطابقة مخرجات التيرمنال مع اللوحة قبل إنهاء المهمة.

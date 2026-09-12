@@ -18,7 +18,6 @@ import uuid
 from typing import Any
 
 
-ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_TTL_SECONDS = 15 * 60
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
 
@@ -27,7 +26,7 @@ def _path() -> Path:
     configured = os.environ.get("AIPOOL_RECOVERY_DB")
     if configured:
         return Path(configured).expanduser()
-    return Path(os.environ.get("AUTH_DB_PATH", ROOT / "dashboard/auth.db"))
+    return Path(os.environ.get("AUTH_DB_PATH", "/var/lib/aipool/runtime/auth.db"))
 
 
 def _json(value: Any) -> str:

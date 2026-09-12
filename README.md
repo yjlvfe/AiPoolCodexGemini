@@ -55,7 +55,7 @@ bash install.sh
 
 ### 5. Verify Services
 ```bash
-systemctl --user status ai-codex-bridge ai-gemini-bridge ai-dashboard
+sudo systemctl status codex.service gemini.service dashboard.service
 ```
 
 ---

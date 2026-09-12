@@ -75,11 +75,11 @@ def test_magic_link_expires_after_30_minutes(tmp_path,monkeypatch):
 
 
 def test_anonymous_requests_are_not_implicitly_cached():
-    assert request_key('Antigravity','/chat',{'x':1}) != request_key('Antigravity','/chat',{'x':1})
+    assert request_key('Gemini','/chat',{'x':1}) != request_key('Gemini','/chat',{'x':1})
 
 
 def test_explicit_keys_are_client_scoped():
-    assert request_key('Antigravity','/chat',{},'same',client_scope='a') != request_key('Antigravity','/chat',{},'same',client_scope='b')
+    assert request_key('Gemini','/chat',{},'same',client_scope='a') != request_key('Gemini','/chat',{},'same',client_scope='b')
 
 
 def test_nested_account_lock_does_not_deadlock(tmp_path):

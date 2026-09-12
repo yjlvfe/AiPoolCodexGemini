@@ -1,10 +1,24 @@
 """SQLite request history and backward-compatible schema migration."""
 import os, sqlite3, time, uuid, json
 from pathlib import Path
-ROOT = Path(__file__).resolve().parents[1]
+
+_POOL_ALIASES = {
+    'codex': 'Codex',
+    'gemini': 'Gemini',
+    'antigravity': 'Gemini',
+    'mixture': 'Mixture',
+}
+
+
+def canonical_pool_name(value):
+    """Return the public pool name without treating unknown pools as totals."""
+    if not isinstance(value, str):
+        return None
+    return _POOL_ALIASES.get(value.strip().lower())
+
 
 def db_path():
-    return Path(os.environ.get('AUTH_DB_PATH',ROOT/'dashboard/auth.db'))
+    return Path(os.environ.get('AUTH_DB_PATH','/var/lib/aipool/runtime/auth.db'))
 
 
 def initialize(path=None):
@@ -104,6 +118,7 @@ def _usage_int(value):
 def _record(provider, model, usage=None, account=None, status='OK', request_id=None, audit=None, error_code=None):
     path = initialize()
     model = clean_model_name(model)
+    provider = canonical_pool_name(provider) or provider
     usage = usage or {}
     prompt = _usage_int(usage.get('input_tokens', usage.get('prompt_tokens')))
     completion = _usage_int(usage.get('output_tokens', usage.get('completion_tokens')))
@@ -166,15 +181,18 @@ def _record(provider, model, usage=None, account=None, status='OK', request_id=N
 
 def report(path):
     initialize(path)
-    providers = {name:{'total_tokens':0,'requests':0,'models':{}} for name in ('Antigravity','Codex','Mixture')}
+    providers = {name:{'total_tokens':0,'requests':0,'models':{}} for name in ('Gemini','Codex','Mixture')}
     recent = []
     with sqlite3.connect(path,timeout=10) as conn:
         conn.row_factory = sqlite3.Row
-        for r in conn.execute("SELECT pool,model,count(*) calls,sum(prompt_tokens) p,sum(completion_tokens) c,sum(total_tokens) t,max(timestamp) ts FROM request_events WHERE pool IN ('Codex','Antigravity','Mixture') GROUP BY pool,model"):
-            m_name = clean_model_name(r['model'])
-            p = providers[r['pool']]
+        for r in conn.execute("SELECT pool,model,count(*) calls,sum(prompt_tokens) p,sum(completion_tokens) c,sum(total_tokens) t,max(timestamp) ts FROM request_events WHERE lower(pool) IN ('codex','gemini','antigravity','mixture') GROUP BY pool,model"):
+            pool_name = canonical_pool_name(r['pool'])
+            if pool_name is None:
+                continue
+            p = providers[pool_name]
             p['total_tokens'] += r['t'] or 0
             p['requests'] += r['calls']
+            m_name = clean_model_name(r['model'])
             if m_name in p['models']:
                 entry = p['models'][m_name]
                 entry['requests_count'] += r['calls']
@@ -182,9 +200,12 @@ def report(path):
                 entry['completion_tokens'] += (r['c'] or 0)
                 entry['total_tokens'] += (r['t'] or 0)
             else:
-                p['models'][m_name] = {'model':m_name,'provider':r['pool'],'requests_count':r['calls'],'prompt_tokens':r['p'] or 0,'completion_tokens':r['c'] or 0,'total_tokens':r['t'] or 0,'last_used':time.strftime('%m/%d %H:%M',time.localtime(r['ts']))}
-        for r in conn.execute("SELECT pool,model,SUM(requests) calls,SUM(prompt_tokens) p,SUM(completion_tokens) c,SUM(total_tokens) t,MAX(day) day FROM usage_rollups WHERE pool IN ('Codex','Antigravity','Mixture') GROUP BY pool,model"):
-            p = providers[r['pool']]
+                p['models'][m_name] = {'model':m_name,'provider':pool_name,'requests_count':r['calls'],'prompt_tokens':r['p'] or 0,'completion_tokens':r['c'] or 0,'total_tokens':r['t'] or 0,'last_used':time.strftime('%m/%d %H:%M',time.localtime(r['ts']))}
+        for r in conn.execute("SELECT pool,model,SUM(requests) calls,SUM(prompt_tokens) p,SUM(completion_tokens) c,SUM(total_tokens) t,MAX(day) day FROM usage_rollups WHERE lower(pool) IN ('codex','gemini','antigravity','mixture') GROUP BY pool,model"):
+            pool_name = canonical_pool_name(r['pool'])
+            if pool_name is None:
+                continue
+            p = providers[pool_name]
             p['total_tokens'] += r['t'] or 0
             p['requests'] += r['calls'] or 0
             m_name = clean_model_name(r['model'])
@@ -195,18 +216,21 @@ def report(path):
                 entry['completion_tokens'] += r['c'] or 0
                 entry['total_tokens'] += r['t'] or 0
             else:
-                p['models'][m_name] = {'model':m_name,'provider':r['pool'],'requests_count':r['calls'] or 0,'prompt_tokens':r['p'] or 0,'completion_tokens':r['c'] or 0,'total_tokens':r['t'] or 0,'last_used':r['day']}
+                p['models'][m_name] = {'model':m_name,'provider':pool_name,'requests_count':r['calls'] or 0,'prompt_tokens':r['p'] or 0,'completion_tokens':r['c'] or 0,'total_tokens':r['t'] or 0,'last_used':r['day']}
         for r in conn.execute(
                 "SELECT id, model, pool, prompt_tokens, completion_tokens, total_tokens, "
                 "time_formatted, status, account, usage_known, request_id, "
                 "(audit_json IS NOT NULL AND audit_json != '') AS audit_available "
-                "FROM request_events WHERE pool IN ('Codex','Antigravity','Mixture') ORDER BY id DESC LIMIT 50"):
+                "FROM request_events WHERE lower(pool) IN ('codex','gemini','antigravity','mixture') ORDER BY id DESC LIMIT 500"):
+            pool_name = canonical_pool_name(r['pool'])
+            if pool_name is None:
+                continue
             recent.append({
                 'id': r['id'],
                 'call_num': r['id'],
                 'model': clean_model_name(r['model']),
-                'provider': r['pool'],
-                'pool': r['pool'],
+                'provider': pool_name,
+                'pool': pool_name,
                 'prompt': r['prompt_tokens'],
                 'completion': r['completion_tokens'],
                 'tokens': r['total_tokens'],

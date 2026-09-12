@@ -14,13 +14,13 @@ from config_env import load
 if 'AIPOOL_CONFIG_ENV' not in os.environ and Path('/etc/aipool/aipool.env').is_file():
     os.environ['AIPOOL_CONFIG_ENV'] = '/etc/aipool/aipool.env'
 load()
-DB_PATH = Path(os.environ.get('AUTH_DB_PATH', ROOT / 'dashboard/auth.db'))
+DB_PATH = Path(os.environ.get('AUTH_DB_PATH', '/var/lib/aipool/runtime/auth.db'))
 p=argparse.ArgumentParser()
-p.add_argument('provider',choices=['codex','antigravity'])
+p.add_argument('provider',choices=['codex','gemini'])
 p.add_argument('model')
 a=p.parse_args()
 port=8124 if a.provider=='codex' else 8123
-pool='Codex' if a.provider=='codex' else 'Antigravity'
+pool='Codex' if a.provider=='codex' else 'Gemini'
 path='/v1/responses' if a.provider=='codex' else '/v1/chat/completions'
 with sqlite3.connect('file:'+str(DB_PATH)+'?mode=ro',uri=True) as c:
     before=c.execute('SELECT coalesce(max(id),0) FROM request_events').fetchone()[0]

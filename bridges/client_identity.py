@@ -114,7 +114,7 @@ def authorize(handler, provider):
             overall_limit = client_obj.get('max_tokens')
             if prov_limit is not None or overall_limit is not None:
                 # Query used tokens from request_events DB
-                db_path = os.environ.get('AUTH_DB_PATH') or str(Path(__file__).resolve().parents[1] / 'bridges/auth.db')
+                db_path = os.environ.get('AUTH_DB_PATH') or '/var/lib/aipool/runtime/auth.db'
                 if os.path.isfile(db_path):
                     try:
                         import sqlite3

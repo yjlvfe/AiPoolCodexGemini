@@ -17,7 +17,7 @@ import threading
 from typing import Dict, Any, Optional
 
 _CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
-DB_PATH = os.environ.get("AUTH_DB_PATH", os.path.join(_CURRENT_DIR, "auth.db"))
+DB_PATH = os.environ.get("AUTH_DB_PATH", "/var/lib/aipool/runtime/auth.db")
 DEFAULT_SESSION_EXPIRY_HOURS = 30 * 24
 
 
@@ -224,14 +224,14 @@ class PoolManager:
             if not isinstance(data, dict):
                 return
             with self._lock:
-                self._cached_ag = data.get('antigravity')
+                self._cached_ag = data.get('gemini')
                 self._cached_cdx = data.get('codex')
                 self._cached_logs = data.get('logs')
         except (OSError, ValueError, TypeError):
             return
 
     def _persist_snapshot(self, ag_data, cdx_data, logs_data):
-        payload = {'saved_at': time.time(), 'antigravity': ag_data, 'codex': cdx_data, 'logs': logs_data}
+        payload = {'saved_at': time.time(), 'gemini': ag_data, 'codex': cdx_data, 'logs': logs_data}
         try:
             self._snapshot_path.parent.mkdir(parents=True, exist_ok=True)
             tmp = self._snapshot_path.with_suffix('.tmp')
@@ -260,7 +260,7 @@ class PoolManager:
             from account_reports import pool_report
             from concurrent.futures import ThreadPoolExecutor
             with ThreadPoolExecutor(max_workers=2) as executor:
-                ag_future = executor.submit(pool_report, 'antigravity')
+                ag_future = executor.submit(pool_report, 'gemini')
                 cdx_future = executor.submit(pool_report, 'codex')
                 try:
                     ag_data = ag_future.result()
@@ -287,7 +287,7 @@ class PoolManager:
                     self._cached_cdx = cdx_data
                 if logs_data is not None:
                     logs_data["status"] = {
-                        "antigravity": self._cached_ag or ag_data,
+                        "gemini": self._cached_ag or ag_data,
                         "codex": self._cached_cdx or cdx_data
                     }
                     self._cached_logs = logs_data
@@ -301,7 +301,7 @@ class PoolManager:
                 self._enrich_accounts_data(persisted_ag, persisted_cdx)
                 if isinstance(persisted_logs, dict):
                     persisted_logs['status'] = {
-                        'antigravity': persisted_ag,
+                        'gemini': persisted_ag,
                         'codex': persisted_cdx,
                     }
             self._persist_snapshot(persisted_ag, persisted_cdx, persisted_logs)
@@ -334,17 +334,11 @@ class PoolManager:
                     self._refresh_inflight = False
         threading.Thread(target=refresh, daemon=True).start()
 
-    def get_cached_logs_report(self):
-        with self._lock:
-            cached = self._cached_logs
-        if cached:
-            return cached
-        return self._build_logs_report()
-
 
     def get_usage_logs_report(self) -> Dict[str, Any]:
-        # Serve the last snapshot immediately; the worker refreshes it asynchronously.
-        return self.get_cached_logs_report()
+        # The live stream must read the DB on every poll; the account snapshot
+        # remains asynchronous, but cached logs hide events recorded meanwhile.
+        return self._build_logs_report()
 
     def get_request_prompt(self, request_id: str) -> Dict[str, Any]:
         import sys
@@ -355,12 +349,12 @@ class PoolManager:
         return request_log.get_request_prompt(self.auth_db, request_id)
 
     def switch_account(self, system: str, account_num: int) -> tuple:
-        if system not in ('antigravity', 'codex') or not isinstance(account_num, int) or account_num < 1:
+        if system not in ('gemini', 'codex') or not isinstance(account_num, int) or account_num < 1:
             return False, 'Invalid system or account number.'
         import sys
-        cmd = os.path.join(os.path.dirname(_CURRENT_DIR), 'cli', 'ag' if system == 'antigravity' else 'cx')
+        cmd = os.path.join(os.path.dirname(_CURRENT_DIR), 'cli', 'ag' if system == 'gemini' else 'cx')
         # Dashboard only switches existing slots; interactive enrollment belongs in a terminal.
-        store = self.ag_store if system == 'antigravity' else self.codex_store
+        store = self.ag_store if system == 'gemini' else self.codex_store
         account_path = Path(store) / str(account_num)
         if account_path.is_symlink() or not account_path.exists():
             return False, f'Account {account_num} does not exist on this device.'
@@ -373,7 +367,7 @@ class PoolManager:
             return False, detail or f'Failed to switch to account {account_num}.'
         threading.Thread(target=self._update_all_background, daemon=True).start()
         with self._lock:
-            cached_data = self._cached_ag if system == 'antigravity' else self._cached_cdx
+            cached_data = self._cached_ag if system == 'gemini' else self._cached_cdx
             if cached_data and 'accounts' in cached_data:
                 for acc in cached_data['accounts']:
                     acc['is_active'] = (acc.get('account') == account_num)
@@ -382,11 +376,11 @@ class PoolManager:
     def delete_account(self, system: str, account_num: int, confirmation: str = "") -> tuple:
         if confirmation.strip().lower() != 'confirm':
             return False, 'Must type confirm to authorize account deletion.'
-        if system not in ('antigravity', 'codex') or not isinstance(account_num, int) or account_num < 1:
+        if system not in ('gemini', 'codex') or not isinstance(account_num, int) or account_num < 1:
             return False, 'Invalid system or account number.'
         import sys
-        cmd = os.path.join(os.path.dirname(_CURRENT_DIR), 'cli', 'ag' if system == 'antigravity' else 'cx')
-        store = self.ag_store if system == 'antigravity' else self.codex_store
+        cmd = os.path.join(os.path.dirname(_CURRENT_DIR), 'cli', 'ag' if system == 'gemini' else 'cx')
+        store = self.ag_store if system == 'gemini' else self.codex_store
         account_dir = Path(store) / str(account_num)
         if account_dir.is_symlink() or not account_dir.exists():
             return False, f'Account {account_num} does not exist on this device.'
@@ -400,7 +394,7 @@ class PoolManager:
 
         # Clear individual account usage counter upon deletion
         try:
-            pool_name = 'Antigravity' if system == 'antigravity' else 'Codex'
+            pool_name = 'Gemini' if system == 'gemini' else 'Codex'
             with sqlite3.connect(self.auth_db, timeout=5) as conn:
                 conn.execute('DELETE FROM account_usage_counters WHERE pool = ? AND account = ?', (pool_name, str(account_num)))
                 conn.commit()
@@ -416,13 +410,13 @@ class PoolManager:
             if cli_dir not in sys.path:
                 sys.path.insert(0, cli_dir)
             import account_manager
-            mgr = account_manager.Manager('antigravity' if system == 'antigravity' else 'codex')
+            mgr = account_manager.Manager('gemini' if system == 'gemini' else 'codex')
             return str(mgr.active())
         except Exception:
             return ''
 
     def _get_account_tokens_map(self) -> Dict[str, Dict[str, int]]:
-        tokens = {'antigravity': {}, 'codex': {}}
+        tokens = {'gemini': {}, 'codex': {}}
         try:
             with sqlite3.connect(self.auth_db, timeout=5) as conn:
                 for row in conn.execute('SELECT pool, account, total_tokens FROM account_usage_counters').fetchall():
@@ -430,7 +424,7 @@ class PoolManager:
                     acc = str(row[1])
                     tok = int(row[2]) if row[2] else 0
                     if 'anti' in p or 'gem' in p:
-                        tokens['antigravity'][acc] = tok
+                        tokens['gemini'][acc] = tok
                     else:
                         tokens['codex'][acc] = tok
         except Exception:
@@ -439,13 +433,13 @@ class PoolManager:
 
     def _enrich_accounts_data(self, ag_data: dict, cdx_data: dict):
         tok_map = self._get_account_tokens_map()
-        ag_active = self._get_active_account_instant('antigravity')
+        ag_active = self._get_active_account_instant('gemini')
         cdx_active = self._get_active_account_instant('codex')
 
         if isinstance(ag_data, dict) and 'accounts' in ag_data:
             for acc in ag_data['accounts']:
                 acc_num = str(acc.get('account', ''))
-                acc['total_tokens'] = tok_map['antigravity'].get(acc_num, 0)
+                acc['total_tokens'] = tok_map['gemini'].get(acc_num, 0)
                 if ag_active:
                     acc['is_active'] = (str(acc_num) == str(ag_active))
 
@@ -462,7 +456,7 @@ class PoolManager:
             cached_cdx = (self._cached_cdx or {}).copy() if isinstance(self._cached_cdx, dict) else {}
             self._enrich_accounts_data(cached_ag, cached_cdx)
             return {
-                "antigravity": cached_ag,
+                "gemini": cached_ag,
                 "codex": cached_cdx,
                 "active_hermes_default": "gemini-3.8-flash",
                 "fallback_status": "Disabled (Pure Model Lock)",

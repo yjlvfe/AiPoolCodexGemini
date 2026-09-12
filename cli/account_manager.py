@@ -128,7 +128,7 @@ def ag_module():
 class Manager:
     def __init__(self, provider):
         self.provider = provider
-        self.ag = provider == 'antigravity'
+        self.ag = provider == 'gemini'
         self.label = 'Antigravity' if self.ag else 'Codex'
         self.prefix = 'ag' if self.ag else 'c'
         self.store = Path(os.environ.get('AG_ACCOUNT_STORE' if self.ag else 'CODEX_ACCOUNT_STORE', Path.home() / ('.antigravity-accounts' if self.ag else '.codex-accounts')))

@@ -545,7 +545,7 @@ def _antigravity_headers(access):
 from pool_runtime import AccountPool, PoolError, record, retry_seconds, clean_model_name
 from durable_requests import DurableRequestStore, request_key
 from retry_policy import provider_attempts, retry_delay
-AG_POOL = AccountPool('antigravity')
+AG_POOL = AccountPool('gemini')
 
 # A provider outage is a transient infrastructure event, not a reason to
 # abandon a live Hermes turn after one account cycle.  The default is 20
@@ -671,7 +671,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         classified = classify(message, status=status, stream_started=False)
         self._send_json({"error": public_error(classified)}, status)
 
-    def _record_bridge_request(self, out_resp, req_model, pool_name='Antigravity'):
+    def _record_bridge_request(self, out_resp, req_model, pool_name='Gemini'):
         audit = getattr(self, '_audit', None)
         if audit is not None:
             from request_audit import attach_response
@@ -724,7 +724,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         from client_identity import authorize, is_loopback
         forwarded = self.headers.get('X-Real-IP') or self.headers.get('X-Forwarded-For', '').split(',')[0].strip()
         peer = forwarded if forwarded else self.client_address[0]
-        if not is_loopback(peer) and not authorize(self, 'Antigravity'):
+        if not is_loopback(peer) and not authorize(self, 'Gemini'):
             return
         path = urllib.parse.urlparse(self.path).path
         try:
@@ -740,7 +740,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
     def do_POST(self):
         from client_identity import authorize
-        if not authorize(self, 'Antigravity'):
+        if not authorize(self, 'Gemini'):
             return
         from request_audit import attach_provider_payload, capture
         self._audit = None
@@ -804,17 +804,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                self.headers.get('X-Request-ID') or
                                self.headers.get('X-Request-Id'))
                 scope = (getattr(self, '_client_identity', {}).get('credential_id') or 'local')
-                self._durable_key = request_key('Antigravity', path, payload, supplied_id, client_scope=scope)
+                self._durable_key = request_key('Gemini', path, payload, supplied_id, client_scope=scope)
                 state = self._durable_store.begin(
                     key=self._durable_key,
                     request_id=self._audit['request_id'],
-                    provider='Antigravity', model=m, endpoint=path, payload=payload,
+                    provider='Gemini', model=m, endpoint=path, payload=payload,
                 )
                 if state['state'] == 'completed':
                     stored = json.loads(state['response_json'])
                     out = to_openai_response(stored, request_model=m)
                     self._audit['replayed_after_restart'] = True
-                    self._record_bridge_request(out, m, "Antigravity")
+                    self._record_bridge_request(out, m, "Gemini")
                     if stream:
                         self._send_cached_stream(out, requested_model=m)
                     else:
@@ -844,7 +844,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self._durable_store.complete(self._durable_key, ag_resp, 200)
             out = to_openai_response(ag_resp, request_model=m)
             self._audit['latency_ms'] = round((time.perf_counter() - started_at) * 1000, 2)
-            self._record_bridge_request(out, m, "Antigravity")
+            self._record_bridge_request(out, m, "Gemini")
             self._send_json(out, 200)
         except Exception as e:
             print(f"[bridge] POST ERROR: {e}", file=sys.stderr)
@@ -859,7 +859,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
                     self._durable_key, classified.code.value,
                     retryable=(status >= 500 or isinstance(e, (OSError, TimeoutError))),
                 )
-            record('Antigravity',payload.get('model'),None,getattr(self,'_account_used',None),'FAILED',audit=getattr(self,'_audit',None),error_code=classified.code.value)
+            record('Gemini',payload.get('model'),None,getattr(self,'_account_used',None),'FAILED',audit=getattr(self,'_audit',None),error_code=classified.code.value)
             if not self._stream_started:
                 self._send_error(e,status)
             else:
@@ -870,7 +870,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         out = to_openai_response(ag_resp, request_model=requested_model)
         if durable_store and durable_key:
             durable_store.complete(durable_key, ag_resp, 200)
-        self._record_bridge_request(out, requested_model or out['model'], "Antigravity")
+        self._record_bridge_request(out, requested_model or out['model'], "Gemini")
         self._send_cached_stream(out, requested_model=requested_model)
 
     def _call_with_retry(self, ag_body, attempts=None):

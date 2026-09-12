@@ -1,5 +1,5 @@
 {
-  "version": "2.1.6",
-  "updated_at": "2026-09-10T00:00:00+03:00",
+  "version": "2.1.7",
+  "updated_at": "2026-09-12T15:21:37+03:00",
   "description": "Persistent pool snapshots, redacted request inspection, and serialized account refresh"
 }

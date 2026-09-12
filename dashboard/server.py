@@ -153,7 +153,7 @@ def get_cli_tools_status():
         codex={'installed':result.returncode==0,'path':binary,'version':result.stdout.strip()}
     except (OSError,ValueError,subprocess.SubprocessError):
         pass
-    return {'codex':codex,'antigravity':{'installed':True,'path':'Built-in OAuth','version':'No external CLI required'}}
+    return {'codex':codex,'gemini':{'installed':True,'path':'Built-in OAuth','version':'No external CLI required'}}
 
 
 import sys
@@ -344,7 +344,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
 
                 # Compute aggregated token usage per client from request_events DB
                 usage_by_client = {}
-                db_path = os.environ.get("AUTH_DB_PATH") or str(Path(__file__).resolve().parents[1] / "bridges/auth.db")
+                db_path = os.environ.get("AUTH_DB_PATH") or "/var/lib/aipool/runtime/auth.db"
                 if os.path.isfile(db_path):
                     try:
                         import sqlite3
@@ -566,7 +566,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                 account = int(payload.get("account", 0))
             except (TypeError, ValueError):
                 account = 0
-            if system not in ("antigravity", "codex") or account < 1:
+            if system not in ("gemini", "codex") or account < 1:
                 self.send_json_response({"success": False, "message": "Invalid system or account number."}, status_code=400)
                 return
             ok, detail = pm.switch_account(system, account)
@@ -588,7 +588,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             except (TypeError, ValueError):
                 account = 0
             confirmation = payload.get("confirmation", "")
-            if system not in ("antigravity", "codex") or account < 1:
+            if system not in ("gemini", "codex") or account < 1:
                 self.send_json_response({"success": False, "message": "Invalid system or account number."}, status_code=400)
                 return
             if str(confirmation).strip().lower() != "confirm":
@@ -612,7 +612,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json_response({"success": False, "message": str(exc)}, status_code=400)
                 return
             tool = payload.get("tool", "")
-            if tool not in ("codex", "antigravity"):
+            if tool not in ("codex", "gemini"):
                 self.send_json_response({"success": False, "message": "Invalid tool specified."}, status_code=400)
                 return
             base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
@@ -731,7 +731,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                 # Gather usage statistics from request_events DB
                 c_name = (found_client.get("name") or "").lower()
                 c_id = target_id.lower()
-                db_path = os.environ.get("AUTH_DB_PATH") or str(Path(__file__).resolve().parents[1] / "bridges/auth.db")
+                db_path = os.environ.get("AUTH_DB_PATH") or "/var/lib/aipool/runtime/auth.db"
 
                 total_tokens = 0
                 total_requests = 0

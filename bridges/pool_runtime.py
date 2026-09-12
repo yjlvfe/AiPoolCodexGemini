@@ -24,7 +24,7 @@ class AccountPool:
         self.cooldowns = {}
 
     def _cooldown_path(self):
-        return Path(os.environ.get('AUTH_DB_PATH', ROOT / 'dashboard/auth.db'))
+        return Path(os.environ.get('AUTH_DB_PATH', '/var/lib/aipool/runtime/auth.db'))
 
     def _ensure_cooldown_table(self, conn):
         conn.execute('''CREATE TABLE IF NOT EXISTS pool_cooldowns (

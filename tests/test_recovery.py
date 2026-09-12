@@ -46,10 +46,10 @@ class RecoveryTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = Path(directory) / 'recovery.db'
             payload = {'model': 'gemini-3.8-flash', 'messages': [{'role': 'user', 'content': 'continue'}]}
-            key = request_key('Antigravity', '/v1/chat/completions', payload)
+            key = request_key('Gemini', '/v1/chat/completions', payload)
             first = DurableRequestStore(path)
             first.begin(
-                key=key, request_id='req-1', provider='Antigravity', model=payload['model'],
+                key=key, request_id='req-1', provider='Gemini', model=payload['model'],
                 endpoint='/v1/chat/completions', payload=payload,
             )
             with sqlite3.connect(path) as connection:
@@ -88,7 +88,7 @@ class RecoveryTests(unittest.TestCase):
                 }
             }
             idempotency_key = 'restart-replay-1'
-            key = request_key('Antigravity', '/v1/chat/completions', payload, idempotency_key)
+            key = request_key('Gemini', '/v1/chat/completions', payload, idempotency_key)
 
             with patch.dict('os.environ', {
                 'AUTH_DB_PATH': str(db_path),
@@ -97,7 +97,7 @@ class RecoveryTests(unittest.TestCase):
             }):
                 store = DurableRequestStore(db_path)
                 store.begin(
-                    key=key, request_id='restart-1', provider='Antigravity',
+                    key=key, request_id='restart-1', provider='Gemini',
                     model=payload['model'], endpoint='/v1/chat/completions', payload=payload,
                 )
                 with sqlite3.connect(db_path) as connection:
@@ -149,28 +149,28 @@ class RecoveryTests(unittest.TestCase):
             path = Path(directory) / 'recovery.db'
             store = DurableRequestStore(path)
             key = 'fixed-idempotency-key'
-            store.begin(key=key, request_id='req-1', provider='Antigravity',
+            store.begin(key=key, request_id='req-1', provider='Gemini',
                         model='gemini-3.8-flash', endpoint='/v1/chat/completions',
                         payload={'model': 'gemini-3.8-flash', 'messages': [{'content': 'one'}]})
             with self.assertRaises(ValueError):
-                store.begin(key=key, request_id='req-2', provider='Antigravity',
+                store.begin(key=key, request_id='req-2', provider='Gemini',
                             model='gemini-3.8-flash', endpoint='/v1/chat/completions',
                             payload={'model': 'gemini-3.8-flash', 'messages': [{'content': 'two'}]})
 
             same = {'model': 'gemini-3.8-flash', 'messages': [{'content': 'one'}]}
             self.assertEqual(store.begin(
-                key='active-key', request_id='req-3', provider='Antigravity',
+                key='active-key', request_id='req-3', provider='Gemini',
                 model='gemini-3.8-flash', endpoint='/v1/chat/completions', payload=same,
             )['state'], 'claimed')
             self.assertEqual(store.begin(
-                key='active-key', request_id='req-4', provider='Antigravity',
+                key='active-key', request_id='req-4', provider='Gemini',
                 model='gemini-3.8-flash', endpoint='/v1/chat/completions', payload=same,
             )['state'], 'in_progress')
             self.assertEqual(store.get('active-key')['status'], 'in_progress')
 
             store.complete(key, {'candidates': []})
             with self.assertRaises(ValueError):
-                store.begin(key=key, request_id='req-5', provider='Antigravity',
+                store.begin(key=key, request_id='req-5', provider='Gemini',
                             model='gemini-3.8-flash', endpoint='/v1/chat/completions',
                             payload={'model': 'gemini-3.8-flash', 'messages': [{'content': 'two'}]})
 
