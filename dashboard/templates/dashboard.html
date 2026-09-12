@@ -1643,14 +1643,13 @@
 
                     <!-- Allowed Models Selector (Clean Collapsible UI) -->
                     <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                             <label style="color: #e2e8f0; font-size: 12.5px; font-weight: 700;">🤖 Allowed Models Filter:</label>
                             <span id="modal-edit-models-count" style="font-size: 11px; color: #34d399; font-weight: 600;">All models enabled</span>
                         </div>
-                        <span style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 10px;">By default, all models are enabled. To whitelist or block specific models per provider, customize below.</span>
                         
                         <!-- Toggle Button for Model Restrictions -->
-                        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                        <div style="display: flex; gap: 8px;">
                             <button type="button" id="btn-toggle-models-panel" onclick="toggleModelsRestrictionPanel()" style="background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.25); color: #38bdf8; border-radius: 6px; padding: 6px 12px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px;">
                                 <span>⚙️ Customize Allowed Models</span>
                             </button>
@@ -1659,8 +1658,8 @@
                             </button>
                         </div>
 
-                        <!-- Models Container Grouped by Provider (Hidden by default) -->
-                        <div id="models-restriction-panel" style="display: none; flex-direction: column; gap: 12px; margin-top: 10px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; border: 1px solid rgba(56,189,248,0.15);">
+                        <!-- Models Container Grouped by Provider (Always hidden by default) -->
+                        <div id="models-restriction-panel" style="display: none; flex-direction: column; gap: 10px; margin-top: 10px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; border: 1px solid rgba(56,189,248,0.15);">
                             <!-- Provider Accordion: Codex -->
                             <div style="border: 1px solid rgba(168,85,247,0.2); border-radius: 6px; overflow: hidden; background: rgba(168,85,247,0.03);">
                                 <div onclick="toggleProviderModelsList('codex')" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; cursor: pointer; background: rgba(168,85,247,0.08);">
@@ -1687,39 +1686,35 @@
 
                     <!-- Master Combined Token Quota -->
                     <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
                             <label style="color: #e2e8f0; font-size: 12.5px; font-weight: 700;">🎯 Total Master Token Quota:</label>
                             <span id="modal-edit-total-preview" style="font-size: 11px; font-family: monospace; color: #34d399;">Unlimited</span>
                         </div>
-                        <span style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 8px;">The overall token pool for this key across all providers. (e.g. 100M, 10M, 0 for unlimited)</span>
-                        <input type="text" id="modal-edit-limit-total" class="modal-input" placeholder="e.g. 100M, 50M, 0" oninput="updateQuotaPreview('total')" />
+                        <input type="text" id="modal-edit-limit-total" class="modal-input" placeholder="e.g. 100M, 50M, 0 (or blank for unlimited)" oninput="updateQuotaPreview('total')" />
 
                         <!-- Sub-limit Toggle Trigger -->
-                        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: space-between;">
+                        <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: space-between;">
                             <span style="font-size: 11.5px; color: #cbd5e1; font-weight: 600;">Restrict Provider Sub-Limit?</span>
                             <button type="button" id="btn-toggle-sublimits" onclick="toggleSublimits()" style="background: rgba(168,85,247,0.15); border: 1px solid rgba(168,85,247,0.3); color: #c084fc; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer;">
                                 ➕ Add Provider Cap
                             </button>
                         </div>
 
-                        <!-- Provider Specific Token Sub-limits (Hidden by default) -->
-                        <div id="sublimits-container" style="display: none; flex-direction: column; gap: 10px; margin-top: 12px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; border: 1px solid rgba(168,85,247,0.2);">
-                            <span style="font-size: 11px; color: #94a3b8; line-height: 1.4;">
-                                Set an independent ceiling on one provider (e.g. 10M on Codex). If exhausted, that provider halts while remaining tokens (e.g. 90M) stay available for Gemini!
-                            </span>
+                        <!-- Provider Specific Token Sub-limits (Always hidden by default) -->
+                        <div id="sublimits-container" style="display: none; flex-direction: column; gap: 10px; margin-top: 10px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; border: 1px solid rgba(168,85,247,0.2);">
                             <div>
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                                     <span style="font-size: 11.5px; font-weight: 600; color: #c084fc;">🟣 Codex Cap:</span>
                                     <span id="modal-edit-codex-preview" style="font-size: 11px; font-family: monospace; color: #fbbf24;">No Cap</span>
                                 </div>
-                                <input type="text" id="modal-edit-limit-codex" class="modal-input" placeholder="e.g. 10M (leave empty for no cap)" oninput="updateQuotaPreview('codex')" />
+                                <input type="text" id="modal-edit-limit-codex" class="modal-input" placeholder="e.g. 10M (or blank for no cap)" oninput="updateQuotaPreview('codex')" />
                             </div>
                             <div>
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
                                     <span style="font-size: 11.5px; font-weight: 600; color: #38bdf8;">🔵 Gemini Cap:</span>
                                     <span id="modal-edit-gemini-preview" style="font-size: 11px; font-family: monospace; color: #fbbf24;">No Cap</span>
                                 </div>
-                                <input type="text" id="modal-edit-limit-gemini" class="modal-input" placeholder="e.g. 10M (leave empty for no cap)" oninput="updateQuotaPreview('gemini')" />
+                                <input type="text" id="modal-edit-limit-gemini" class="modal-input" placeholder="e.g. 10M (or blank for no cap)" oninput="updateQuotaPreview('gemini')" />
                             </div>
                         </div>
                     </div>
@@ -2421,12 +2416,12 @@
             }
         }
 
-        function toggleProviderModelsList(prov) {
+        function toggleProviderModelsList(prov, forceShow) {
             const list = document.getElementById(prov + '-models-list');
             const arrow = document.getElementById(prov + '-models-arrow');
             if (!list || !arrow) return;
-            const isHidden = list.style.display === 'none';
-            if (isHidden) {
+            const isHidden = forceShow !== undefined ? !forceShow : list.style.display === 'none';
+            if (!isHidden) {
                 list.style.display = 'grid';
                 arrow.textContent = '▲ Hide';
                 arrow.style.color = '#38bdf8';
@@ -2482,15 +2477,11 @@
             codexContainer.innerHTML = codexModels.map(renderModelRow).join('');
             geminiContainer.innerHTML = geminiModels.map(renderModelRow).join('');
 
-            // If key already has restricted models, auto-open panel and relevant provider accordion
-            const hasRestrictedModels = allowedSet.size > 0;
-            toggleModelsRestrictionPanel(hasRestrictedModels);
-            if (hasRestrictedModels) {
-                const hasCodex = codexModels.some(m => allowedSet.has(m.id.toLowerCase()));
-                const hasGemini = geminiModels.some(m => allowedSet.has(m.id.toLowerCase()));
-                if (hasCodex) toggleProviderModelsList('codex');
-                if (hasGemini) toggleProviderModelsList('gemini');
-            }
+            // Default: Keep panels cleanly closed until user explicitly clicks to customize
+            toggleModelsRestrictionPanel(false);
+            toggleSublimits(false);
+            toggleProviderModelsList('codex', false);
+            toggleProviderModelsList('gemini', false);
             updateModelsCountPreview();
         }
 
@@ -2606,9 +2597,8 @@
             if (geminiLimInput) geminiLimInput.value = limits.gemini ? formatTokenCount(limits.gemini) : '';
             if (totalLimInput) totalLimInput.value = currentEditKeyData.max_tokens ? formatTokenCount(currentEditKeyData.max_tokens) : '';
 
-            // If key already had a provider sub-limit defined, auto-expand sublimits container
-            const hasSublimits = !!(limits.codex || limits.gemini);
-            toggleSublimits(hasSublimits);
+            // Default: Keep sublimits collapsed initially unless user clicks to expand
+            toggleSublimits(false);
 
             updateQuotaPreview('codex');
             updateQuotaPreview('gemini');
