@@ -680,6 +680,83 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json_response({"success": False, "message": str(e)}, status_code=500)
             return
 
+        if path in ("/aipool/api/tokens/details", "/api/tokens/details"):
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self.send_json_response({"success": False, "message": str(exc)}, status_code=400)
+                return
+            target_id = str(payload.get("id", "")).strip()
+            registry_file = Path(__file__).resolve().parent / "client-identities.json"
+            try:
+                data = json.loads(registry_file.read_text())
+                found_client = None
+                for c in data.get("clients", []):
+                    if c.get("id") == target_id:
+                        found_client = c
+                        break
+                if not found_client:
+                    self.send_json_response({"success": False, "message": "Key not found"}, status_code=404)
+                    return
+
+                # Gather usage statistics from request_events DB
+                c_name = (found_client.get("name") or "").lower()
+                c_id = target_id.lower()
+                db_path = os.environ.get("AUTH_DB_PATH") or str(Path(__file__).resolve().parents[1] / "bridges/auth.db")
+
+                total_tokens = 0
+                total_requests = 0
+                by_provider = {"codex": {"tokens": 0, "requests": 0}, "gemini": {"tokens": 0, "requests": 0}}
+                by_model = {}
+
+                if os.path.isfile(db_path):
+                    try:
+                        import sqlite3
+                        with sqlite3.connect(db_path, timeout=5) as conn:
+                            conn.row_factory = sqlite3.Row
+                            cur = conn.execute("SELECT audit_json, total_tokens, pool, model FROM request_events WHERE audit_json IS NOT NULL AND audit_json != ''")
+                            for r in cur.fetchall():
+                                try:
+                                    aud = json.loads(r["audit_json"])
+                                    cl = (aud.get("client_label") or "").lower()
+                                    if cl and (cl == c_name or cl == c_id):
+                                        toks = int(r["total_tokens"] or 0)
+                                        m = str(r["model"] or "unknown")
+                                        prov = "codex" if str(r["pool"]).lower() in ("codex", "openai") else "gemini"
+                                        total_tokens += toks
+                                        total_requests += 1
+                                        by_provider[prov]["tokens"] += toks
+                                        by_provider[prov]["requests"] += 1
+                                        by_model[m] = by_model.get(m, 0) + toks
+                                except Exception:
+                                    pass
+                    except Exception:
+                        pass
+
+                # Sort top models by tokens used (or requests)
+                top_models = sorted([{"model": m, "tokens": toks} for m, toks in by_model.items()], key=lambda x: x["tokens"], reverse=True)[:3]
+
+                self.send_json_response({
+                    "success": True,
+                    "details": {
+                        "id": found_client.get("id"),
+                        "name": found_client.get("name"),
+                        "enabled": found_client.get("enabled", True),
+                        "created_at": found_client.get("created_at", "Custom Key"),
+                        "allowed_providers": found_client.get("allowed_providers", ["codex", "gemini"]),
+                        "allowed_models": found_client.get("allowed_models", []),
+                        "token_limits": found_client.get("token_limits", {}),
+                        "max_tokens": found_client.get("max_tokens"),
+                        "total_tokens": total_tokens,
+                        "total_requests": total_requests,
+                        "by_provider": by_provider,
+                        "top_models": top_models
+                    }
+                })
+            except Exception as e:
+                self.send_json_response({"success": False, "message": str(e)}, status_code=500)
+            return
+
         if path in ("/aipool/api/tokens/update", "/api/tokens/update"):
             try:
                 payload = self._read_json_body()

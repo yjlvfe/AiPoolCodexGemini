@@ -82,6 +82,24 @@ def authorize(handler, provider):
                 handler.close_connection = True
                 return False
 
+            # Check model permission if model is known
+            requested_model = getattr(handler, '_requested_model', None)
+            allowed_models = client_obj.get('allowed_models')
+            if requested_model and allowed_models:
+                # If non-empty list of allowed models is specified, restrict to those
+                clean_req = str(requested_model).lower()
+                clean_allowed = [str(m).lower() for m in allowed_models]
+                if clean_req not in clean_allowed:
+                    body = f'{{"error":{{"message":"Model {requested_model} is not permitted for this API Key","type":"permission_denied"}}}}'.encode()
+                    handler.send_response(403)
+                    handler.send_header('Content-Type', 'application/json')
+                    handler.send_header('Content-Length', str(len(body)))
+                    handler.send_header('Connection', 'close')
+                    handler.end_headers()
+                    handler.wfile.write(body)
+                    handler.close_connection = True
+                    return False
+
             # Check provider token quota
             token_limits = client_obj.get('token_limits', {})
             prov_limit = token_limits.get(norm_prov)

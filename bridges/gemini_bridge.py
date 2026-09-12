@@ -773,6 +773,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
             if 'tools' in payload and not isinstance(payload.get('tools'), list):
                 raise PoolError('tools must be an array', 400)
             m = payload.get("model")
+            self._requested_model = m
+
+            # Validate client model permissions
+            client_identity = getattr(self, '_client_identity', {})
+            client_obj = client_identity.get('client_obj')
+            if client_obj and client_obj.get('allowed_models'):
+                clean_req = str(m).lower()
+                clean_allowed = [str(mod).lower() for mod in client_obj['allowed_models']]
+                if clean_req not in clean_allowed:
+                    raise PoolError(f"Model {m} is not permitted for this API Key", 403)
             n_msgs = len(payload.get("messages", []))
             n_tools = len(payload.get("tools", []))
             stream = payload.get("stream", False)

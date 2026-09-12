@@ -251,6 +251,16 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
             audit['wire_tokens_estimate'] = max(1, (audit['wire_provider_bytes'] + 3) // 4)
             audit['latency_ms'] = round((time.perf_counter() - request_started_at) * 1000, 2)
             model=body['model']
+            self._requested_model = model
+
+            # Validate client model permissions
+            client_identity = getattr(self, '_client_identity', {})
+            client_obj = client_identity.get('client_obj')
+            if client_obj and client_obj.get('allowed_models'):
+                clean_req = str(model).lower()
+                clean_allowed = [str(m).lower() for m in client_obj['allowed_models']]
+                if clean_req not in clean_allowed:
+                    raise PoolError(f"Model {model} is not permitted for this API Key", 403)
             wants_stream=bool(payload.get('stream'))
             attempts=POOL.candidates(model, include_cooldown=True)
             last_status=429 if not attempts else 503
