@@ -31,17 +31,20 @@ def identify(headers, path=None, peer_ip=None):
     verified = False
     client_name = None
     credential_id = None
+    client_obj = None
     for client in config.get('clients', []):
         if token and client.get('enabled', False) and hmac.compare_digest(digest, client['sha256']):
             verified = True
             client_name = client.get('name')
             credential_id = client.get('id')
+            client_obj = client
             break
     # Policy: loopback peers are trusted local clients (Hermes/OpenClaw/local).
     local = is_loopback(peer_ip)
     allowed = (mode == 'observe') or local or verified
     return {'authenticated_client': client_name, 'credential_id': credential_id,
-            'identity_verified': verified, 'auth_mode': mode, 'allowed': allowed}
+            'identity_verified': verified, 'auth_mode': mode, 'allowed': allowed,
+            'client_obj': client_obj}
 
 
 def authorize(handler, provider):
@@ -63,6 +66,73 @@ def authorize(handler, provider):
                     'allowed': is_loopback(peer)}
     handler._client_identity = identity
     if identity['allowed']:
+        # Enforce provider and quota permissions if configured on the client
+        client_obj = identity.get('client_obj')
+        if client_obj and not is_loopback(peer):
+            norm_prov = 'codex' if provider.lower() in ('codex', 'openai') else 'gemini'
+            allowed_provs = client_obj.get('allowed_providers')
+            if allowed_provs is not None and norm_prov not in [p.lower() for p in allowed_provs]:
+                body = f'{{"error":{{"message":"Provider {provider} is not permitted for this API Key","type":"permission_denied"}}}}'.encode()
+                handler.send_response(403)
+                handler.send_header('Content-Type', 'application/json')
+                handler.send_header('Content-Length', str(len(body)))
+                handler.send_header('Connection', 'close')
+                handler.end_headers()
+                handler.wfile.write(body)
+                handler.close_connection = True
+                return False
+
+            # Check provider token quota
+            token_limits = client_obj.get('token_limits', {})
+            prov_limit = token_limits.get(norm_prov)
+            overall_limit = client_obj.get('max_tokens')
+            if prov_limit is not None or overall_limit is not None:
+                # Query used tokens from request_events DB
+                db_path = os.environ.get('AUTH_DB_PATH') or str(Path(__file__).resolve().parents[1] / 'bridges/auth.db')
+                if os.path.isfile(db_path):
+                    try:
+                        import sqlite3
+                        with sqlite3.connect(db_path, timeout=3) as conn:
+                            conn.row_factory = sqlite3.Row
+                            cur = conn.execute("SELECT audit_json, total_tokens, pool FROM request_events WHERE audit_json IS NOT NULL AND audit_json != ''")
+                            c_name = (client_obj.get('name') or '').lower()
+                            c_id = (client_obj.get('id') or '').lower()
+                            total_used = 0
+                            prov_used = 0
+                            for r in cur.fetchall():
+                                try:
+                                    aud = json.loads(r['audit_json'])
+                                    cl = (aud.get('client_label') or '').lower()
+                                    if cl and (cl == c_name or cl == c_id):
+                                        toks = int(r['total_tokens'] or 0)
+                                        total_used += toks
+                                        row_prov = 'codex' if str(r['pool']).lower() in ('codex', 'openai') else 'gemini'
+                                        if row_prov == norm_prov:
+                                            prov_used += toks
+                                except Exception:
+                                    pass
+                            if prov_limit is not None and prov_used >= prov_limit:
+                                body = f'{{"error":{{"message":"Token quota for provider {provider} exceeded ({prov_used:,}/{prov_limit:,})","type":"quota_exceeded"}}}}'.encode()
+                                handler.send_response(429)
+                                handler.send_header('Content-Type', 'application/json')
+                                handler.send_header('Content-Length', str(len(body)))
+                                handler.send_header('Connection', 'close')
+                                handler.end_headers()
+                                handler.wfile.write(body)
+                                handler.close_connection = True
+                                return False
+                            if overall_limit is not None and total_used >= overall_limit:
+                                body = f'{{"error":{{"message":"Total token quota exceeded ({total_used:,}/{overall_limit:,})","type":"quota_exceeded"}}}}'.encode()
+                                handler.send_response(429)
+                                handler.send_header('Content-Type', 'application/json')
+                                handler.send_header('Content-Length', str(len(body)))
+                                handler.send_header('Connection', 'close')
+                                handler.end_headers()
+                                handler.wfile.write(body)
+                                handler.close_connection = True
+                                return False
+                    except Exception:
+                        pass
         return True
     try:
         record(provider, '', status='UNAUTHORIZED', audit=capture(handler, {}))

@@ -1514,33 +1514,85 @@
 
         <!-- Custom Modal for Editing API Key -->
         <div id="edit-key-modal-overlay" class="modal-overlay" style="display: none;" onclick="closeEditKeyModal(event)">
-            <div class="modal-dialog glass-card" onclick="event.stopPropagation()" style="max-width: 420px;">
+            <div class="modal-dialog glass-card" onclick="event.stopPropagation()" style="max-width: 580px; width: 95%;">
                 <div class="modal-header">
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="font-size: 20px;">✏️</span>
-                        <span style="font-weight: 700; color: #fff; font-size: 15px;">Edit API Key</span>
+                        <span style="font-size: 20px;">⚙️</span>
+                        <span style="font-weight: 800; color: #fff; font-size: 16px;">Configure API Key & Permissions</span>
                     </div>
                     <button class="modal-close-btn" onclick="closeEditKeyModal()">&times;</button>
                 </div>
-                <div class="modal-body">
+                <div class="modal-body" style="display: flex; flex-direction: column; gap: 14px; max-height: 75vh; overflow-y: auto; padding-right: 4px;">
                     <input type="hidden" id="modal-edit-key-id" value="" />
-                    <label style="display: block; color: #94a3b8; font-size: 11.5px; margin-bottom: 6px; font-weight: 600;">Key Name / Label:</label>
-                    <input type="text" id="modal-edit-key-name-input" class="modal-input" style="margin-bottom: 16px;" placeholder="e.g. Youssef Friend" autocomplete="off" onkeydown="if(event.key==='Enter') executeUpdateKey()" />
+                    
+                    <!-- Basic Info & Status -->
+                    <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
+                        <div>
+                            <label style="display: block; color: #94a3b8; font-size: 11.5px; margin-bottom: 5px; font-weight: 600;">Key Name / Label:</label>
+                            <input type="text" id="modal-edit-key-name-input" class="modal-input" placeholder="e.g. Youssef Friend, Cursor" autocomplete="off" />
+                        </div>
+                        <div>
+                            <label style="display: block; color: #94a3b8; font-size: 11.5px; margin-bottom: 5px; font-weight: 600;">Credential Status:</label>
+                            <div style="display: flex; gap: 10px;">
+                                <button type="button" id="modal-edit-status-enable" onclick="setEditKeyStatus(true)" style="flex: 1; padding: 7px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid rgba(16,185,129,0.3); background: rgba(16,185,129,0.15); color: #34d399;">
+                                    ✅ Active
+                                </button>
+                                <button type="button" id="modal-edit-status-disable" onclick="setEditKeyStatus(false)" style="flex: 1; padding: 7px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.1); color: #94a3b8;">
+                                    🚫 Disabled
+                                </button>
+                            </div>
+                        </div>
+                    </div>
 
-                    <label style="display: block; color: #94a3b8; font-size: 11.5px; margin-bottom: 6px; font-weight: 600;">Status (Enable / Disable):</label>
-                    <div style="display: flex; gap: 10px;">
-                        <button type="button" id="modal-edit-status-enable" onclick="setEditKeyStatus(true)" style="flex: 1; padding: 8px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid rgba(16,185,129,0.3); background: rgba(16,185,129,0.15); color: #34d399;">
-                            ✅ Active
-                        </button>
-                        <button type="button" id="modal-edit-status-disable" onclick="setEditKeyStatus(false)" style="flex: 1; padding: 8px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.1); color: #94a3b8;">
-                            🚫 Disabled
-                        </button>
+                    <!-- Allowed Providers Toggle -->
+                    <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px;">
+                        <label style="display: block; color: #e2e8f0; font-size: 12.5px; margin-bottom: 8px; font-weight: 700;">🌐 Allowed Providers:</label>
+                        <div style="display: flex; gap: 12px;">
+                            <label style="display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 13px; cursor: pointer;">
+                                <input type="checkbox" id="modal-edit-prov-codex" checked style="accent-color: #a855f7; width: 16px; height: 16px;" />
+                                <span style="font-weight: 600; color: #c084fc;">ChatGPT / Codex</span>
+                            </label>
+                            <label style="display: flex; align-items: center; gap: 8px; color: #cbd5e1; font-size: 13px; cursor: pointer;">
+                                <input type="checkbox" id="modal-edit-prov-gemini" checked style="accent-color: #06b6d4; width: 16px; height: 16px;" />
+                                <span style="font-weight: 600; color: #38bdf8;">Google Gemini</span>
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Provider Specific Token Quotas -->
+                    <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px;">
+                        <label style="display: block; color: #e2e8f0; font-size: 12.5px; margin-bottom: 4px; font-weight: 700;">🎯 Quota Limits (Tokens Plan):</label>
+                        <span style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 10px;">Leave blank or 0 for unlimited usage. Supports shorthand like 10M, 100M, 500k.</span>
+                        
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <span style="font-size: 11.5px; font-weight: 600; color: #c084fc;">🟣 Codex Token Limit:</span>
+                                    <span id="modal-edit-codex-preview" style="font-size: 11px; font-family: monospace; color: #fbbf24;">Unlimited</span>
+                                </div>
+                                <input type="text" id="modal-edit-limit-codex" class="modal-input" placeholder="e.g. 10M, 10000000" oninput="updateQuotaPreview('codex')" />
+                            </div>
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <span style="font-size: 11.5px; font-weight: 600; color: #38bdf8;">🔵 Gemini Token Limit:</span>
+                                    <span id="modal-edit-gemini-preview" style="font-size: 11px; font-family: monospace; color: #fbbf24;">Unlimited</span>
+                                </div>
+                                <input type="text" id="modal-edit-limit-gemini" class="modal-input" placeholder="e.g. 100M, 100000000" oninput="updateQuotaPreview('gemini')" />
+                            </div>
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <span style="font-size: 11.5px; font-weight: 600; color: #e2e8f0;">⚡ Total Combined Token Quota:</span>
+                                    <span id="modal-edit-total-preview" style="font-size: 11px; font-family: monospace; color: #34d399;">Unlimited</span>
+                                </div>
+                                <input type="text" id="modal-edit-limit-total" class="modal-input" placeholder="e.g. 110M, or calculated automatically" oninput="updateQuotaPreview('total')" />
+                            </div>
+                        </div>
                     </div>
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="modal-btn-cancel" onclick="closeEditKeyModal()">Cancel</button>
-                    <button type="button" id="modal-btn-confirm-edit-key" class="settings-btn" style="background: linear-gradient(135deg, #a855f7, #7c3aed); color: #fff; font-weight: 700; padding: 7px 16px; font-size: 12px;" onclick="executeUpdateKey()">
-                        💾 Save Changes
+                    <button type="button" id="modal-btn-confirm-edit-key" class="settings-btn" style="background: linear-gradient(135deg, #a855f7, #06b6d4); color: #fff; font-weight: 700; padding: 8px 18px; font-size: 12.5px;" onclick="executeUpdateKey()">
+                        💾 Save Settings
                     </button>
                 </div>
             </div>
@@ -2077,15 +2129,27 @@
                     const totalTokensNum = Number(t.total_tokens || 0);
                     const tokenBadge = `<span style="font-size: 9px; font-family: 'JetBrains Mono', monospace; padding: 1px 6px; border-radius: 4px; background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.3); color: #fbbf24; font-weight: 700; flex-shrink: 0;" title="Total Tokens used by this key">⚡ ${formatTokenCount(totalTokensNum)}</span>`;
 
+                    // Remaining quota badge
+                    let quotaBadge = '';
+                    if (t.max_tokens) {
+                        const rem = Math.max(0, t.max_tokens - totalTokensNum);
+                        const pct = Math.round((rem / t.max_tokens) * 100);
+                        const color = rem === 0 ? '#ef4444' : (pct < 20 ? '#f59e0b' : '#34d399');
+                        const bg = rem === 0 ? 'rgba(239,68,68,0.15)' : (pct < 20 ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)');
+                        const border = rem === 0 ? 'rgba(239,68,68,0.3)' : (pct < 20 ? 'rgba(245,158,11,0.3)' : 'rgba(16,185,129,0.3)');
+                        quotaBadge = `<span style="font-size: 9px; font-family: 'JetBrains Mono', monospace; padding: 1px 6px; border-radius: 4px; background: ${bg}; border: 1px solid ${border}; color: ${color}; font-weight: 700; flex-shrink: 0;" title="Remaining tokens in plan: ${rem.toLocaleString()} (${pct}%)">⏳ ${formatTokenCount(rem)} left</span>`;
+                    }
+
                     const div = document.createElement('div');
                     div.className = 'api-key-item-pill';
                     div.title = 'Click to show actions';
                     div.innerHTML = `
                         <div class="api-key-normal-content">
-                            <div style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden;">
+                            <div style="display: flex; align-items: center; gap: 6px; min-width: 0; overflow: hidden; flex-wrap: wrap;">
                                 <div style="font-weight: 700; color: ${isEnabled ? '#fff' : '#94a3b8'}; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(t.name || 'Key')}</div>
                                 ${statusBadge}
                                 ${tokenBadge}
+                                ${quotaBadge}
                             </div>
                             <div style="font-size: 11px; color: var(--text-tertiary);">
                                 <span>Tap to manage</span>
@@ -2095,8 +2159,8 @@
                             <button type="button" class="api-key-btn-copy" onclick="event.stopPropagation(); copyToClipboard('${tokenToCopy}')" title="Copy Token">
                                 <span>📋</span><span>Copy</span>
                             </button>
-                            <button type="button" class="api-key-btn-edit" onclick="event.stopPropagation(); openEditKeyModal('${t.id}', '${escapeHtml(t.name || '')}', ${isEnabled})" title="Edit Key">
-                                <span>✏️</span><span>Edit</span>
+                            <button type="button" class="api-key-btn-edit" onclick="event.stopPropagation(); openEditKeyModal('${t.id}', '${escapeHtml(t.name || '')}', ${isEnabled}, ${JSON.stringify(t).replace(/"/g, '&quot;')})" title="Edit Key & Quota">
+                                <span>⚙️</span><span>Configure</span>
                             </button>
                             <button type="button" class="api-key-btn-delete" onclick="event.stopPropagation(); revokeApiKey('${t.id}')" title="Revoke Key">
                                 <span>🗑️</span><span>Delete</span>
@@ -2138,15 +2202,64 @@
             setTimeout(() => { if (input) input.focus(); }, 50);
         }
 
-        let currentEditKeyEnabled = true;
+        function parseTokenShorthand(val) {
+            if (!val) return null;
+            val = String(val).trim().toUpperCase();
+            if (!val || val === '0' || val === 'UNLIMITED') return null;
+            let mult = 1;
+            if (val.endsWith('K')) { mult = 1000; val = val.slice(0, -1); }
+            else if (val.endsWith('M')) { mult = 1000000; val = val.slice(0, -1); }
+            else if (val.endsWith('B')) { mult = 1000000000; val = val.slice(0, -1); }
+            const num = parseFloat(val);
+            return isNaN(num) ? null : Math.round(num * mult);
+        }
 
-        function openEditKeyModal(id, name, isEnabled) {
+        function updateQuotaPreview(kind) {
+            const input = document.getElementById('modal-edit-limit-' + kind);
+            const preview = document.getElementById('modal-edit-' + kind + '-preview');
+            if (!input || !preview) return;
+            const parsed = parseTokenShorthand(input.value);
+            if (parsed === null) {
+                preview.textContent = 'Unlimited';
+                preview.style.color = kind === 'total' ? '#34d399' : '#fbbf24';
+            } else {
+                preview.textContent = parsed.toLocaleString() + ' tokens';
+                preview.style.color = '#38bdf8';
+            }
+        }
+
+        let currentEditKeyData = null;
+
+        function openEditKeyModal(id, name, isEnabled, keyData) {
+            currentEditKeyData = keyData || {};
             const overlay = document.getElementById('edit-key-modal-overlay');
             const idInput = document.getElementById('modal-edit-key-id');
             const nameInput = document.getElementById('modal-edit-key-name-input');
             if (idInput) idInput.value = id;
             if (nameInput) nameInput.value = name;
             setEditKeyStatus(isEnabled);
+
+            // Set allowed providers
+            const allowed = currentEditKeyData.allowed_providers || ['codex', 'gemini'];
+            const codexChk = document.getElementById('modal-edit-prov-codex');
+            const geminiChk = document.getElementById('modal-edit-prov-gemini');
+            if (codexChk) codexChk.checked = allowed.includes('codex');
+            if (geminiChk) geminiChk.checked = allowed.includes('gemini');
+
+            // Set token limits
+            const limits = currentEditKeyData.token_limits || {};
+            const codexLimInput = document.getElementById('modal-edit-limit-codex');
+            const geminiLimInput = document.getElementById('modal-edit-limit-gemini');
+            const totalLimInput = document.getElementById('modal-edit-limit-total');
+
+            if (codexLimInput) codexLimInput.value = limits.codex ? formatTokenCount(limits.codex) : '';
+            if (geminiLimInput) geminiLimInput.value = limits.gemini ? formatTokenCount(limits.gemini) : '';
+            if (totalLimInput) totalLimInput.value = currentEditKeyData.max_tokens ? formatTokenCount(currentEditKeyData.max_tokens) : '';
+
+            updateQuotaPreview('codex');
+            updateQuotaPreview('gemini');
+            updateQuotaPreview('total');
+
             if (overlay) overlay.style.display = 'flex';
             setTimeout(() => { if (nameInput) nameInput.focus(); }, 50);
         }
@@ -2192,19 +2305,50 @@
                 showToast('⚠️ Please enter a name for the key', true);
                 return;
             }
+
+            // Gather allowed providers
+            const allowed_providers = [];
+            if (document.getElementById('modal-edit-prov-codex')?.checked) allowed_providers.push('codex');
+            if (document.getElementById('modal-edit-prov-gemini')?.checked) allowed_providers.push('gemini');
+            if (allowed_providers.length === 0) {
+                showToast('⚠️ Please select at least one allowed provider', true);
+                return;
+            }
+
+            // Gather token limits
+            const codexLimit = parseTokenShorthand(document.getElementById('modal-edit-limit-codex')?.value);
+            const geminiLimit = parseTokenShorthand(document.getElementById('modal-edit-limit-gemini')?.value);
+            let totalLimit = parseTokenShorthand(document.getElementById('modal-edit-limit-total')?.value);
+
+            // If totalLimit not explicitly given but provider limits are, optionally sum them
+            if (totalLimit === null && (codexLimit !== null || geminiLimit !== null)) {
+                totalLimit = (codexLimit || 0) + (geminiLimit || 0);
+            }
+
+            const token_limits = {};
+            if (codexLimit !== null) token_limits.codex = codexLimit;
+            if (geminiLimit !== null) token_limits.gemini = geminiLimit;
+
             const btn = document.getElementById('modal-btn-confirm-edit-key');
             if (btn) btn.disabled = true;
             try {
                 const res = await fetch(resolveApiUrl('/api/tokens/update'), {
                     method: 'POST',
                     headers: apiHeaders({ 'Content-Type': 'application/json' }),
-                    body: JSON.stringify({ id, name, enabled: currentEditKeyEnabled })
+                    body: JSON.stringify({
+                        id,
+                        name,
+                        enabled: currentEditKeyEnabled,
+                        allowed_providers,
+                        token_limits,
+                        max_tokens: totalLimit
+                    })
                 });
                 const data = await res.json();
                 if (data.success) {
                     closeEditKeyModal();
                     loadApiTokens();
-                    showToast('✅ Key Updated Successfully!');
+                    showToast('✅ Key & Quotas Updated Successfully!');
                 } else {
                     showToast('⚠️ Error: ' + (data.message || 'Failed to update key'), true);
                 }

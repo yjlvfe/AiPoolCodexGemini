@@ -368,7 +368,10 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                         "raw_token": c.get("raw_token"),  # Persistent token for copying anytime
                         "enabled": c.get("enabled", True),
                         "created_at": c.get("created_at", "Custom Key"),
-                        "total_tokens": used
+                        "total_tokens": used,
+                        "max_tokens": c.get("max_tokens"),
+                        "allowed_providers": c.get("allowed_providers", ["codex", "gemini"]),
+                        "token_limits": c.get("token_limits", {})
                     })
                 self.send_json_response({"success": True, "tokens": clients})
             except Exception as e:
@@ -689,6 +692,11 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                 return
             new_name = payload.get("name")
             new_enabled = payload.get("enabled")
+            allowed_providers = payload.get("allowed_providers")
+            allowed_models = payload.get("allowed_models")
+            token_limits = payload.get("token_limits") # e.g. {"codex": 10000000, "gemini": 100000000}
+            max_tokens = payload.get("max_tokens")     # e.g. 110000000
+
             registry_file = Path(__file__).resolve().parent / "client-identities.json"
             try:
                 data = json.loads(registry_file.read_text())
@@ -702,6 +710,14 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                                 c["name"] = clean_n
                         if new_enabled is not None:
                             c["enabled"] = bool(new_enabled)
+                        if allowed_providers is not None:
+                            c["allowed_providers"] = [str(p).lower() for p in allowed_providers]
+                        if allowed_models is not None:
+                            c["allowed_models"] = [str(m).strip() for m in allowed_models if str(m).strip()]
+                        if token_limits is not None:
+                            c["token_limits"] = {str(k).lower(): (int(v) if v is not None else None) for k, v in token_limits.items()}
+                        if "max_tokens" in payload:
+                            c["max_tokens"] = int(max_tokens) if max_tokens is not None else None
                         break
                 if not found:
                     self.send_json_response({"success": False, "message": f"Token {target_id} not found"}, status_code=404)
