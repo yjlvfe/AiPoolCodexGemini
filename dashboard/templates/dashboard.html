@@ -1747,23 +1747,23 @@
                             </div>
                         </div>
 
-                        <!-- Refill Schedule & Expiration Section (Custom Value + Unit Selector) -->
-                        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed rgba(255,255,255,0.08); display: flex; flex-direction: column; gap: 12px;">
+                        <!-- Refill Schedule & Expiration Section (Clean Inline Pickers) -->
+                        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed rgba(255,255,255,0.08); display: flex; flex-direction: column; gap: 10px;">
                             <!-- Auto Refill Component -->
                             <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(56,189,248,0.15); border-radius: 8px; padding: 10px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                     <label style="color: #e2e8f0; font-size: 11.5px; font-weight: 700;">🔄 Auto-Refill Quota:</label>
-                                    <span id="modal-edit-refill-preview" style="font-size: 10.5px; font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #38bdf8; background: rgba(56,189,248,0.1); border: 1px solid rgba(56,189,248,0.25); padding: 2px 7px; border-radius: 5px;">One-Time (No Refill)</span>
+                                    <span id="modal-edit-refill-preview" style="font-size: 10.5px; font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #94a3b8; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 2px 7px; border-radius: 5px;">One-Time (No Refill)</span>
                                 </div>
-                                <div style="display: flex; gap: 6px; align-items: center;">
-                                    <input type="number" id="modal-edit-refill-num" min="1" max="999" class="modal-input" style="flex: 1; padding: 7px 10px; font-size: 12px; text-align: center;" placeholder="Qty (e.g. 5)" oninput="updateRefillCustomPreview()" />
-                                    <div style="display: flex; gap: 4px; flex: 2;" id="refill-unit-selector">
-                                        <button type="button" class="unit-btn active" data-unit="none" onclick="setRefillUnit('none')">None</button>
-                                        <button type="button" class="unit-btn" data-unit="hours" onclick="setRefillUnit('hours')">Hours</button>
-                                        <button type="button" class="unit-btn" data-unit="days" onclick="setRefillUnit('days')">Days</button>
-                                        <button type="button" class="unit-btn" data-unit="weeks" onclick="setRefillUnit('weeks')">Weeks</button>
-                                        <button type="button" class="unit-btn" data-unit="months" onclick="setRefillUnit('months')">Months</button>
-                                    </div>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <input type="number" id="modal-edit-refill-num" min="1" max="999" class="modal-input" style="width: 80px; padding: 8px 10px; font-size: 13px; text-align: center; display: none;" placeholder="5" oninput="updateRefillCustomPreview()" />
+                                    <select id="modal-edit-refill-unit-select" class="modal-input" style="flex: 1; padding: 8px 12px; font-size: 12px; cursor: pointer;" onchange="onRefillSelectChange()">
+                                        <option value="none">One-Time (No Refill)</option>
+                                        <option value="hours">Hours (ساعات)</option>
+                                        <option value="days">Days (أيام)</option>
+                                        <option value="weeks">Weeks (أسابيع)</option>
+                                        <option value="months">Months (أشهر)</option>
+                                    </select>
                                 </div>
                             </div>
 
@@ -1773,15 +1773,15 @@
                                     <label style="color: #e2e8f0; font-size: 11.5px; font-weight: 700;">⏳ Key Lifespan / Expiry:</label>
                                     <span id="modal-edit-expires-preview" style="font-size: 10.5px; font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #34d399; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25); padding: 2px 7px; border-radius: 5px;">Never Expires</span>
                                 </div>
-                                <div style="display: flex; gap: 6px; align-items: center;">
-                                    <input type="number" id="modal-edit-exp-num" min="1" max="999" class="modal-input" style="flex: 1; padding: 7px 10px; font-size: 12px; text-align: center;" placeholder="Qty (e.g. 1)" oninput="updateExpirationCustomPreview()" />
-                                    <div style="display: flex; gap: 4px; flex: 2;" id="exp-unit-selector">
-                                        <button type="button" class="unit-btn active" data-unit="none" onclick="setExpUnit('none')">Never</button>
-                                        <button type="button" class="unit-btn" data-unit="hours" onclick="setExpUnit('hours')">Hours</button>
-                                        <button type="button" class="unit-btn" data-unit="days" onclick="setExpUnit('days')">Days</button>
-                                        <button type="button" class="unit-btn" data-unit="weeks" onclick="setExpUnit('weeks')">Weeks</button>
-                                        <button type="button" class="unit-btn" data-unit="months" onclick="setExpUnit('months')">Months</button>
-                                    </div>
+                                <div style="display: flex; gap: 8px; align-items: center;">
+                                    <input type="number" id="modal-edit-exp-num" min="1" max="999" class="modal-input" style="width: 80px; padding: 8px 10px; font-size: 13px; text-align: center; display: none;" placeholder="1" oninput="updateExpirationCustomPreview()" />
+                                    <select id="modal-edit-exp-unit-select" class="modal-input" style="flex: 1; padding: 8px 12px; font-size: 12px; cursor: pointer;" onchange="onExpSelectChange()">
+                                        <option value="none">Never Expires (دائم)</option>
+                                        <option value="hours">Hours (ساعات)</option>
+                                        <option value="days">Days (أيام)</option>
+                                        <option value="weeks">Weeks (أسابيع)</option>
+                                        <option value="months">Months (أشهر)</option>
+                                    </select>
                                 </div>
                             </div>
                         </div>
@@ -2472,17 +2472,55 @@
         let currentRefillUnit = 'none';
         let currentExpUnit = 'none';
 
+        function onRefillSelectChange() {
+            const sel = document.getElementById('modal-edit-refill-unit-select');
+            const unit = sel ? sel.value : 'none';
+            currentRefillUnit = unit;
+            const input = document.getElementById('modal-edit-refill-num');
+            if (input) {
+                if (unit === 'none') {
+                    input.style.display = 'none';
+                    input.value = '';
+                } else {
+                    input.style.display = 'inline-block';
+                    if (!input.value || parseInt(input.value) <= 0) {
+                        input.value = unit === 'hours' ? '5' : '1';
+                    }
+                }
+            }
+            updateRefillCustomPreview();
+        }
+
+        function onExpSelectChange() {
+            const sel = document.getElementById('modal-edit-exp-unit-select');
+            const unit = sel ? sel.value : 'none';
+            currentExpUnit = unit;
+            const input = document.getElementById('modal-edit-exp-num');
+            if (input) {
+                if (unit === 'none') {
+                    input.style.display = 'none';
+                    input.value = '';
+                } else {
+                    input.style.display = 'inline-block';
+                    if (!input.value || parseInt(input.value) <= 0) {
+                        input.value = unit === 'months' ? '1' : (unit === 'days' ? '30' : '1');
+                    }
+                }
+            }
+            updateExpirationCustomPreview();
+        }
+
         function setRefillUnit(unit) {
             currentRefillUnit = unit;
-            document.querySelectorAll('#refill-unit-selector .unit-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.getAttribute('data-unit') === unit);
-            });
+            const sel = document.getElementById('modal-edit-refill-unit-select');
+            if (sel) sel.value = unit;
             const input = document.getElementById('modal-edit-refill-num');
-            if (unit === 'none') {
-                if (input) input.value = '';
-            } else {
-                if (input && (!input.value || parseInt(input.value) <= 0)) {
-                    input.value = unit === 'hours' ? '5' : '1';
+            if (input) {
+                if (unit === 'none') {
+                    input.style.display = 'none';
+                    input.value = '';
+                } else {
+                    input.style.display = 'inline-block';
                 }
             }
             updateRefillCustomPreview();
@@ -2490,15 +2528,15 @@
 
         function setExpUnit(unit) {
             currentExpUnit = unit;
-            document.querySelectorAll('#exp-unit-selector .unit-btn').forEach(btn => {
-                btn.classList.toggle('active', btn.getAttribute('data-unit') === unit);
-            });
+            const sel = document.getElementById('modal-edit-exp-unit-select');
+            if (sel) sel.value = unit;
             const input = document.getElementById('modal-edit-exp-num');
-            if (unit === 'none') {
-                if (input) input.value = '';
-            } else {
-                if (input && (!input.value || parseInt(input.value) <= 0)) {
-                    input.value = unit === 'months' ? '1' : (unit === 'days' ? '30' : '1');
+            if (input) {
+                if (unit === 'none') {
+                    input.style.display = 'none';
+                    input.value = '';
+                } else {
+                    input.style.display = 'inline-block';
                 }
             }
             updateExpirationCustomPreview();
