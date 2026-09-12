@@ -1641,15 +1641,47 @@
                         </div>
                     </div>
 
-                    <!-- Allowed Models Selector -->
+                    <!-- Allowed Models Selector (Clean Collapsible UI) -->
                     <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <label style="color: #e2e8f0; font-size: 12.5px; font-weight: 700;">🤖 Allowed Models Restriction:</label>
-                            <span id="modal-edit-models-count" style="font-size: 11px; color: #38bdf8;">All models allowed</span>
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <label style="color: #e2e8f0; font-size: 12.5px; font-weight: 700;">🤖 Allowed Models Filter:</label>
+                            <span id="modal-edit-models-count" style="font-size: 11px; color: #34d399; font-weight: 600;">All models enabled</span>
                         </div>
-                        <span style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 8px;">Select specific models this key is permitted to call (leave unchecked for all):</span>
-                        <div id="modal-edit-models-container" style="display: grid; grid-template-columns: 1fr 1fr; gap: 6px; max-height: 160px; overflow-y: auto; background: rgba(0,0,0,0.3); padding: 8px; border-radius: 8px;">
-                            <!-- Populated dynamically -->
+                        <span style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 10px;">By default, all models are enabled. To whitelist or block specific models per provider, customize below.</span>
+                        
+                        <!-- Toggle Button for Model Restrictions -->
+                        <div style="display: flex; gap: 8px; margin-bottom: 8px;">
+                            <button type="button" id="btn-toggle-models-panel" onclick="toggleModelsRestrictionPanel()" style="background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.25); color: #38bdf8; border-radius: 6px; padding: 6px 12px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px;">
+                                <span>⚙️ Customize Allowed Models</span>
+                            </button>
+                            <button type="button" id="btn-reset-all-models" onclick="resetAllModelsToDefault()" style="display: none; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; border-radius: 6px; padding: 6px 10px; font-size: 11px; cursor: pointer;">
+                                Reset to All
+                            </button>
+                        </div>
+
+                        <!-- Models Container Grouped by Provider (Hidden by default) -->
+                        <div id="models-restriction-panel" style="display: none; flex-direction: column; gap: 12px; margin-top: 10px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; border: 1px solid rgba(56,189,248,0.15);">
+                            <!-- Provider Accordion: Codex -->
+                            <div style="border: 1px solid rgba(168,85,247,0.2); border-radius: 6px; overflow: hidden; background: rgba(168,85,247,0.03);">
+                                <div onclick="toggleProviderModelsList('codex')" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; cursor: pointer; background: rgba(168,85,247,0.08);">
+                                    <span style="font-size: 12px; font-weight: 700; color: #c084fc;">🟣 OpenAI / Codex Models</span>
+                                    <span id="codex-models-arrow" style="font-size: 11px; color: #94a3b8;">▼ Show</span>
+                                </div>
+                                <div id="codex-models-list" style="display: none; padding: 8px; grid-template-columns: 1fr 1fr; gap: 6px;">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+
+                            <!-- Provider Accordion: Gemini -->
+                            <div style="border: 1px solid rgba(56,189,248,0.2); border-radius: 6px; overflow: hidden; background: rgba(56,189,248,0.03);">
+                                <div onclick="toggleProviderModelsList('gemini')" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; cursor: pointer; background: rgba(56,189,248,0.08);">
+                                    <span style="font-size: 12px; font-weight: 700; color: #38bdf8;">🔵 Google Gemini Models</span>
+                                    <span id="gemini-models-arrow" style="font-size: 11px; color: #94a3b8;">▼ Show</span>
+                                </div>
+                                <div id="gemini-models-list" style="display: none; padding: 8px; grid-template-columns: 1fr 1fr; gap: 6px;">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
                         </div>
                     </div>
 
@@ -2369,50 +2401,113 @@
 
         let currentEditKeyData = null;
 
+        function toggleModelsRestrictionPanel(forceShow) {
+            const panel = document.getElementById('models-restriction-panel');
+            const btn = document.getElementById('btn-toggle-models-panel');
+            if (!panel || !btn) return;
+            const isShown = forceShow !== undefined ? forceShow : panel.style.display !== 'none';
+            if (isShown && forceShow === undefined) {
+                // Toggle off
+                panel.style.display = 'none';
+                btn.innerHTML = '<span>⚙️ Customize Allowed Models</span>';
+                btn.style.background = 'rgba(56,189,248,0.12)';
+                btn.style.color = '#38bdf8';
+            } else {
+                // Toggle on
+                panel.style.display = 'flex';
+                btn.innerHTML = '<span>▲ Close Models Filter</span>';
+                btn.style.background = 'rgba(239,68,68,0.15)';
+                btn.style.color = '#f87171';
+            }
+        }
+
+        function toggleProviderModelsList(prov) {
+            const list = document.getElementById(prov + '-models-list');
+            const arrow = document.getElementById(prov + '-models-arrow');
+            if (!list || !arrow) return;
+            const isHidden = list.style.display === 'none';
+            if (isHidden) {
+                list.style.display = 'grid';
+                arrow.textContent = '▲ Hide';
+                arrow.style.color = '#38bdf8';
+            } else {
+                list.style.display = 'none';
+                arrow.textContent = '▼ Show';
+                arrow.style.color = '#94a3b8';
+            }
+        }
+
+        function resetAllModelsToDefault() {
+            document.querySelectorAll('.modal-model-checkbox').forEach(c => {
+                c.checked = false;
+            });
+            updateModelsCountPreview();
+        }
+
         function populateModelsCheckboxes(allowedModels) {
-            const container = document.getElementById('modal-edit-models-container');
-            if (!container) return;
-            // List all known models across Gemini and Codex
-            const allKnownModels = [
-                // Codex models
-                { id: 'gpt-5.6-luna', name: 'gpt-5.6-luna (Codex)' },
-                { id: 'gpt-5.6-sol', name: 'gpt-5.6-sol (Codex)' },
-                { id: 'gpt-5.6-terra', name: 'gpt-5.6-terra (Codex)' },
-                { id: 'gpt-6-astra', name: 'gpt-6-astra (Codex)' },
-                { id: 'gpt-5.5', name: 'gpt-5.5 (Codex)' },
-                // Gemini models
-                { id: 'gemini-3.8-flash', name: 'gemini-3.8-flash (Gemini)' },
-                { id: 'gemini-3.7-flash', name: 'gemini-3.7-flash (Gemini)' },
-                { id: 'gemini-3.6-flash', name: 'gemini-3.6-flash (Gemini)' },
-                { id: 'gemini-3.1-pro-low', name: 'gemini-3.1-pro (Gemini)' },
-                { id: 'gemini-2.5-pro', name: 'gemini-2.5-pro (Gemini)' },
-                { id: 'claude-opus-4-6-thinking', name: 'claude-opus-4-6 (Gemini)' },
-                { id: 'claude-sonnet-4-6', name: 'claude-sonnet-4-6 (Gemini)' }
+            const codexContainer = document.getElementById('codex-models-list');
+            const geminiContainer = document.getElementById('gemini-models-list');
+            if (!codexContainer || !geminiContainer) return;
+
+            const codexModels = [
+                { id: 'gpt-5.6-luna', name: 'gpt-5.6-luna' },
+                { id: 'gpt-5.6-sol', name: 'gpt-5.6-sol' },
+                { id: 'gpt-5.6-terra', name: 'gpt-5.6-terra' },
+                { id: 'gpt-6-astra', name: 'gpt-6-astra' },
+                { id: 'gpt-5.5', name: 'gpt-5.5' }
             ];
+
+            const geminiModels = [
+                { id: 'gemini-3.8-flash', name: 'gemini-3.8-flash' },
+                { id: 'gemini-3.7-flash', name: 'gemini-3.7-flash' },
+                { id: 'gemini-3.6-flash', name: 'gemini-3.6-flash' },
+                { id: 'gemini-3.1-pro-low', name: 'gemini-3.1-pro' },
+                { id: 'gemini-2.5-pro', name: 'gemini-2.5-pro' },
+                { id: 'claude-opus-4-6-thinking', name: 'claude-opus-4-6' },
+                { id: 'claude-sonnet-4-6', name: 'claude-sonnet-4-6' }
+            ];
+
             const allowedSet = new Set((allowedModels || []).map(m => m.toLowerCase()));
-            container.innerHTML = allKnownModels.map(m => {
+
+            const renderModelRow = (m) => {
                 const isChecked = allowedSet.has(m.id.toLowerCase());
                 return `
-                    <label style="display: flex; align-items: center; gap: 6px; color: #cbd5e1; font-size: 11px; cursor: pointer; padding: 4px; border-radius: 4px; background: rgba(255,255,255,0.02);">
+                    <label style="display: flex; align-items: center; gap: 6px; color: #cbd5e1; font-size: 11px; cursor: pointer; padding: 5px 6px; border-radius: 4px; background: rgba(255,255,255,0.03);">
                         <input type="checkbox" class="modal-model-checkbox" value="${escapeHtml(m.id)}" ${isChecked ? 'checked' : ''} style="accent-color: #38bdf8; width: 14px; height: 14px;" onchange="updateModelsCountPreview()" />
                         <span style="font-family: monospace; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(m.name)}</span>
                     </label>
                 `;
-            }).join('');
+            };
+
+            codexContainer.innerHTML = codexModels.map(renderModelRow).join('');
+            geminiContainer.innerHTML = geminiModels.map(renderModelRow).join('');
+
+            // If key already has restricted models, auto-open panel and relevant provider accordion
+            const hasRestrictedModels = allowedSet.size > 0;
+            toggleModelsRestrictionPanel(hasRestrictedModels);
+            if (hasRestrictedModels) {
+                const hasCodex = codexModels.some(m => allowedSet.has(m.id.toLowerCase()));
+                const hasGemini = geminiModels.some(m => allowedSet.has(m.id.toLowerCase()));
+                if (hasCodex) toggleProviderModelsList('codex');
+                if (hasGemini) toggleProviderModelsList('gemini');
+            }
             updateModelsCountPreview();
         }
 
         function updateModelsCountPreview() {
             const countSpan = document.getElementById('modal-edit-models-count');
+            const resetBtn = document.getElementById('btn-reset-all-models');
             const checkboxes = document.querySelectorAll('.modal-model-checkbox');
             const checkedCount = Array.from(checkboxes).filter(c => c.checked).length;
             if (countSpan) {
                 if (checkedCount === 0) {
-                    countSpan.textContent = 'All models allowed';
-                    countSpan.style.color = '#38bdf8';
+                    countSpan.textContent = 'All models enabled (Default)';
+                    countSpan.style.color = '#34d399';
+                    if (resetBtn) resetBtn.style.display = 'none';
                 } else {
-                    countSpan.textContent = `${checkedCount} model(s) restricted`;
+                    countSpan.textContent = `Strict filter: ${checkedCount} allowed`;
                     countSpan.style.color = '#fbbf24';
+                    if (resetBtn) resetBtn.style.display = 'inline-block';
                 }
             }
         }
