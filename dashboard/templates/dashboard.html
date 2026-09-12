@@ -1641,43 +1641,38 @@
                         </div>
                     </div>
 
-                    <!-- Allowed Models Selector (Clean Collapsible UI) -->
+                    <!-- Allowed Models Selector (Always visible directly, with provider accordions) -->
                     <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px;">
                             <label style="color: #e2e8f0; font-size: 12.5px; font-weight: 700;">🤖 Allowed Models Filter:</label>
-                            <span id="modal-edit-models-count" style="font-size: 11px; color: #34d399; font-weight: 600;">All models enabled</span>
-                        </div>
-                        
-                        <!-- Toggle Button for Model Restrictions -->
-                        <div style="display: flex; gap: 8px;">
-                            <button type="button" id="btn-toggle-models-panel" onclick="toggleModelsRestrictionPanel()" style="background: rgba(56,189,248,0.12); border: 1px solid rgba(56,189,248,0.25); color: #38bdf8; border-radius: 6px; padding: 6px 12px; font-size: 11px; font-weight: 700; cursor: pointer; display: flex; align-items: center; gap: 5px;">
-                                <span>⚙️ Customize Allowed Models</span>
-                            </button>
-                            <button type="button" id="btn-reset-all-models" onclick="resetAllModelsToDefault()" style="display: none; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; border-radius: 6px; padding: 6px 10px; font-size: 11px; cursor: pointer;">
-                                Reset to All
-                            </button>
+                            <div style="display: flex; align-items: center; gap: 8px;">
+                                <span id="modal-edit-models-count" style="font-size: 11px; color: #34d399; font-weight: 600;">All models enabled</span>
+                                <button type="button" id="btn-reset-all-models" onclick="resetAllModelsToDefault()" style="display: none; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); color: #94a3b8; border-radius: 6px; padding: 2px 8px; font-size: 10.5px; cursor: pointer;">
+                                    Reset
+                                </button>
+                            </div>
                         </div>
 
-                        <!-- Models Container Grouped by Provider (Always hidden by default) -->
-                        <div id="models-restriction-panel" style="display: none; flex-direction: column; gap: 10px; margin-top: 10px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; border: 1px solid rgba(56,189,248,0.15);">
+                        <!-- Models Container Grouped by Provider (Always visible, clean card layout) -->
+                        <div id="models-restriction-panel" style="display: flex; flex-direction: column; gap: 10px;">
                             <!-- Provider Accordion: Codex -->
-                            <div style="border: 1px solid rgba(168,85,247,0.2); border-radius: 6px; overflow: hidden; background: rgba(168,85,247,0.03);">
-                                <div onclick="toggleProviderModelsList('codex')" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; cursor: pointer; background: rgba(168,85,247,0.08);">
+                            <div style="border: 1px solid rgba(168,85,247,0.25); border-radius: 8px; overflow: hidden; background: rgba(168,85,247,0.04);">
+                                <button type="button" onclick="toggleProviderModelsList('codex')" style="width: 100%; border: none; outline: none; display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; cursor: pointer; background: rgba(168,85,247,0.12); text-align: left;">
                                     <span style="font-size: 12px; font-weight: 700; color: #c084fc;">🟣 OpenAI / Codex Models</span>
-                                    <span id="codex-models-arrow" style="font-size: 11px; color: #94a3b8;">▼ Show</span>
-                                </div>
-                                <div id="codex-models-list" style="display: none; padding: 8px; grid-template-columns: 1fr 1fr; gap: 6px;">
+                                    <span id="codex-models-arrow" style="font-size: 11px; font-weight: 700; color: #c084fc;">▼ Show</span>
+                                </button>
+                                <div id="codex-models-list" style="display: none; padding: 10px; grid-template-columns: 1fr 1fr; gap: 6px; background: rgba(0,0,0,0.25);">
                                     <!-- Populated dynamically -->
                                 </div>
                             </div>
 
                             <!-- Provider Accordion: Gemini -->
-                            <div style="border: 1px solid rgba(56,189,248,0.2); border-radius: 6px; overflow: hidden; background: rgba(56,189,248,0.03);">
-                                <div onclick="toggleProviderModelsList('gemini')" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 10px; cursor: pointer; background: rgba(56,189,248,0.08);">
+                            <div style="border: 1px solid rgba(56,189,248,0.25); border-radius: 8px; overflow: hidden; background: rgba(56,189,248,0.04);">
+                                <button type="button" onclick="toggleProviderModelsList('gemini')" style="width: 100%; border: none; outline: none; display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; cursor: pointer; background: rgba(56,189,248,0.12); text-align: left;">
                                     <span style="font-size: 12px; font-weight: 700; color: #38bdf8;">🔵 Google Gemini Models</span>
-                                    <span id="gemini-models-arrow" style="font-size: 11px; color: #94a3b8;">▼ Show</span>
-                                </div>
-                                <div id="gemini-models-list" style="display: none; padding: 8px; grid-template-columns: 1fr 1fr; gap: 6px;">
+                                    <span id="gemini-models-arrow" style="font-size: 11px; font-weight: 700; color: #38bdf8;">▼ Show</span>
+                                </button>
+                                <div id="gemini-models-list" style="display: none; padding: 10px; grid-template-columns: 1fr 1fr; gap: 6px; background: rgba(0,0,0,0.25);">
                                     <!-- Populated dynamically -->
                                 </div>
                             </div>
@@ -1694,9 +1689,9 @@
 
                         <!-- Sub-limit Toggle Trigger -->
                         <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: space-between;">
-                            <span style="font-size: 11.5px; color: #cbd5e1; font-weight: 600;">Restrict Provider Sub-Limit?</span>
+                            <span style="font-size: 11.5px; color: #cbd5e1; font-weight: 600;">Custom Provider Limits</span>
                             <button type="button" id="btn-toggle-sublimits" onclick="toggleSublimits()" style="background: rgba(168,85,247,0.15); border: 1px solid rgba(168,85,247,0.3); color: #c084fc; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer;">
-                                ➕ Add Provider Cap
+                                ⚙️ Customize Cap
                             </button>
                         </div>
 
@@ -2381,13 +2376,13 @@
             const shouldShow = forceShow !== undefined ? forceShow : container.style.display === 'none';
             if (shouldShow) {
                 container.style.display = 'flex';
-                btn.textContent = '➖ Hide Provider Cap';
+                btn.innerHTML = '<span>⚙️ Hide Cap</span>';
                 btn.style.background = 'rgba(239,68,68,0.15)';
                 btn.style.borderColor = 'rgba(239,68,68,0.3)';
                 btn.style.color = '#f87171';
             } else {
                 container.style.display = 'none';
-                btn.textContent = '➕ Add Provider Cap';
+                btn.innerHTML = '<span>⚙️ Customize Cap</span>';
                 btn.style.background = 'rgba(168,85,247,0.15)';
                 btn.style.borderColor = 'rgba(168,85,247,0.3)';
                 btn.style.color = '#c084fc';
