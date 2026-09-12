@@ -1517,14 +1517,18 @@
                     </div>
 
                     <!-- Usage Stats Grid -->
-                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                    <div id="details-stats-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                         <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(56,189,248,0.2); border-radius: 10px; padding: 12px; text-align: center;">
                             <span style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">Total Tokens Used</span>
-                            <span id="details-total-tokens" style="font-size: 18px; font-weight: 800; color: #38bdf8; font-family: monospace;">0</span>
+                            <span id="details-total-tokens" style="font-size: 17px; font-weight: 800; color: #38bdf8; font-family: monospace;">0</span>
                         </div>
-                        <div style="background: rgba(15,23,42,0.6); border: 1px solid rgba(168,85,247,0.2); border-radius: 10px; padding: 12px; text-align: center;">
+                        <div id="details-remaining-box" style="display: none; background: rgba(15,23,42,0.6); border: 1px solid rgba(52,211,153,0.25); border-radius: 10px; padding: 12px; text-align: center;">
+                            <span style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">Remaining Tokens</span>
+                            <span id="details-remaining-tokens" style="font-size: 17px; font-weight: 800; color: #34d399; font-family: monospace;">Unlimited</span>
+                        </div>
+                        <div id="details-requests-box" style="background: rgba(15,23,42,0.6); border: 1px solid rgba(168,85,247,0.2); border-radius: 10px; padding: 12px; text-align: center;">
                             <span style="font-size: 11px; color: #94a3b8; display: block; margin-bottom: 4px;">Total Requests</span>
-                            <span id="details-total-requests" style="font-size: 18px; font-weight: 800; color: #c084fc; font-family: monospace;">0</span>
+                            <span id="details-total-requests" style="font-size: 17px; font-weight: 800; color: #c084fc; font-family: monospace;">0</span>
                         </div>
                     </div>
 
@@ -2266,17 +2270,6 @@
                     const totalTokensNum = Number(t.total_tokens || 0);
                     const tokenBadge = `<span style="font-size: 9px; font-family: 'JetBrains Mono', monospace; padding: 1px 6px; border-radius: 4px; background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.3); color: #fbbf24; font-weight: 700; flex-shrink: 0;" title="Total Tokens used by this key">⚡ ${formatTokenCount(totalTokensNum)}</span>`;
 
-                    // Remaining quota badge
-                    let quotaBadge = '';
-                    if (t.max_tokens) {
-                        const rem = Math.max(0, t.max_tokens - totalTokensNum);
-                        const pct = Math.round((rem / t.max_tokens) * 100);
-                        const color = rem === 0 ? '#ef4444' : (pct < 20 ? '#f59e0b' : '#34d399');
-                        const bg = rem === 0 ? 'rgba(239,68,68,0.15)' : (pct < 20 ? 'rgba(245,158,11,0.15)' : 'rgba(16,185,129,0.15)');
-                        const border = rem === 0 ? 'rgba(239,68,68,0.3)' : (pct < 20 ? 'rgba(245,158,11,0.3)' : 'rgba(16,185,129,0.3)');
-                        quotaBadge = `<span style="font-size: 9px; font-family: 'JetBrains Mono', monospace; padding: 1px 6px; border-radius: 4px; background: ${bg}; border: 1px solid ${border}; color: ${color}; font-weight: 700; flex-shrink: 0;" title="Remaining tokens in plan: ${rem.toLocaleString()} (${pct}%)">⏳ ${formatTokenCount(rem)} left</span>`;
-                    }
-
                     const div = document.createElement('div');
                     div.className = 'api-key-item-pill';
                     div.title = 'Click to show actions';
@@ -2286,7 +2279,6 @@
                                 <div style="font-weight: 700; color: ${isEnabled ? '#fff' : '#94a3b8'}; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(t.name || 'Key')}</div>
                                 ${statusBadge}
                                 ${tokenBadge}
-                                ${quotaBadge}
                             </div>
                             <div style="font-size: 11px; color: var(--text-tertiary);">
                                 <span>Tap to manage</span>
@@ -2551,8 +2543,24 @@
                         : '<span style="font-size: 10px; padding: 2px 8px; border-radius: 6px; background: rgba(239,68,68,0.15); color: #f87171; font-weight: 700;">DISABLED</span>';
                 }
 
-                document.getElementById('details-total-tokens').textContent = (d.total_tokens || 0).toLocaleString();
+                document.getElementById('details-total-tokens').textContent = formatTokenCount(d.total_tokens || 0);
                 document.getElementById('details-total-requests').textContent = (d.total_requests || 0).toLocaleString();
+
+                // Show remaining tokens if key has a quota
+                const remBox = document.getElementById('details-remaining-box');
+                const remSpan = document.getElementById('details-remaining-tokens');
+                const statsGrid = document.getElementById('details-stats-grid');
+                if (remBox && remSpan) {
+                    if (d.max_tokens) {
+                        const remTokens = Math.max(0, d.max_tokens - (d.total_tokens || 0));
+                        remSpan.textContent = formatTokenCount(remTokens);
+                        remBox.style.display = 'block';
+                        if (statsGrid) statsGrid.style.gridTemplateColumns = '1fr 1fr 1fr';
+                    } else {
+                        remBox.style.display = 'none';
+                        if (statsGrid) statsGrid.style.gridTemplateColumns = '1fr 1fr';
+                    }
+                }
 
                 const codexStats = d.by_provider?.codex || { tokens: 0, requests: 0 };
                 const geminiStats = d.by_provider?.gemini || { tokens: 0, requests: 0 };
