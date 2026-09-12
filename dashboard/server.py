@@ -394,6 +394,9 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                         "total_tokens": used,
                         "max_tokens": c.get("max_tokens"),
                         "allowed_providers": c.get("allowed_providers", ["codex", "gemini"]),
+                        "allowed_models": c.get("allowed_models", []),
+                        "created_at_ts": c.get("created_at_ts"),
+                        "updated_at_ts": c.get("updated_at_ts"),
                         "token_limits": c.get("token_limits", {})
                     })
                 self.send_json_response({"success": True, "tokens": clients})
