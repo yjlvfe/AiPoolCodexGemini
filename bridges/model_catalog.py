@@ -129,9 +129,29 @@ def extract_gemini_catalog(payload: Any) -> tuple[list[str], dict[str, str]]:
             public.append(public_id)
             seen_public.add(public_id)
         wire.setdefault(public_id, upstream)
-    if not public:
-        raise CatalogError("Gemini model catalog contained no public models")
-    return public, wire
+    # Desired authoritative ordering: Newest to Oldest
+    ORDER_PREFERENCE = [
+        "gemini-3.8-flash",
+        "gemini-3.7-flash",
+        "gemini-3.6-flash",
+        "gemini-3.1-pro",
+        "gemini-3.1-pro-low",
+        "claude-opus-4-6-thinking",
+        "claude-opus-4-6",
+        "claude-sonnet-4-6",
+        "gpt-oss-120b",
+        "gpt-oss-120b-medium",
+    ]
+
+    sorted_public: list[str] = []
+    for pref in ORDER_PREFERENCE:
+        if pref in public and pref not in sorted_public:
+            sorted_public.append(pref)
+    for p in public:
+        if p not in sorted_public:
+            sorted_public.append(p)
+
+    return sorted_public, wire
 
 
 def extract_gemini_models(payload: Any) -> list[str]:
