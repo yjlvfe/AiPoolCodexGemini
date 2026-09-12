@@ -488,6 +488,78 @@
             background: rgba(16, 185, 129, 0.08);
             box-shadow: inset 0 0 16px rgba(16, 185, 129, 0.06);
         }
+        .api-key-item-pill {
+            background: rgba(15, 20, 32, 0.45);
+            border: 1px solid rgba(255, 255, 255, 0.07);
+            border-radius: var(--border-radius-md);
+            padding: 12px 14px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .api-key-item-pill:hover {
+            border-color: rgba(255, 255, 255, 0.15);
+            background: rgba(15, 20, 32, 0.65);
+        }
+        .api-key-normal-content {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            width: 100%;
+            gap: 10px;
+        }
+        .api-key-actions-bar {
+            display: none !important;
+            width: 100%;
+            gap: 10px;
+            align-items: center;
+            justify-content: stretch;
+        }
+        .api-key-item-pill.selected .api-key-normal-content {
+            display: none !important;
+        }
+        .api-key-item-pill.selected .api-key-actions-bar {
+            display: flex !important;
+        }
+        .api-key-btn-copy, .api-key-btn-delete {
+            flex: 1 1 50%;
+            min-height: 36px;
+            border-radius: 8px;
+            font-size: 11.5px;
+            font-weight: 700;
+            font-family: inherit;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            box-sizing: border-box;
+            border: 1px solid transparent;
+        }
+        .api-key-btn-copy {
+            background: linear-gradient(135deg, rgba(6, 182, 212, 0.2), rgba(2, 132, 199, 0.3));
+            border-color: rgba(56, 189, 248, 0.45);
+            color: #38bdf8;
+        }
+        .api-key-btn-copy:hover {
+            background: linear-gradient(135deg, #0ea5e9, #0284c7);
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(14, 165, 233, 0.35);
+        }
+        .api-key-btn-delete {
+            background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(185, 28, 28, 0.25));
+            border-color: rgba(239, 68, 68, 0.4);
+            color: #f87171;
+        }
+        .api-key-btn-delete:hover {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(239, 68, 68, 0.35);
+        }
         .account-actions {
             display: flex;
             align-items: center;
@@ -1948,27 +2020,48 @@
                     container.innerHTML = '<div style="padding:18px; text-align:center; color:var(--text-tertiary); font-size:12px;">No custom API keys created yet. Click "+ New Key" above to generate one.</div>';
                     return;
                 }
-                container.innerHTML = data.tokens.map(t => {
+                container.innerHTML = '';
+                data.tokens.forEach(t => {
                     const tokenToCopy = t.raw_token || t.id;
                     const isSystem = ['hermes', 'openclaw', 'localtooling'].includes(t.id);
-                    if (isSystem) return ''; // Extra guard against system keys
-                    return `
-                        <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
+                    if (isSystem) return; // Extra guard against system keys
+                    
+                    const div = document.createElement('div');
+                    div.className = 'api-key-item-pill';
+                    div.title = 'Click to show actions';
+                    div.innerHTML = `
+                        <div class="api-key-normal-content">
                             <div style="display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden;">
                                 <div style="font-weight: 700; color: #fff; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(t.name || 'Key')}</div>
                                 <span style="font-size: 9px; padding: 1px 6px; border-radius: 4px; background: rgba(16,185,129,0.15); color: #34d399; font-weight: 700; flex-shrink: 0;">ACTIVE</span>
                             </div>
-                            <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
-                                <button onclick="copyToClipboard('${tokenToCopy}')" class="settings-top-btn" style="height: 26px; padding: 0 8px; font-size: 10.5px; background: rgba(56,189,248,0.1); border-color: rgba(56,189,248,0.3); color: #38bdf8;" title="Copy Token for API use">
-                                    <span>📋</span><span>Copy</span>
-                                </button>
-                                <button onclick="revokeApiKey('${t.id}')" style="background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.25); color: #f87171; border-radius: 8px; padding: 0 8px; height: 26px; font-size: 10.5px; cursor: pointer; display: inline-flex; align-items: center;" title="Revoke Key">
-                                    <span>🗑️</span>
-                                </button>
+                            <div style="font-size: 11px; color: var(--text-tertiary);">
+                                <span>Tap to manage</span>
                             </div>
                         </div>
+                        <div class="api-key-actions-bar">
+                            <button type="button" class="api-key-btn-copy" onclick="event.stopPropagation(); copyToClipboard('${tokenToCopy}')" title="Copy Token">
+                                <span>📋</span><span>Copy Token</span>
+                            </button>
+                            <button type="button" class="api-key-btn-delete" onclick="event.stopPropagation(); revokeApiKey('${t.id}')" title="Revoke Key">
+                                <span>🗑️</span><span>Delete</span>
+                            </button>
+                        </div>
                     `;
-                }).join('');
+
+                    div.onclick = function(e) {
+                        if (e.target && e.target.closest && (e.target.closest('.api-key-btn-copy') || e.target.closest('.api-key-btn-delete'))) return;
+                        const isAlreadySelected = this.classList.contains('selected');
+                        document.querySelectorAll('.api-key-item-pill.selected').forEach(el => {
+                            el.classList.remove('selected');
+                        });
+                        if (!isAlreadySelected) {
+                            this.classList.add('selected');
+                        }
+                    };
+
+                    container.appendChild(div);
+                });
             } catch (e) {
                 container.innerHTML = `<div style="padding:14px; text-align:center; color:#f87171; font-size:12px;">Failed to load keys: ${e.message}</div>`;
             }
