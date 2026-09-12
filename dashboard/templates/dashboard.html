@@ -1672,23 +1672,6 @@
                     </div>
                 </div>
             </div>
-
-            <!-- Quick Integration Guide -->
-            <div class="glass-card settings-card">
-                <div class="settings-card-header">
-                    <div>
-                        <div class="settings-card-title">💡 How to Connect External Apps</div>
-                        <div class="settings-card-sub">Use with Cursor, LibreChat, NextChat, Python, or standard OpenAI clients</div>
-                    </div>
-                </div>
-                <div style="margin-top: 10px; font-family:'JetBrains Mono',monospace; font-size: 11.5px; color:#cbd5e1; background: rgba(0,0,0,0.4); padding: 14px; border-radius: 12px; line-height: 1.6;">
-                    <span style="color: #64748b;"># Example cURL request to your remote Gemini bridge</span><br>
-                    curl https://64.112.42.39.sslip.io/api/v1/gemini/chat/completions \<br>
-                    &nbsp;&nbsp;-H <span style="color: #38bdf8;">"Authorization: Bearer YOUR_API_KEY"</span> \<br>
-                    &nbsp;&nbsp;-H "Content-Type: application/json" \<br>
-                    &nbsp;&nbsp;-d '{"model": "gemini-3.8-flash", "messages": [{"role": "user", "content": "Hello"}]}'
-                </div>
-            </div>
         </section>
 
         <!-- Settings View Section -->
@@ -1971,13 +1954,9 @@
                     if (isSystem) return ''; // Extra guard against system keys
                     return `
                         <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.07); border-radius: 10px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 8px;">
-                            <div style="display: flex; flex-direction: column; gap: 2px; overflow: hidden; min-width: 0;">
-                                <div style="font-weight: 700; color: #fff; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(t.name || 'Key')}</div>
-                                <div style="display: flex; align-items: center; gap: 6px;">
-                                    <span style="font-family:'JetBrains Mono'; font-size: 10.5px; color: var(--accent-cyan);">${escapeHtml(t.id)}</span>
-                                    <span style="font-size: 9px; padding: 1px 5px; border-radius: 4px; background: rgba(16,185,129,0.15); color: #34d399; font-weight: 600;">ACTIVE</span>
-                                    <span style="font-size: 9px; color: var(--text-tertiary);">${escapeHtml(t.created_at || '')}</span>
-                                </div>
+                            <div style="display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden;">
+                                <div style="font-weight: 700; color: #fff; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(t.name || 'Key')}</div>
+                                <span style="font-size: 9px; padding: 1px 6px; border-radius: 4px; background: rgba(16,185,129,0.15); color: #34d399; font-weight: 700; flex-shrink: 0;">ACTIVE</span>
                             </div>
                             <div style="display: flex; align-items: center; gap: 6px; flex-shrink: 0;">
                                 <button onclick="copyToClipboard('${tokenToCopy}')" class="settings-top-btn" style="height: 26px; padding: 0 8px; font-size: 10.5px; background: rgba(56,189,248,0.1); border-color: rgba(56,189,248,0.3); color: #38bdf8;" title="Copy Token for API use">
