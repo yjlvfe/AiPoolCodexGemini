@@ -2411,19 +2411,24 @@
             }
         }
 
-        function toggleProviderModelsList(prov, forceShow) {
+        function toggleProviderModelsList(prov) {
             const list = document.getElementById(prov + '-models-list');
             const arrow = document.getElementById(prov + '-models-arrow');
-            if (!list || !arrow) return;
-            const isHidden = forceShow !== undefined ? !forceShow : list.style.display === 'none';
-            if (!isHidden) {
-                list.style.display = 'grid';
-                arrow.textContent = '▲ Hide';
-                arrow.style.color = '#38bdf8';
+            if (!list) return;
+            // Robust display check reading computed style or inline style
+            const isCurrentlyHidden = (list.style.display === 'none' || window.getComputedStyle(list).display === 'none');
+            if (isCurrentlyHidden) {
+                list.style.setProperty('display', 'grid', 'important');
+                if (arrow) {
+                    arrow.textContent = '▲ Hide';
+                    arrow.style.color = '#38bdf8';
+                }
             } else {
-                list.style.display = 'none';
-                arrow.textContent = '▼ Show';
-                arrow.style.color = '#94a3b8';
+                list.style.setProperty('display', 'none', 'important');
+                if (arrow) {
+                    arrow.textContent = '▼ Show';
+                    arrow.style.color = prov === 'codex' ? '#c084fc' : '#38bdf8';
+                }
             }
         }
 
@@ -2472,11 +2477,14 @@
             codexContainer.innerHTML = codexModels.map(renderModelRow).join('');
             geminiContainer.innerHTML = geminiModels.map(renderModelRow).join('');
 
-            // Default: Keep panels cleanly closed until user explicitly clicks to customize
-            toggleModelsRestrictionPanel(false);
+            // Default: Keep sublimits and provider lists closed initially
             toggleSublimits(false);
-            toggleProviderModelsList('codex', false);
-            toggleProviderModelsList('gemini', false);
+            if (codexContainer) codexContainer.style.setProperty('display', 'none', 'important');
+            if (geminiContainer) geminiContainer.style.setProperty('display', 'none', 'important');
+            const codexArrow = document.getElementById('codex-models-arrow');
+            const geminiArrow = document.getElementById('gemini-models-arrow');
+            if (codexArrow) { codexArrow.textContent = '▼ Show'; codexArrow.style.color = '#c084fc'; }
+            if (geminiArrow) { geminiArrow.textContent = '▼ Show'; geminiArrow.style.color = '#38bdf8'; }
             updateModelsCountPreview();
         }
 
