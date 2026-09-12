@@ -1747,10 +1747,17 @@
                             </div>
                         </div>
 
-                        <!-- Refill Schedule & Expiration Section (Clean Inline Pickers) -->
-                        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed rgba(255,255,255,0.08); display: flex; flex-direction: column; gap: 10px;">
+                        <!-- Refill Schedule & Expiration Section (Collapsible Advanced Controls) -->
+                        <div style="margin-top: 10px; padding-top: 8px; border-top: 1px dashed rgba(255,255,255,0.08); display: flex; align-items: center; justify-content: space-between;">
+                            <span style="font-size: 11.5px; color: #cbd5e1; font-weight: 600;">Refill Cycle & Expiry</span>
+                            <button type="button" id="btn-toggle-schedule" onclick="toggleScheduleSection()" style="background: rgba(56,189,248,0.15); border: 1px solid rgba(56,189,248,0.3); color: #38bdf8; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer;">
+                                ⏱️ Configure
+                            </button>
+                        </div>
+
+                        <div id="schedule-container" style="display: none; flex-direction: column; gap: 10px; margin-top: 10px;">
                             <!-- Auto Refill Component -->
-                            <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(56,189,248,0.15); border-radius: 8px; padding: 10px;">
+                            <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(56,189,248,0.2); border-radius: 8px; padding: 10px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                     <label style="color: #e2e8f0; font-size: 11.5px; font-weight: 700;">🔄 Auto-Refill Quota:</label>
                                     <span id="modal-edit-refill-preview" style="font-size: 10.5px; font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #94a3b8; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 2px 7px; border-radius: 5px;">One-Time (No Refill)</span>
@@ -1759,16 +1766,16 @@
                                     <input type="number" id="modal-edit-refill-num" min="1" max="999" class="modal-input" style="width: 80px; padding: 8px 10px; font-size: 13px; text-align: center; display: none;" placeholder="5" oninput="updateRefillCustomPreview()" />
                                     <select id="modal-edit-refill-unit-select" class="modal-input" style="flex: 1; padding: 8px 12px; font-size: 12px; cursor: pointer;" onchange="onRefillSelectChange()">
                                         <option value="none">One-Time (No Refill)</option>
-                                        <option value="hours">Hours (ساعات)</option>
-                                        <option value="days">Days (أيام)</option>
-                                        <option value="weeks">Weeks (أسابيع)</option>
-                                        <option value="months">Months (أشهر)</option>
+                                        <option value="hours">Hours</option>
+                                        <option value="days">Days</option>
+                                        <option value="weeks">Weeks</option>
+                                        <option value="months">Months</option>
                                     </select>
                                 </div>
                             </div>
 
                             <!-- Lifespan Expiration Component -->
-                            <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(168,85,247,0.15); border-radius: 8px; padding: 10px;">
+                            <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(168,85,247,0.2); border-radius: 8px; padding: 10px;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                     <label style="color: #e2e8f0; font-size: 11.5px; font-weight: 700;">⏳ Key Lifespan / Expiry:</label>
                                     <span id="modal-edit-expires-preview" style="font-size: 10.5px; font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #34d399; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25); padding: 2px 7px; border-radius: 5px;">Never Expires</span>
@@ -1776,11 +1783,11 @@
                                 <div style="display: flex; gap: 8px; align-items: center;">
                                     <input type="number" id="modal-edit-exp-num" min="1" max="999" class="modal-input" style="width: 80px; padding: 8px 10px; font-size: 13px; text-align: center; display: none;" placeholder="1" oninput="updateExpirationCustomPreview()" />
                                     <select id="modal-edit-exp-unit-select" class="modal-input" style="flex: 1; padding: 8px 12px; font-size: 12px; cursor: pointer;" onchange="onExpSelectChange()">
-                                        <option value="none">Never Expires (دائم)</option>
-                                        <option value="hours">Hours (ساعات)</option>
-                                        <option value="days">Days (أيام)</option>
-                                        <option value="weeks">Weeks (أسابيع)</option>
-                                        <option value="months">Months (أشهر)</option>
+                                        <option value="none">Never Expires</option>
+                                        <option value="hours">Hours</option>
+                                        <option value="days">Days</option>
+                                        <option value="weeks">Weeks</option>
+                                        <option value="months">Months</option>
                                     </select>
                                 </div>
                             </div>
@@ -2455,16 +2462,36 @@
             const shouldShow = forceShow !== undefined ? forceShow : container.style.display === 'none';
             if (shouldShow) {
                 container.style.display = 'flex';
-                btn.innerHTML = '<span>⚙️ Hide Cap</span>';
+                btn.textContent = '⚙️ Hide Cap';
                 btn.style.background = 'rgba(239,68,68,0.15)';
                 btn.style.borderColor = 'rgba(239,68,68,0.3)';
                 btn.style.color = '#f87171';
             } else {
                 container.style.display = 'none';
-                btn.innerHTML = '<span>⚙️ Customize Cap</span>';
+                btn.textContent = '⚙️ Customize Cap';
                 btn.style.background = 'rgba(168,85,247,0.15)';
                 btn.style.borderColor = 'rgba(168,85,247,0.3)';
                 btn.style.color = '#c084fc';
+            }
+        }
+
+        function toggleScheduleSection(forceShow) {
+            const container = document.getElementById('schedule-container');
+            const btn = document.getElementById('btn-toggle-schedule');
+            if (!container || !btn) return;
+            const shouldShow = forceShow !== undefined ? forceShow : container.style.display === 'none';
+            if (shouldShow) {
+                container.style.display = 'flex';
+                btn.textContent = '⏱️ Hide';
+                btn.style.background = 'rgba(239,68,68,0.15)';
+                btn.style.borderColor = 'rgba(239,68,68,0.3)';
+                btn.style.color = '#f87171';
+            } else {
+                container.style.display = 'none';
+                btn.textContent = '⏱️ Configure';
+                btn.style.background = 'rgba(56,189,248,0.15)';
+                btn.style.borderColor = 'rgba(56,189,248,0.3)';
+                btn.style.color = '#38bdf8';
             }
         }
 
@@ -2817,8 +2844,9 @@
             if (geminiLimInput) geminiLimInput.value = limits.gemini ? formatTokenCount(limits.gemini) : '';
             if (totalLimInput) totalLimInput.value = currentEditKeyData.max_tokens ? formatTokenCount(currentEditKeyData.max_tokens) : '';
 
-            // Default: Keep sublimits collapsed initially unless user clicks to expand
+            // Default: Keep sublimits and schedule collapsed initially unless user clicks to expand
             toggleSublimits(false);
+            toggleScheduleSection(false);
 
             updateQuotaPreview('codex');
             updateQuotaPreview('gemini');
