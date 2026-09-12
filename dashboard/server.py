@@ -377,7 +377,11 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                         "expires_at": expires_at,
                         "refill_period": c.get("refill_period"),
                         "refill_period_seconds": c.get("refill_period_seconds"),
+                        "refill_unit": c.get("refill_unit"),
+                        "refill_val": c.get("refill_val"),
                         "expiration_duration": c.get("expiration_duration"),
+                        "expiration_unit": c.get("expiration_unit"),
+                        "expiration_val": c.get("expiration_val"),
                         "created_at": c.get("created_at", "Custom Key"),
                         "total_tokens": used,
                         "max_tokens": c.get("max_tokens"),
@@ -792,6 +796,10 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             refill_period = payload.get("refill_period") # e.g. "5h", "1d", "1w", "1m" or None
             refill_period_seconds = payload.get("refill_period_seconds")
             expiration_duration = payload.get("expiration_duration") # e.g. "1m", "30d"
+            expiration_unit = payload.get("expiration_unit")
+            expiration_val = payload.get("expiration_val")
+            refill_unit = payload.get("refill_unit")
+            refill_val = payload.get("refill_val")
             expires_at = payload.get("expires_at")
 
             registry_file = Path(__file__).resolve().parent / "client-identities.json"
@@ -821,6 +829,14 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                             c["refill_period_seconds"] = int(refill_period_seconds) if refill_period_seconds is not None else None
                         if "expiration_duration" in payload:
                             c["expiration_duration"] = str(expiration_duration).strip() if expiration_duration else None
+                        if "expiration_unit" in payload:
+                            c["expiration_unit"] = str(expiration_unit).strip() if expiration_unit else None
+                        if "expiration_val" in payload:
+                            c["expiration_val"] = int(expiration_val) if expiration_val is not None else None
+                        if "refill_unit" in payload:
+                            c["refill_unit"] = str(refill_unit).strip() if refill_unit else None
+                        if "refill_val" in payload:
+                            c["refill_val"] = int(refill_val) if refill_val is not None else None
                         if "expires_at" in payload:
                             c["expires_at"] = float(expires_at) if expires_at is not None else None
                         if not c.get("created_at_ts"):
