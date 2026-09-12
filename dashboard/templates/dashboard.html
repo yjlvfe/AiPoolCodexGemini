@@ -1431,6 +1431,22 @@
             font-weight: 700;
             box-shadow: 0 0 10px rgba(56, 189, 248, 0.2);
         }
+        .custom-dropdown-opt {
+            padding: 10px 14px;
+            font-size: 12px;
+            color: #cbd5e1;
+            cursor: pointer;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+            transition: all 0.15s ease;
+        }
+        .custom-dropdown-opt:last-child {
+            border-bottom: none;
+        }
+        .custom-dropdown-opt:hover, .custom-dropdown-opt:active {
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+            font-weight: 600;
+        }
         .modal-actions {
             display: flex;
             gap: 10px;
@@ -1757,38 +1773,46 @@
 
                         <div id="schedule-container" style="display: none; flex-direction: column; gap: 10px; margin-top: 10px;">
                             <!-- Auto Refill Component -->
-                            <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(56,189,248,0.2); border-radius: 8px; padding: 10px;">
+                            <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(56,189,248,0.2); border-radius: 8px; padding: 10px; position: relative;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                     <label style="color: #e2e8f0; font-size: 11.5px; font-weight: 700;">🔄 Auto-Refill Quota:</label>
                                     <span id="modal-edit-refill-preview" style="font-size: 10.5px; font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #94a3b8; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 2px 7px; border-radius: 5px;">One-Time (No Refill)</span>
                                 </div>
-                                <div style="display: flex; gap: 8px; align-items: center;">
+                                <div style="display: flex; gap: 8px; align-items: center; position: relative;">
                                     <input type="number" id="modal-edit-refill-num" min="1" max="999" class="modal-input" style="width: 80px; padding: 8px 10px; font-size: 13px; text-align: center; display: none;" placeholder="5" oninput="updateRefillCustomPreview()" />
-                                    <select id="modal-edit-refill-unit-select" class="modal-input" style="flex: 1; padding: 8px 12px; font-size: 12px; cursor: pointer;" onchange="onRefillSelectChange()">
-                                        <option value="none">One-Time (No Refill)</option>
-                                        <option value="hours">Hours</option>
-                                        <option value="days">Days</option>
-                                        <option value="weeks">Weeks</option>
-                                        <option value="months">Months</option>
-                                    </select>
+                                    <div id="modal-edit-refill-trigger" class="modal-input" style="flex: 1; padding: 8px 12px; font-size: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="toggleDropdownMenu('refill')">
+                                        <span id="modal-edit-refill-selected-text">One-Time (No Refill)</span>
+                                        <span style="font-size: 10px; color: #94a3b8;">▼</span>
+                                    </div>
+                                    <div id="modal-edit-refill-dropdown" style="display: none; position: absolute; top: calc(100% + 4px); right: 0; left: 0; background: #0f172a; border: 1px solid rgba(56,189,248,0.3); border-radius: 8px; z-index: 1000; box-shadow: 0 8px 24px rgba(0,0,0,0.6); overflow: hidden;">
+                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('refill', 'none', 'One-Time (No Refill)')">One-Time (No Refill)</div>
+                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('refill', 'hours', 'Hours')">Hours</div>
+                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('refill', 'days', 'Days')">Days</div>
+                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('refill', 'weeks', 'Weeks')">Weeks</div>
+                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('refill', 'months', 'Months')">Months</div>
+                                    </div>
                                 </div>
                             </div>
 
                             <!-- Lifespan Expiration Component -->
-                            <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(168,85,247,0.2); border-radius: 8px; padding: 10px;">
+                            <div style="background: rgba(0,0,0,0.3); border: 1px solid rgba(168,85,247,0.2); border-radius: 8px; padding: 10px; position: relative;">
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
                                     <label style="color: #e2e8f0; font-size: 11.5px; font-weight: 700;">⏳ Key Lifespan / Expiry:</label>
                                     <span id="modal-edit-expires-preview" style="font-size: 10.5px; font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #34d399; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25); padding: 2px 7px; border-radius: 5px;">Never Expires</span>
                                 </div>
-                                <div style="display: flex; gap: 8px; align-items: center;">
+                                <div style="display: flex; gap: 8px; align-items: center; position: relative;">
                                     <input type="number" id="modal-edit-exp-num" min="1" max="999" class="modal-input" style="width: 80px; padding: 8px 10px; font-size: 13px; text-align: center; display: none;" placeholder="1" oninput="updateExpirationCustomPreview()" />
-                                    <select id="modal-edit-exp-unit-select" class="modal-input" style="flex: 1; padding: 8px 12px; font-size: 12px; cursor: pointer;" onchange="onExpSelectChange()">
-                                        <option value="none">Never Expires</option>
-                                        <option value="hours">Hours</option>
-                                        <option value="days">Days</option>
-                                        <option value="weeks">Weeks</option>
-                                        <option value="months">Months</option>
-                                    </select>
+                                    <div id="modal-edit-exp-trigger" class="modal-input" style="flex: 1; padding: 8px 12px; font-size: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="toggleDropdownMenu('exp')">
+                                        <span id="modal-edit-exp-selected-text">Never Expires</span>
+                                        <span style="font-size: 10px; color: #94a3b8;">▼</span>
+                                    </div>
+                                    <div id="modal-edit-exp-dropdown" style="display: none; position: absolute; top: calc(100% + 4px); right: 0; left: 0; background: #0f172a; border: 1px solid rgba(168,85,247,0.3); border-radius: 8px; z-index: 1000; box-shadow: 0 8px 24px rgba(0,0,0,0.6); overflow: hidden;">
+                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('exp', 'none', 'Never Expires')">Never Expires</div>
+                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('exp', 'hours', 'Hours')">Hours</div>
+                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('exp', 'days', 'Days')">Days</div>
+                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('exp', 'weeks', 'Weeks')">Weeks</div>
+                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('exp', 'months', 'Months')">Months</div>
+                                    </div>
                                 </div>
                             </div>
                         </div>
@@ -2257,6 +2281,12 @@
             if (wrapper && !wrapper.contains(e.target)) {
                 wrapper.classList.remove('open');
             }
+            // Close custom inline schedule dropdowns if clicking outside
+            const rTrigger = document.getElementById('modal-edit-refill-trigger');
+            const eTrigger = document.getElementById('modal-edit-exp-trigger');
+            if (rTrigger && !rTrigger.contains(e.target) && eTrigger && !eTrigger.contains(e.target)) {
+                closeAllCustomDropdowns();
+            }
             // Close selected API key actions if clicking anywhere outside the key card
             if (!e.target.closest('.api-key-item-pill')) {
                 document.querySelectorAll('.api-key-item-pill.selected').forEach(el => {
@@ -2499,48 +2529,71 @@
         let currentRefillUnit = 'none';
         let currentExpUnit = 'none';
 
-        function onRefillSelectChange() {
-            const sel = document.getElementById('modal-edit-refill-unit-select');
-            const unit = sel ? sel.value : 'none';
-            currentRefillUnit = unit;
-            const input = document.getElementById('modal-edit-refill-num');
-            if (input) {
-                if (unit === 'none') {
-                    input.style.display = 'none';
-                    input.value = '';
-                } else {
-                    input.style.display = 'inline-block';
-                    if (!input.value || parseInt(input.value) <= 0) {
-                        input.value = unit === 'hours' ? '5' : '1';
-                    }
-                }
-            }
-            updateRefillCustomPreview();
+        function toggleDropdownMenu(kind) {
+            const dropdown = document.getElementById('modal-edit-' + kind + '-dropdown');
+            if (!dropdown) return;
+            const isShown = dropdown.style.display === 'block';
+            closeAllCustomDropdowns();
+            if (!isShown) dropdown.style.display = 'block';
         }
 
-        function onExpSelectChange() {
-            const sel = document.getElementById('modal-edit-exp-unit-select');
-            const unit = sel ? sel.value : 'none';
-            currentExpUnit = unit;
-            const input = document.getElementById('modal-edit-exp-num');
-            if (input) {
-                if (unit === 'none') {
-                    input.style.display = 'none';
-                    input.value = '';
-                } else {
-                    input.style.display = 'inline-block';
-                    if (!input.value || parseInt(input.value) <= 0) {
-                        input.value = unit === 'months' ? '1' : (unit === 'days' ? '30' : '1');
+        function closeAllCustomDropdowns() {
+            const d1 = document.getElementById('modal-edit-refill-dropdown');
+            const d2 = document.getElementById('modal-edit-exp-dropdown');
+            if (d1) d1.style.display = 'none';
+            if (d2) d2.style.display = 'none';
+        }
+
+        function selectDropdownOption(kind, unit, label) {
+            if (kind === 'refill') {
+                currentRefillUnit = unit;
+                const textEl = document.getElementById('modal-edit-refill-selected-text');
+                if (textEl) textEl.textContent = label;
+                const input = document.getElementById('modal-edit-refill-num');
+                if (input) {
+                    if (unit === 'none') {
+                        input.style.display = 'none';
+                        input.value = '';
+                    } else {
+                        input.style.display = 'inline-block';
+                        if (!input.value || parseInt(input.value) <= 0) {
+                            input.value = unit === 'hours' ? '5' : '1';
+                        }
                     }
                 }
+                updateRefillCustomPreview();
+            } else if (kind === 'exp') {
+                currentExpUnit = unit;
+                const textEl = document.getElementById('modal-edit-exp-selected-text');
+                if (textEl) textEl.textContent = label;
+                const input = document.getElementById('modal-edit-exp-num');
+                if (input) {
+                    if (unit === 'none') {
+                        input.style.display = 'none';
+                        input.value = '';
+                    } else {
+                        input.style.display = 'inline-block';
+                        if (!input.value || parseInt(input.value) <= 0) {
+                            input.value = unit === 'months' ? '1' : (unit === 'days' ? '30' : '1');
+                        }
+                    }
+                }
+                updateExpirationCustomPreview();
             }
-            updateExpirationCustomPreview();
+            closeAllCustomDropdowns();
         }
 
         function setRefillUnit(unit) {
             currentRefillUnit = unit;
-            const sel = document.getElementById('modal-edit-refill-unit-select');
-            if (sel) sel.value = unit;
+            const labels = {
+                'none': 'One-Time (No Refill)',
+                'hours': 'Hours',
+                'days': 'Days',
+                'weeks': 'Weeks',
+                'months': 'Months'
+            };
+            const textEl = document.getElementById('modal-edit-refill-selected-text');
+            if (textEl) textEl.textContent = labels[unit] || 'One-Time (No Refill)';
             const input = document.getElementById('modal-edit-refill-num');
             if (input) {
                 if (unit === 'none') {
@@ -2555,8 +2608,15 @@
 
         function setExpUnit(unit) {
             currentExpUnit = unit;
-            const sel = document.getElementById('modal-edit-exp-unit-select');
-            if (sel) sel.value = unit;
+            const labels = {
+                'none': 'Never Expires',
+                'hours': 'Hours',
+                'days': 'Days',
+                'weeks': 'Weeks',
+                'months': 'Months'
+            };
+            const textEl = document.getElementById('modal-edit-exp-selected-text');
+            if (textEl) textEl.textContent = labels[unit] || 'Never Expires';
             const input = document.getElementById('modal-edit-exp-num');
             if (input) {
                 if (unit === 'none') {
