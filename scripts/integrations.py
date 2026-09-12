@@ -272,7 +272,10 @@ def apply_native(agent, path, data):
     try:
         if agent == 'openclaw':
             patch = {'models': {'providers': {k: v for k, v in desired.items()}}}
-            applied = subprocess.run([binary, 'config', 'patch', '--stdin'], input=json.dumps(patch),
+            cmd = [binary, 'config', 'patch', '--stdin']
+            for k in desired:
+                cmd.extend(['--replace-path', f'models.providers.{k}.models'])
+            applied = subprocess.run(cmd, input=json.dumps(patch),
                                      env=env, capture_output=True, text=True, timeout=60)
             if applied.returncode:
                 raise ValueError(applied.stderr.strip() or applied.stdout.strip() or 'openclaw config patch failed')
@@ -340,12 +343,23 @@ def status(agent):
         data = read_config(agent, path)
         actual = data.get('providers', {}) if agent == 'hermes' else data.get('models', {}).get('providers', {})
         expected = providers(agent)
-        result['connected'] = all(isinstance(actual.get(k), dict) and all(actual[k].get(field) == value for field, value in entry.items()) for k, entry in expected.items())
         if agent == 'hermes':
+            result['connected'] = all(isinstance(actual.get(k), dict) and all(actual[k].get(field) == value for field, value in entry.items()) for k, entry in expected.items())
             try:
                 result['connected'] = result['connected'] and int((data.get('agent') or {}).get('api_max_retries', 0)) >= HERMES_MIN_API_RETRIES
             except (TypeError, ValueError):
                 result['connected'] = False
+        else:
+            # For OpenClaw: models order may differ or be sorted by openclaw; verify models by ID set and baseUrl/api
+            def _openclaw_match(act_prov, exp_prov):
+                if not isinstance(act_prov, dict):
+                    return False
+                if act_prov.get('baseUrl') != exp_prov.get('baseUrl') or act_prov.get('api') != exp_prov.get('api'):
+                    return False
+                act_ids = {m.get('id') for m in act_prov.get('models', []) if isinstance(m, dict)}
+                exp_ids = {m.get('id') for m in exp_prov.get('models', []) if isinstance(m, dict)}
+                return exp_ids.issubset(act_ids)
+            result['connected'] = all(_openclaw_match(actual.get(k), entry) for k, entry in expected.items())
         result['verified'] = result['connected']
         result['providers'] = list(expected)
         result['message'] = 'Configuration verified; existing sessions keep their selected provider.' if result['connected'] else 'Pool providers are missing or mismatched.'
@@ -392,10 +406,8 @@ def integrate(agent):
         # gateway so Telegram reads the repaired catalog immediately.
         try:
             subprocess.run(['openclaw', 'gateway', 'restart'], capture_output=True,
-                           text=True, timeout=60, check=True)
+                           text=True, timeout=10, check=False)
         except (OSError, subprocess.SubprocessError):
-            # Config installation remains valid even when no gateway service is
-            # installed; status/readback below is still authoritative.
             pass
     check = status(agent)
     if not check['verified']:
