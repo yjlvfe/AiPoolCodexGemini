@@ -362,11 +362,22 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                     c_name = c.get("name", "")
                     c_id = c.get("id", "")
                     used = usage_by_client.get(c_name.lower(), 0) or usage_by_client.get(c_id.lower(), 0)
+                    # Check expired status dynamically
+                    expires_at = c.get("expires_at")
+                    is_expired = False
+                    if expires_at and time.time() > float(expires_at):
+                        is_expired = True
+
                     clients.append({
                         "id": c.get("id"),
                         "name": c_name,
                         "raw_token": c.get("raw_token"),  # Persistent token for copying anytime
                         "enabled": c.get("enabled", True),
+                        "expired": is_expired,
+                        "expires_at": expires_at,
+                        "refill_period": c.get("refill_period"),
+                        "refill_period_seconds": c.get("refill_period_seconds"),
+                        "expiration_duration": c.get("expiration_duration"),
                         "created_at": c.get("created_at", "Custom Key"),
                         "total_tokens": used,
                         "max_tokens": c.get("max_tokens"),
@@ -747,6 +758,11 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                         "allowed_models": found_client.get("allowed_models", []),
                         "token_limits": found_client.get("token_limits", {}),
                         "max_tokens": found_client.get("max_tokens"),
+                        "refill_period": found_client.get("refill_period"),
+                        "refill_period_seconds": found_client.get("refill_period_seconds"),
+                        "expiration_duration": found_client.get("expiration_duration"),
+                        "expires_at": found_client.get("expires_at"),
+                        "expired": bool(found_client.get("expires_at") and time.time() > float(found_client.get("expires_at"))),
                         "total_tokens": total_tokens,
                         "total_requests": total_requests,
                         "by_provider": by_provider,
@@ -773,6 +789,10 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             allowed_models = payload.get("allowed_models")
             token_limits = payload.get("token_limits") # e.g. {"codex": 10000000, "gemini": 100000000}
             max_tokens = payload.get("max_tokens")     # e.g. 110000000
+            refill_period = payload.get("refill_period") # e.g. "5h", "1d", "1w", "1m" or None
+            refill_period_seconds = payload.get("refill_period_seconds")
+            expiration_duration = payload.get("expiration_duration") # e.g. "1m", "30d"
+            expires_at = payload.get("expires_at")
 
             registry_file = Path(__file__).resolve().parent / "client-identities.json"
             try:
@@ -795,6 +815,16 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                             c["token_limits"] = {str(k).lower(): (int(v) if v is not None else None) for k, v in token_limits.items()}
                         if "max_tokens" in payload:
                             c["max_tokens"] = int(max_tokens) if max_tokens is not None else None
+                        if "refill_period" in payload:
+                            c["refill_period"] = str(refill_period).strip() if refill_period else None
+                        if "refill_period_seconds" in payload:
+                            c["refill_period_seconds"] = int(refill_period_seconds) if refill_period_seconds is not None else None
+                        if "expiration_duration" in payload:
+                            c["expiration_duration"] = str(expiration_duration).strip() if expiration_duration else None
+                        if "expires_at" in payload:
+                            c["expires_at"] = float(expires_at) if expires_at is not None else None
+                        if not c.get("created_at_ts"):
+                            c["created_at_ts"] = time.time()
                         break
                 if not found:
                     self.send_json_response({"success": False, "message": f"Token {target_id} not found"}, status_code=404)

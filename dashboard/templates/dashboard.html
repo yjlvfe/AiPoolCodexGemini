@@ -1614,18 +1614,24 @@
                     <!-- Basic Info & Status -->
                     <div style="display: grid; grid-template-columns: 1fr; gap: 10px;">
                         <div>
-                            <label style="display: block; color: #94a3b8; font-size: 11.5px; margin-bottom: 5px; font-weight: 600;">Key Name / Label:</label>
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                                <label style="color: #94a3b8; font-size: 11.5px; font-weight: 600;">Key Name / Label:</label>
+                                <button type="button" onclick="focusKeyNameInput()" style="background: none; border: none; color: #38bdf8; font-size: 11px; cursor: pointer; padding: 0;">✏️ Edit Name</button>
+                            </div>
                             <input type="text" id="modal-edit-key-name-input" class="modal-input" placeholder="e.g. Youssef Friend, Cursor" autocomplete="off" />
                         </div>
                         <div>
                             <label style="display: block; color: #94a3b8; font-size: 11.5px; margin-bottom: 5px; font-weight: 600;">Credential Status:</label>
-                            <div style="display: flex; gap: 10px;">
-                                <button type="button" id="modal-edit-status-enable" onclick="setEditKeyStatus(true)" style="flex: 1; padding: 7px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid rgba(16,185,129,0.3); background: rgba(16,185,129,0.15); color: #34d399;">
+                            <div style="display: flex; gap: 8px;">
+                                <button type="button" id="modal-edit-status-enable" onclick="setEditKeyStatus(true)" style="flex: 1; padding: 7px; border-radius: 8px; font-size: 11.5px; font-weight: 700; cursor: pointer; border: 1px solid rgba(16,185,129,0.3); background: rgba(16,185,129,0.15); color: #34d399;">
                                     ✅ Active
                                 </button>
-                                <button type="button" id="modal-edit-status-disable" onclick="setEditKeyStatus(false)" style="flex: 1; padding: 7px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.1); color: #94a3b8;">
+                                <button type="button" id="modal-edit-status-disable" onclick="setEditKeyStatus(false)" style="flex: 1; padding: 7px; border-radius: 8px; font-size: 11.5px; font-weight: 700; cursor: pointer; border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.1); color: #94a3b8;">
                                     🚫 Disabled
                                 </button>
+                                <div id="modal-edit-status-expired-pill" style="display: none; align-items: center; justify-content: center; padding: 7px 10px; border-radius: 8px; font-size: 11.5px; font-weight: 700; border: 1px solid rgba(245,158,11,0.3); background: rgba(245,158,11,0.15); color: #fbbf24;">
+                                    ⏰ Expired
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -1714,6 +1720,40 @@
                                     <span id="modal-edit-gemini-preview" style="font-size: 11px; font-family: monospace; color: #fbbf24;">No Cap</span>
                                 </div>
                                 <input type="text" id="modal-edit-limit-gemini" class="modal-input" placeholder="e.g. 10M (or blank for no cap)" oninput="updateQuotaPreview('gemini')" />
+                            </div>
+                        </div>
+
+                        <!-- Refill Schedule & Expiration Section -->
+                        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed rgba(255,255,255,0.08); display: flex; flex-direction: column; gap: 10px;">
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <label style="color: #e2e8f0; font-size: 11.5px; font-weight: 700;">🔄 Quota Refill Cycle:</label>
+                                    <span id="modal-edit-refill-preview" style="font-size: 10.5px; font-family: monospace; color: #38bdf8;">Never (One-time)</span>
+                                </div>
+                                <select id="modal-edit-refill-period" class="modal-input" style="cursor: pointer;" onchange="updateRefillPreview()">
+                                    <option value="">Never (One-time quota)</option>
+                                    <option value="1h">Every 1 Hour</option>
+                                    <option value="5h">Every 5 Hours</option>
+                                    <option value="12h">Every 12 Hours</option>
+                                    <option value="1d">Every 1 Day (Daily)</option>
+                                    <option value="1w">Every 1 Week (Weekly)</option>
+                                    <option value="1m">Every 1 Month (Monthly)</option>
+                                </select>
+                            </div>
+
+                            <div>
+                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                                    <label style="color: #e2e8f0; font-size: 11.5px; font-weight: 700;">⏳ Key Lifespan / Expiration:</label>
+                                    <span id="modal-edit-expires-preview" style="font-size: 10.5px; font-family: monospace; color: #34d399;">No Expiry</span>
+                                </div>
+                                <select id="modal-edit-expiration-duration" class="modal-input" style="cursor: pointer;" onchange="updateExpirationPreview()">
+                                    <option value="">Never Expires</option>
+                                    <option value="1d">Expire after 1 Day</option>
+                                    <option value="7d">Expire after 1 Week</option>
+                                    <option value="30d">Expire after 1 Month (30 Days)</option>
+                                    <option value="90d">Expire after 3 Months</option>
+                                    <option value="365d">Expire after 1 Year</option>
+                                </select>
                             </div>
                         </div>
                     </div>
@@ -2262,10 +2302,16 @@
                     const tokenToCopy = t.raw_token || t.id;
                     const isSystem = ['hermes', 'openclaw', 'localtooling'].includes(t.id);
                     if (isSystem) return; // Extra guard against system keys
-                    const isEnabled = t.enabled !== false;
-                    const statusBadge = isEnabled
-                        ? `<span style="font-size: 9px; padding: 1px 6px; border-radius: 4px; background: rgba(16,185,129,0.15); color: #34d399; font-weight: 700; flex-shrink: 0;">ACTIVE</span>`
-                        : `<span style="font-size: 9px; padding: 1px 6px; border-radius: 4px; background: rgba(239,68,68,0.15); color: #f87171; font-weight: 700; flex-shrink: 0;">DISABLED</span>`;
+                    const isExpired = !!t.expired;
+                    const isEnabled = t.enabled !== false && !isExpired;
+                    let statusBadge = '';
+                    if (isExpired) {
+                        statusBadge = `<span style="font-size: 9px; padding: 1px 6px; border-radius: 4px; background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.3); color: #fbbf24; font-weight: 700; flex-shrink: 0;">EXPIRED</span>`;
+                    } else if (isEnabled) {
+                        statusBadge = `<span style="font-size: 9px; padding: 1px 6px; border-radius: 4px; background: rgba(16,185,129,0.15); color: #34d399; font-weight: 700; flex-shrink: 0;">ACTIVE</span>`;
+                    } else {
+                        statusBadge = `<span style="font-size: 9px; padding: 1px 6px; border-radius: 4px; background: rgba(239,68,68,0.15); color: #f87171; font-weight: 700; flex-shrink: 0;">DISABLED</span>`;
+                    }
                     
                     const totalTokensNum = Number(t.total_tokens || 0);
                     const tokenBadge = `<span style="font-size: 9px; font-family: 'JetBrains Mono', monospace; padding: 1px 6px; border-radius: 4px; background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.3); color: #fbbf24; font-weight: 700; flex-shrink: 0;" title="Total Tokens used by this key">⚡ ${formatTokenCount(totalTokensNum)}</span>`;
@@ -2639,8 +2685,46 @@
             updateQuotaPreview('gemini');
             updateQuotaPreview('total');
 
+            // Refill & Expiration fields setup
+            const refillSel = document.getElementById('modal-edit-refill-period');
+            const expSel = document.getElementById('modal-edit-expiration-duration');
+            if (refillSel) refillSel.value = currentEditKeyData.refill_period || '';
+            if (expSel) expSel.value = currentEditKeyData.expiration_duration || '';
+            updateRefillPreview();
+            updateExpirationPreview();
+
+            // Expired status pill
+            const expiredPill = document.getElementById('modal-edit-status-expired-pill');
+            if (expiredPill) {
+                expiredPill.style.display = currentEditKeyData.expired ? 'inline-flex' : 'none';
+            }
+
             if (overlay) overlay.style.display = 'flex';
-            setTimeout(() => { if (nameInput) nameInput.focus(); }, 50);
+            // Do NOT auto-focus the input to avoid unwanted keyboard popup on mobile!
+        }
+
+        function focusKeyNameInput() {
+            const input = document.getElementById('modal-edit-key-name-input');
+            if (input) {
+                input.focus();
+                input.select();
+            }
+        }
+
+        function updateRefillPreview() {
+            const sel = document.getElementById('modal-edit-refill-period');
+            const preview = document.getElementById('modal-edit-refill-preview');
+            if (!sel || !preview) return;
+            const text = sel.options[sel.selectedIndex]?.text || 'Never';
+            preview.textContent = text;
+        }
+
+        function updateExpirationPreview() {
+            const sel = document.getElementById('modal-edit-expiration-duration');
+            const preview = document.getElementById('modal-edit-expires-preview');
+            if (!sel || !preview) return;
+            const text = sel.options[sel.selectedIndex]?.text || 'No Expiry';
+            preview.textContent = text;
         }
 
         function setEditKeyStatus(enabled) {
@@ -2715,6 +2799,25 @@
             // If ALL are checked, store empty array / null so key has full access to all models (future proof)
             const allowed_models = checkedBoxes.length === totalModelsCount ? [] : checkedBoxes.map(c => c.value);
 
+            // Calculate refill period seconds
+            const refillPeriod = document.getElementById('modal-edit-refill-period')?.value || null;
+            let refill_period_seconds = null;
+            if (refillPeriod === '1h') refill_period_seconds = 3600;
+            else if (refillPeriod === '5h') refill_period_seconds = 18000;
+            else if (refillPeriod === '12h') refill_period_seconds = 43200;
+            else if (refillPeriod === '1d') refill_period_seconds = 86400;
+            else if (refillPeriod === '1w') refill_period_seconds = 604800;
+            else if (refillPeriod === '1m') refill_period_seconds = 2592000;
+
+            // Calculate expiration timestamp
+            const expDuration = document.getElementById('modal-edit-expiration-duration')?.value || null;
+            let expires_at = null;
+            if (expDuration === '1d') expires_at = (Date.now() / 1000) + 86400;
+            else if (expDuration === '7d') expires_at = (Date.now() / 1000) + 604800;
+            else if (expDuration === '30d') expires_at = (Date.now() / 1000) + 2592000;
+            else if (expDuration === '90d') expires_at = (Date.now() / 1000) + (90 * 86400);
+            else if (expDuration === '365d') expires_at = (Date.now() / 1000) + (365 * 86400);
+
             const btn = document.getElementById('modal-btn-confirm-edit-key');
             if (btn) btn.disabled = true;
             try {
@@ -2728,7 +2831,11 @@
                         allowed_providers,
                         allowed_models,
                         token_limits,
-                        max_tokens: totalLimit
+                        max_tokens: totalLimit,
+                        refill_period: refillPeriod,
+                        refill_period_seconds,
+                        expiration_duration: expDuration,
+                        expires_at
                     })
                 });
                 const data = await res.json();

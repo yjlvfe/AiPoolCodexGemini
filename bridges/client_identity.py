@@ -8,6 +8,7 @@ import hashlib
 import hmac
 import json
 import os
+import time
 from pathlib import Path
 
 REGISTRY = Path(__file__).resolve().parents[1] / 'dashboard/client-identities.json'
@@ -33,11 +34,18 @@ def identify(headers, path=None, peer_ip=None):
     credential_id = None
     client_obj = None
     for client in config.get('clients', []):
-        if token and client.get('enabled', False) and hmac.compare_digest(digest, client['sha256']):
-            verified = True
+        if token and hmac.compare_digest(digest, client['sha256']):
             client_name = client.get('name')
             credential_id = client.get('id')
             client_obj = client
+            # Check expiration
+            expires_at = client.get('expires_at')
+            if expires_at and time.time() > float(expires_at):
+                verified = False
+                client['expired'] = True
+                break
+            if client.get('enabled', False):
+                verified = True
             break
     # Policy: loopback peers are trusted local clients (Hermes/OpenClaw/local).
     local = is_loopback(peer_ip)
@@ -112,13 +120,37 @@ def authorize(handler, provider):
                         import sqlite3
                         with sqlite3.connect(db_path, timeout=3) as conn:
                             conn.row_factory = sqlite3.Row
-                            cur = conn.execute("SELECT audit_json, total_tokens, pool FROM request_events WHERE audit_json IS NOT NULL AND audit_json != ''")
+                            cur = conn.execute("SELECT audit_json, total_tokens, pool, timestamp FROM request_events WHERE audit_json IS NOT NULL AND audit_json != ''")
                             c_name = (client_obj.get('name') or '').lower()
                             c_id = (client_obj.get('id') or '').lower()
                             total_used = 0
                             prov_used = 0
+
+                            # Determine quota window start timestamp if refill_period is set
+                            refill_period_s = client_obj.get('refill_period_seconds')
+                            window_start_ts = None
+                            if refill_period_s and float(refill_period_s) > 0:
+                                created_at_ts = float(client_obj.get('created_at_ts') or time.time())
+                                now = time.time()
+                                elapsed = max(0, now - created_at_ts)
+                                cycle_num = int(elapsed // float(refill_period_s))
+                                window_start_ts = created_at_ts + (cycle_num * float(refill_period_s))
+
                             for r in cur.fetchall():
                                 try:
+                                    # If refill period is active, ignore events from older cycles
+                                    if window_start_ts is not None:
+                                        row_time = r['timestamp']
+                                        if row_time:
+                                            import datetime
+                                            if isinstance(row_time, str):
+                                                row_dt = datetime.datetime.fromisoformat(row_time.replace('Z', '+00:00'))
+                                                row_ts = row_dt.timestamp()
+                                            else:
+                                                row_ts = float(row_time)
+                                            if row_ts < window_start_ts:
+                                                continue
+
                                     aud = json.loads(r['audit_json'])
                                     cl = (aud.get('client_label') or '').lower()
                                     if cl and (cl == c_name or cl == c_id):
