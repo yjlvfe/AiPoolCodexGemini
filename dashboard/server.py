@@ -651,6 +651,44 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json_response({"success": False, "message": str(e)}, status_code=500)
             return
 
+        if path in ("/aipool/api/tokens/update", "/api/tokens/update"):
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self.send_json_response({"success": False, "message": str(exc)}, status_code=400)
+                return
+            target_id = str(payload.get("id", "")).strip()
+            if target_id in ("hermes", "openclaw", "localtooling"):
+                self.send_json_response({"success": False, "message": "Cannot modify system internal keys"}, status_code=403)
+                return
+            new_name = payload.get("name")
+            new_enabled = payload.get("enabled")
+            registry_file = Path(__file__).resolve().parent / "client-identities.json"
+            try:
+                data = json.loads(registry_file.read_text())
+                found = False
+                for c in data.get("clients", []):
+                    if c.get("id") == target_id:
+                        found = True
+                        if new_name is not None:
+                            clean_n = str(new_name).strip()
+                            if clean_n:
+                                c["name"] = clean_n
+                        if new_enabled is not None:
+                            c["enabled"] = bool(new_enabled)
+                        break
+                if not found:
+                    self.send_json_response({"success": False, "message": f"Token {target_id} not found"}, status_code=404)
+                    return
+                registry_file.write_text(json.dumps(data, indent=2))
+                alt_dest = Path("/var/lib/aipool/app/dashboard/client-identities.json")
+                if alt_dest.parent.is_dir() and alt_dest.resolve() != registry_file.resolve():
+                    alt_dest.write_text(json.dumps(data, indent=2))
+                self.send_json_response({"success": True, "message": f"Token {target_id} updated successfully"})
+            except Exception as e:
+                self.send_json_response({"success": False, "message": str(e)}, status_code=500)
+            return
+
         if path in ("/aipool/api/settings/uninstall", "/api/settings/uninstall"):
             self.send_json_response({"success": False, "message": "Destructive uninstall endpoint has been safely disabled."}, status_code=403)
             return

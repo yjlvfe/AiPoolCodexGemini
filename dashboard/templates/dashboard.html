@@ -524,17 +524,17 @@
         .api-key-item-pill.selected .api-key-actions-bar {
             display: flex !important;
         }
-        .api-key-btn-copy, .api-key-btn-delete {
-            flex: 1 1 50%;
+        .api-key-btn-copy, .api-key-btn-edit, .api-key-btn-delete {
+            flex: 1 1 33.33%;
             min-height: 36px;
             border-radius: 8px;
-            font-size: 11.5px;
+            font-size: 11px;
             font-weight: 700;
             font-family: inherit;
             display: inline-flex;
             align-items: center;
             justify-content: center;
-            gap: 6px;
+            gap: 5px;
             cursor: pointer;
             transition: all 0.2s ease;
             box-sizing: border-box;
@@ -549,6 +549,16 @@
             background: linear-gradient(135deg, #0ea5e9, #0284c7);
             color: #fff;
             box-shadow: 0 4px 14px rgba(14, 165, 233, 0.35);
+        }
+        .api-key-btn-edit {
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.2), rgba(124, 58, 237, 0.3));
+            border-color: rgba(192, 132, 252, 0.45);
+            color: #c084fc;
+        }
+        .api-key-btn-edit:hover {
+            background: linear-gradient(135deg, #a855f7, #7c3aed);
+            color: #fff;
+            box-shadow: 0 4px 14px rgba(168, 85, 247, 0.35);
         }
         .api-key-btn-delete {
             background: linear-gradient(135deg, rgba(239, 68, 68, 0.15), rgba(185, 28, 28, 0.25));
@@ -1502,6 +1512,40 @@
             </div>
         </div>
 
+        <!-- Custom Modal for Editing API Key -->
+        <div id="edit-key-modal-overlay" class="modal-overlay" style="display: none;" onclick="closeEditKeyModal(event)">
+            <div class="modal-dialog glass-card" onclick="event.stopPropagation()" style="max-width: 420px;">
+                <div class="modal-header">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 20px;">✏️</span>
+                        <span style="font-weight: 700; color: #fff; font-size: 15px;">Edit API Key</span>
+                    </div>
+                    <button class="modal-close-btn" onclick="closeEditKeyModal()">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <input type="hidden" id="modal-edit-key-id" value="" />
+                    <label style="display: block; color: #94a3b8; font-size: 11.5px; margin-bottom: 6px; font-weight: 600;">Key Name / Label:</label>
+                    <input type="text" id="modal-edit-key-name-input" class="modal-input" style="margin-bottom: 16px;" placeholder="e.g. Youssef Friend" autocomplete="off" onkeydown="if(event.key==='Enter') executeUpdateKey()" />
+
+                    <label style="display: block; color: #94a3b8; font-size: 11.5px; margin-bottom: 6px; font-weight: 600;">Status (Enable / Disable):</label>
+                    <div style="display: flex; gap: 10px;">
+                        <button type="button" id="modal-edit-status-enable" onclick="setEditKeyStatus(true)" style="flex: 1; padding: 8px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid rgba(16,185,129,0.3); background: rgba(16,185,129,0.15); color: #34d399;">
+                            ✅ Active
+                        </button>
+                        <button type="button" id="modal-edit-status-disable" onclick="setEditKeyStatus(false)" style="flex: 1; padding: 8px; border-radius: 8px; font-size: 12px; font-weight: 700; cursor: pointer; border: 1px solid rgba(239,68,68,0.3); background: rgba(239,68,68,0.1); color: #94a3b8;">
+                            🚫 Disabled
+                        </button>
+                    </div>
+                </div>
+                <div class="modal-actions">
+                    <button type="button" class="modal-btn-cancel" onclick="closeEditKeyModal()">Cancel</button>
+                    <button type="button" id="modal-btn-confirm-edit-key" class="settings-btn" style="background: linear-gradient(135deg, #a855f7, #7c3aed); color: #fff; font-weight: 700; padding: 7px 16px; font-size: 12px;" onclick="executeUpdateKey()">
+                        💾 Save Changes
+                    </button>
+                </div>
+            </div>
+        </div>
+
         <!-- Delete Account Confirmation Modal -->
         <div id="delete-modal-overlay" class="modal-overlay" style="display: none;" onclick="closeDeleteModal(event)">
             <div class="modal-dialog glass-card" onclick="event.stopPropagation()">
@@ -2025,6 +2069,10 @@
                     const tokenToCopy = t.raw_token || t.id;
                     const isSystem = ['hermes', 'openclaw', 'localtooling'].includes(t.id);
                     if (isSystem) return; // Extra guard against system keys
+                    const isEnabled = t.enabled !== false;
+                    const statusBadge = isEnabled
+                        ? `<span style="font-size: 9px; padding: 1px 6px; border-radius: 4px; background: rgba(16,185,129,0.15); color: #34d399; font-weight: 700; flex-shrink: 0;">ACTIVE</span>`
+                        : `<span style="font-size: 9px; padding: 1px 6px; border-radius: 4px; background: rgba(239,68,68,0.15); color: #f87171; font-weight: 700; flex-shrink: 0;">DISABLED</span>`;
                     
                     const div = document.createElement('div');
                     div.className = 'api-key-item-pill';
@@ -2032,8 +2080,8 @@
                     div.innerHTML = `
                         <div class="api-key-normal-content">
                             <div style="display: flex; align-items: center; gap: 8px; min-width: 0; overflow: hidden;">
-                                <div style="font-weight: 700; color: #fff; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(t.name || 'Key')}</div>
-                                <span style="font-size: 9px; padding: 1px 6px; border-radius: 4px; background: rgba(16,185,129,0.15); color: #34d399; font-weight: 700; flex-shrink: 0;">ACTIVE</span>
+                                <div style="font-weight: 700; color: ${isEnabled ? '#fff' : '#94a3b8'}; font-size: 13.5px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${escapeHtml(t.name || 'Key')}</div>
+                                ${statusBadge}
                             </div>
                             <div style="font-size: 11px; color: var(--text-tertiary);">
                                 <span>Tap to manage</span>
@@ -2041,7 +2089,10 @@
                         </div>
                         <div class="api-key-actions-bar">
                             <button type="button" class="api-key-btn-copy" onclick="event.stopPropagation(); copyToClipboard('${tokenToCopy}')" title="Copy Token">
-                                <span>📋</span><span>Copy Token</span>
+                                <span>📋</span><span>Copy</span>
+                            </button>
+                            <button type="button" class="api-key-btn-edit" onclick="event.stopPropagation(); openEditKeyModal('${t.id}', '${escapeHtml(t.name || '')}', ${isEnabled})" title="Edit Key">
+                                <span>✏️</span><span>Edit</span>
                             </button>
                             <button type="button" class="api-key-btn-delete" onclick="event.stopPropagation(); revokeApiKey('${t.id}')" title="Revoke Key">
                                 <span>🗑️</span><span>Delete</span>
@@ -2050,7 +2101,7 @@
                     `;
 
                     div.onclick = function(e) {
-                        if (e.target && e.target.closest && (e.target.closest('.api-key-btn-copy') || e.target.closest('.api-key-btn-delete'))) return;
+                        if (e.target && e.target.closest && (e.target.closest('.api-key-btn-copy') || e.target.closest('.api-key-btn-edit') || e.target.closest('.api-key-btn-delete'))) return;
                         const isAlreadySelected = this.classList.contains('selected');
                         document.querySelectorAll('.api-key-item-pill.selected').forEach(el => {
                             el.classList.remove('selected');
@@ -2081,6 +2132,83 @@
             if (input) input.value = '';
             if (overlay) overlay.style.display = 'flex';
             setTimeout(() => { if (input) input.focus(); }, 50);
+        }
+
+        let currentEditKeyEnabled = true;
+
+        function openEditKeyModal(id, name, isEnabled) {
+            const overlay = document.getElementById('edit-key-modal-overlay');
+            const idInput = document.getElementById('modal-edit-key-id');
+            const nameInput = document.getElementById('modal-edit-key-name-input');
+            if (idInput) idInput.value = id;
+            if (nameInput) nameInput.value = name;
+            setEditKeyStatus(isEnabled);
+            if (overlay) overlay.style.display = 'flex';
+            setTimeout(() => { if (nameInput) nameInput.focus(); }, 50);
+        }
+
+        function setEditKeyStatus(enabled) {
+            currentEditKeyEnabled = !!enabled;
+            const btnEn = document.getElementById('modal-edit-status-enable');
+            const btnDis = document.getElementById('modal-edit-status-disable');
+            if (btnEn && btnDis) {
+                if (currentEditKeyEnabled) {
+                    btnEn.style.background = 'rgba(16,185,129,0.25)';
+                    btnEn.style.borderColor = '#10b981';
+                    btnEn.style.color = '#34d399';
+                    btnDis.style.background = 'rgba(239,68,68,0.06)';
+                    btnDis.style.borderColor = 'rgba(239,68,68,0.2)';
+                    btnDis.style.color = '#64748b';
+                } else {
+                    btnDis.style.background = 'rgba(239,68,68,0.25)';
+                    btnDis.style.borderColor = '#ef4444';
+                    btnDis.style.color = '#f87171';
+                    btnEn.style.background = 'rgba(16,185,129,0.06)';
+                    btnEn.style.borderColor = 'rgba(16,185,129,0.2)';
+                    btnEn.style.color = '#64748b';
+                }
+            }
+        }
+
+        function closeEditKeyModal(event) {
+            if (event && event.target !== document.getElementById('edit-key-modal-overlay') && !event.target.classList.contains('modal-close-btn') && !event.target.classList.contains('modal-btn-cancel')) {
+                return;
+            }
+            const overlay = document.getElementById('edit-key-modal-overlay');
+            if (overlay) overlay.style.display = 'none';
+        }
+
+        async function executeUpdateKey() {
+            const idInput = document.getElementById('modal-edit-key-id');
+            const nameInput = document.getElementById('modal-edit-key-name-input');
+            const id = (idInput ? idInput.value : '').trim();
+            const name = (nameInput ? nameInput.value : '').trim();
+            if (!id) return;
+            if (!name) {
+                showToast('⚠️ Please enter a name for the key', true);
+                return;
+            }
+            const btn = document.getElementById('modal-btn-confirm-edit-key');
+            if (btn) btn.disabled = true;
+            try {
+                const res = await fetch(resolveApiUrl('/api/tokens/update'), {
+                    method: 'POST',
+                    headers: apiHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ id, name, enabled: currentEditKeyEnabled })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    closeEditKeyModal();
+                    loadApiTokens();
+                    showToast('✅ Key Updated Successfully!');
+                } else {
+                    showToast('⚠️ Error: ' + (data.message || 'Failed to update key'), true);
+                }
+            } catch (e) {
+                showToast('❌ Request Failed: ' + e.message, true);
+            } finally {
+                if (btn) btn.disabled = false;
+            }
         }
 
         function closeCreateKeyModal(event) {
