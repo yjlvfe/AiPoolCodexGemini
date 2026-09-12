@@ -1586,44 +1586,54 @@
         <!-- API View Section -->
         <section id="api-view-section" style="display: none; flex-direction: column; gap: 16px;">
             <!-- Public Base URLs Card -->
-            <div class="glass-card settings-card" style="border: 1px solid rgba(0, 242, 254, 0.25); background: linear-gradient(135deg, rgba(0, 242, 254, 0.03), rgba(157, 78, 221, 0.03));">
-                <div class="settings-card-header">
-                    <div style="display:flex; align-items:center; gap: 8px;">
-                        <span style="font-size: 20px;">🌐</span>
-                        <div>
-                            <div class="settings-card-title" style="font-size: 15px; color: #fff;">Public Endpoints</div>
-                            <div class="settings-card-sub" style="font-size: 11px;">OpenAI-compatible Base URLs for external tools</div>
-                        </div>
-                    </div>
-                    <span class="endpoint-pill-badge" style="background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.3); font-size: 10px; padding: 2px 7px;">🟢 SSL LIVE</span>
+            <div class="glass-card settings-card" style="border: 1px solid rgba(255, 255, 255, 0.08); background: rgba(15, 20, 32, 0.65);">
+                <div style="display: flex; flex-direction: column; align-items: flex-start; text-align: left; gap: 3px; margin-bottom: 12px; width: 100%;">
+                    <div style="font-size: 14.5px; font-weight: 800; color: #fff; text-align: left; line-height: 1.2;">🌐 Public Endpoints</div>
+                    <div style="font-size: 11px; color: var(--text-tertiary); text-align: left; line-height: 1.3;">OpenAI-compatible Base URLs for external agents & apps</div>
                 </div>
 
-                <div class="api-endpoints-grid" style="display: flex; flex-direction: column; gap: 10px; margin-top: 12px;">
+                <div class="api-endpoints-grid" style="display: flex; flex-direction: column; gap: 10px;">
                     <!-- Codex Base URL -->
-                    <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(139, 92, 246, 0.25); border-radius: 12px; padding: 12px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
-                            <span style="font-weight: 700; color: #d8b4fe; font-size: 12.5px;">🟣 ChatGPT / Codex Base URL</span>
-                            <button onclick="copyToClipboard('https://masteryj.shop/api/v1/codex/')" class="settings-top-btn" style="height:24px; padding:2px 8px; font-size:10.5px;">📋 Copy</button>
+                    <div style="background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(168, 85, 247, 0.22); border-radius: 12px; padding: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 13px;">🟣</span>
+                                <span style="font-weight: 700; color: #d8b4fe; font-size: 12.5px;">ChatGPT / Codex</span>
+                            </div>
+                            <button onclick="copyToClipboard('https://masteryj.shop/api/v1/codex/')" class="settings-top-btn" style="height: 24px; padding: 0 8px; font-size: 10.5px; background: rgba(168, 85, 247, 0.12); border-color: rgba(168, 85, 247, 0.35); color: #d8b4fe;">
+                                <span>📋</span><span>Copy</span>
+                            </button>
                         </div>
-                        <div style="font-family:'JetBrains Mono',monospace; font-size: 11.5px; color: #f8fafc; word-break: break-all; background: rgba(255,255,255,0.04); padding: 7px 9px; border-radius: 6px;">
+                        <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #f8fafc; word-break: break-all; background: rgba(255, 255, 255, 0.04); padding: 7px 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05); user-select: all;">
                             https://masteryj.shop/api/v1/codex/
                         </div>
-                        <div style="font-size: 10.5px; color: var(--text-tertiary); margin-top: 5px;">
-                            Models: <span style="color: #c084fc; font-weight:600;">gpt-5.6-luna, gpt-5.6-sol, gpt-5.5</span>
+                        <div style="display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--text-tertiary); margin-top: 7px; flex-wrap: wrap;">
+                            <span style="color: var(--text-secondary); font-weight: 600;">Models:</span>
+                            <span style="background: rgba(168, 85, 247, 0.12); color: #c084fc; padding: 1px 6px; border-radius: 5px; font-family: 'JetBrains Mono', monospace; font-size: 10px;">gpt-5.6-luna</span>
+                            <span style="background: rgba(168, 85, 247, 0.12); color: #c084fc; padding: 1px 6px; border-radius: 5px; font-family: 'JetBrains Mono', monospace; font-size: 10px;">gpt-5.6-sol</span>
+                            <span style="background: rgba(168, 85, 247, 0.12); color: #c084fc; padding: 1px 6px; border-radius: 5px; font-family: 'JetBrains Mono', monospace; font-size: 10px;">gpt-5.5</span>
                         </div>
                     </div>
 
                     <!-- Gemini Base URL -->
-                    <div style="background: rgba(0,0,0,0.35); border: 1px solid rgba(6, 182, 212, 0.25); border-radius: 12px; padding: 12px;">
-                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 6px;">
-                            <span style="font-weight: 700; color: #67e8f9; font-size: 12.5px;">🟢 Google Gemini Base URL</span>
-                            <button onclick="copyToClipboard('https://masteryj.shop/api/v1/gemini/')" class="settings-top-btn" style="height:24px; padding:2px 8px; font-size:10.5px;">📋 Copy</button>
+                    <div style="background: rgba(0, 0, 0, 0.35); border: 1px solid rgba(6, 182, 212, 0.22); border-radius: 12px; padding: 12px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                            <div style="display: flex; align-items: center; gap: 6px;">
+                                <span style="font-size: 13px;">🟢</span>
+                                <span style="font-weight: 700; color: #67e8f9; font-size: 12.5px;">Google Gemini</span>
+                            </div>
+                            <button onclick="copyToClipboard('https://masteryj.shop/api/v1/gemini/')" class="settings-top-btn" style="height: 24px; padding: 0 8px; font-size: 10.5px; background: rgba(6, 182, 212, 0.12); border-color: rgba(6, 182, 212, 0.35); color: #67e8f9;">
+                                <span>📋</span><span>Copy</span>
+                            </button>
                         </div>
-                        <div style="font-family:'JetBrains Mono',monospace; font-size: 11.5px; color: #f8fafc; word-break: break-all; background: rgba(255,255,255,0.04); padding: 7px 9px; border-radius: 6px;">
+                        <div style="font-family: 'JetBrains Mono', monospace; font-size: 11px; color: #f8fafc; word-break: break-all; background: rgba(255, 255, 255, 0.04); padding: 7px 10px; border-radius: 8px; border: 1px solid rgba(255, 255, 255, 0.05); user-select: all;">
                             https://masteryj.shop/api/v1/gemini/
                         </div>
-                        <div style="font-size: 10.5px; color: var(--text-tertiary); margin-top: 5px;">
-                            Models: <span style="color: #38bdf8; font-weight:600;">gemini-3.8-flash, gemini-3.1-pro, claude-opus-4-6-thinking</span>
+                        <div style="display: flex; align-items: center; gap: 5px; font-size: 10.5px; color: var(--text-tertiary); margin-top: 7px; flex-wrap: wrap;">
+                            <span style="color: var(--text-secondary); font-weight: 600;">Models:</span>
+                            <span style="background: rgba(6, 182, 212, 0.12); color: #38bdf8; padding: 1px 6px; border-radius: 5px; font-family: 'JetBrains Mono', monospace; font-size: 10px;">gemini-3.8-flash</span>
+                            <span style="background: rgba(6, 182, 212, 0.12); color: #38bdf8; padding: 1px 6px; border-radius: 5px; font-family: 'JetBrains Mono', monospace; font-size: 10px;">gemini-3.1-pro</span>
+                            <span style="background: rgba(6, 182, 212, 0.12); color: #38bdf8; padding: 1px 6px; border-radius: 5px; font-family: 'JetBrains Mono', monospace; font-size: 10px;">claude-opus-4-6-thinking</span>
                         </div>
                     </div>
                 </div>
