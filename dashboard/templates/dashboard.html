@@ -1681,9 +1681,9 @@
 
                     <!-- Master Combined Token Quota -->
                     <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
-                            <label style="color: #e2e8f0; font-size: 12.5px; font-weight: 700;">🎯 Total Master Token Quota:</label>
-                            <span id="modal-edit-total-preview" style="font-size: 11px; font-family: monospace; color: #34d399;">Unlimited</span>
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; margin-bottom: 8px; flex-wrap: nowrap;">
+                            <label style="color: #e2e8f0; font-size: 12px; font-weight: 700; white-space: nowrap; margin: 0;">🎯 Token Quota:</label>
+                            <span id="modal-edit-total-preview" style="font-size: 10.5px; font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #34d399; background: rgba(16,185,129,0.12); border: 1px solid rgba(16,185,129,0.25); padding: 2px 7px; border-radius: 5px; white-space: nowrap;">Unlimited</span>
                         </div>
                         <input type="text" id="modal-edit-limit-total" class="modal-input" placeholder="e.g. 100M, 50M, 0 (or blank for unlimited)" oninput="updateQuotaPreview('total')" />
 
@@ -2363,9 +2363,19 @@
             if (parsed === null) {
                 preview.textContent = kind === 'total' ? 'Unlimited' : 'No Cap';
                 preview.style.color = kind === 'total' ? '#34d399' : '#64748b';
+                if (kind === 'total') {
+                    preview.style.background = 'rgba(16,185,129,0.12)';
+                    preview.style.borderColor = 'rgba(16,185,129,0.25)';
+                }
             } else {
-                preview.textContent = parsed.toLocaleString() + ' tokens';
+                // Luxury compact format (e.g. 100M Tokens) instead of long 100,000,000 tokens
+                const formatted = formatTokenCount(parsed);
+                preview.textContent = formatted + ' Tokens';
                 preview.style.color = '#38bdf8';
+                if (kind === 'total') {
+                    preview.style.background = 'rgba(56,189,248,0.12)';
+                    preview.style.borderColor = 'rgba(56,189,248,0.25)';
+                }
             }
         }
 
