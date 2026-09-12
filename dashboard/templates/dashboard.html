@@ -1546,6 +1546,18 @@
  .details-tile:has(#details-expires-at){grid-column:auto}
  .details-balance{font-size:clamp(21px,8vw,28px)!important}
 }
+/* Key Analytics v3: one authoritative layout, mobile-first. */
+.details-modal{display:flex!important;flex-direction:column;width:min(560px,calc(100vw - 20px))!important;max-width:560px!important;height:min(760px,calc(100dvh - 20px));max-height:calc(100dvh - 20px);padding:0!important;overflow:hidden!important;border:1px solid #26364d!important;border-radius:20px!important;background:#0b1220!important;box-shadow:0 24px 80px #000b!important}
+.details-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto;padding:16px 18px!important;background:#111b2d!important;border-bottom:1px solid #24344b!important}
+.details-title{display:flex;align-items:center;min-width:0!important}.details-title strong{font-size:17px!important;letter-spacing:-.02em}.details-title small{margin-top:4px!important;color:#8da0b8!important;font-size:12px!important}.details-icon{display:none!important}.details-head-actions{display:flex;align-items:center;gap:9px;flex-shrink:0}.details-close{display:grid;place-items:center;width:40px;height:40px;padding:0;border:1px solid #40536d;border-radius:11px;background:#1b2a40;color:#fff;font-size:25px;line-height:1;cursor:pointer}.details-close:hover{background:#29405f}.details-head-actions #details-key-status-badge span{display:block!important;padding:6px 9px!important;font-size:10px!important}
+.details-body{display:flex!important;flex-direction:column;gap:16px!important;flex:1 1 auto;min-height:0;padding:18px!important;overflow-x:hidden!important;overflow-y:auto!important;background:#0b1220}.details-hero{padding:18px!important;border:1px solid #1f4b61!important;border-radius:16px!important;background:linear-gradient(145deg,#12253a,#0e1727 70%)!important}.details-hero-label{display:flex;justify-content:space-between;gap:10px;color:#8ea2bb;font-size:10px;font-weight:800;letter-spacing:.12em}.details-hero-label span{color:#65d9ef;font-size:11px;letter-spacing:0}.details-balance{margin:12px 0 6px!important;color:#f8fafc!important;font-size:clamp(30px,9vw,42px)!important;line-height:1!important}.details-balance-sub{color:#9aabc0!important;font-size:12px!important}.details-balance-sub span{color:#67dff5!important}.details-progress{height:8px!important;margin:17px 0 11px!important;background:#1b2a40!important}.details-hero-meta{display:flex;justify-content:space-between;gap:10px;color:#8498b0;font-size:11px}.details-hero-meta code{color:#a7b7ca;overflow-wrap:anywhere}.details-section{display:flex;flex-direction:column;gap:8px}.details-section-title{padding:0 2px!important;color:#71859d!important;font-size:10px!important;letter-spacing:.14em!important}.details-quick-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}.details-tile{display:flex!important;flex-direction:column;justify-content:space-between;min-height:86px!important;padding:13px!important;border:1px solid #23344b!important;border-radius:13px!important;background:#111c2e!important}.details-tile>span{color:#8ea2bb;font-size:11px}.details-tile strong{margin-top:8px;color:#f1f5f9!important;font-size:14px!important;line-height:1.35!important;white-space:normal!important;overflow-wrap:anywhere;word-break:break-word}.details-tile em{margin-top:5px;color:#55cfe8!important;font-size:11px!important;line-height:1.35!important;white-space:normal!important;overflow-wrap:anywhere}.details-expires-tile{grid-column:1/-1;min-height:78px!important}.details-expires-tile strong{font-size:13px!important}.details-providers{display:flex;flex-direction:column;gap:8px!important}.details-provider{display:flex!important;align-items:center;justify-content:space-between;gap:12px;min-width:0;padding:14px!important;border:1px solid #26364d!important;border-radius:13px!important;background:#111c2e!important}.details-provider.codex{border-left:3px solid #b779ff!important}.details-provider.gemini{border-left:3px solid #40c9ed!important}.details-provider>span{min-width:0;color:#e3ebf5!important;font-size:12px!important;white-space:normal!important;overflow-wrap:anywhere}.details-provider strong{flex:0 0 auto;color:#f6c85f!important;font-size:11px!important;text-align:right;white-space:normal!important;overflow-wrap:anywhere}.details-provider small{color:#8ea2bb!important;font-size:10px!important}.details-collapse{border:1px solid #26364d!important;border-radius:12px!important;background:#111c2e!important}.details-collapse summary{padding:13px 14px!important;color:#d7e1ed!important;font-size:12px!important}.details-collapse-body{padding:0 14px 12px!important}.details-line{gap:12px!important;padding:8px 0!important}.details-line b{max-width:62%!important;color:#dbe6f2!important;white-space:normal!important;overflow-wrap:anywhere}.details-footer{flex:0 0 auto;padding:12px 18px 18px;background:#0b1220;border-top:1px solid #1c2a3d}.details-footer button{width:100%;min-height:44px;border:1px solid #2eafc9;border-radius:11px;background:#12384a;color:#e8fbff;font-size:13px;font-weight:800;cursor:pointer}.details-footer button:hover{background:#18536a}
+@media(max-width:380px){.details-modal{width:calc(100vw - 12px)!important;height:calc(100dvh - 12px);max-height:calc(100dvh - 12px);border-radius:15px!important}.details-head{padding:13px!important}.details-body{padding:13px!important;gap:12px!important}.details-hero{padding:14px!important}.details-tile{min-height:78px!important;padding:11px!important}.details-footer{padding:10px 13px 13px}}
+/* Key Analytics v3: authoritative layout */
+.details-modal{display:flex!important;flex-direction:column;width:min(560px,calc(100vw - 20px))!important;max-width:560px!important;height:min(760px,calc(100dvh - 20px));max-height:calc(100dvh - 20px);padding:0!important;overflow:hidden!important;border:1px solid #26364d!important;border-radius:20px!important;background:#0b1220!important;box-shadow:0 24px 80px #000b!important}
+.details-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex:0 0 auto;padding:16px 18px!important;background:#111b2d!important;border-bottom:1px solid #24344b!important}
+.details-title{display:flex;align-items:center;min-width:0!important}.details-title strong{font-size:17px!important;letter-spacing:-.02em}.details-title small{margin-top:4px!important;color:#8da0b8!important;font-size:12px!important}.details-icon{display:none!important}.details-head-actions{display:flex;align-items:center;gap:9px;flex-shrink:0}.details-close{display:grid;place-items:center;width:40px;height:40px;padding:0;border:1px solid #40536d;border-radius:11px;background:#1b2a40;color:#fff;font-size:25px;line-height:1;cursor:pointer}.details-close:hover{background:#29405f}.details-head-actions #details-key-status-badge span{display:block!important;padding:6px 9px!important;font-size:10px!important}
+.details-body{display:flex!important;flex-direction:column;gap:16px!important;flex:1 1 auto;min-height:0;padding:18px!important;overflow-x:hidden!important;overflow-y:auto!important;background:#0b1220}.details-hero{padding:18px!important;border:1px solid #1f4b61!important;border-radius:16px!important;background:linear-gradient(145deg,#12253a,#0e1727 70%)!important}.details-hero-label{display:flex;justify-content:space-between;gap:10px;color:#8ea2bb;font-size:10px;font-weight:800;letter-spacing:.12em}.details-hero-label span{color:#65d9ef;font-size:11px;letter-spacing:0}.details-balance{margin:12px 0 6px!important;color:#f8fafc!important;font-size:clamp(30px,9vw,42px)!important;line-height:1!important}.details-balance-sub{color:#9aabc0!important;font-size:12px!important}.details-balance-sub span{color:#67dff5!important}.details-progress{height:8px!important;margin:17px 0 11px!important;background:#1b2a40!important}.details-hero-meta{display:flex;justify-content:space-between;gap:10px;color:#8498b0;font-size:11px}.details-hero-meta code{color:#a7b7ca;overflow-wrap:anywhere}.details-section{display:flex;flex-direction:column;gap:8px}.details-section-title{padding:0 2px!important;color:#71859d!important;font-size:10px!important;letter-spacing:.14em!important}.details-quick-grid{display:grid!important;grid-template-columns:repeat(2,minmax(0,1fr))!important;gap:8px!important}.details-tile{display:flex!important;flex-direction:column;justify-content:space-between;min-height:86px!important;padding:13px!important;border:1px solid #23344b!important;border-radius:13px!important;background:#111c2e!important}.details-tile>span{color:#8ea2bb;font-size:11px}.details-tile strong{margin-top:8px;color:#f1f5f9!important;font-size:14px!important;line-height:1.35!important;white-space:normal!important;overflow-wrap:anywhere;word-break:break-word}.details-tile em{margin-top:5px;color:#55cfe8!important;font-size:11px!important;line-height:1.35!important;white-space:normal!important;overflow-wrap:anywhere}.details-expires-tile{grid-column:1/-1;min-height:78px!important}.details-expires-tile strong{font-size:13px!important}.details-providers{display:flex;flex-direction:column;gap:8px!important}.details-provider{display:flex!important;align-items:center;justify-content:space-between;gap:12px;min-width:0;padding:14px!important;border:1px solid #26364d!important;border-radius:13px!important;background:#111c2e!important}.details-provider.codex{border-left:3px solid #b779ff!important}.details-provider.gemini{border-left:3px solid #40c9ed!important}.details-provider>span{min-width:0;color:#e3ebf5!important;font-size:12px!important;white-space:normal!important;overflow-wrap:anywhere}.details-provider strong{flex:0 0 auto;color:#f6c85f!important;font-size:11px!important;text-align:right;white-space:normal!important;overflow-wrap:anywhere}.details-provider small{color:#8ea2bb!important;font-size:10px!important}.details-collapse{border:1px solid #26364d!important;border-radius:12px!important;background:#111c2e!important}.details-collapse summary{padding:13px 14px!important;color:#d7e1ed!important;font-size:12px!important}.details-collapse-body{padding:0 14px 12px!important}.details-line{gap:12px!important;padding:8px 0!important}.details-line b{max-width:62%!important;color:#dbe6f2!important;white-space:normal!important;overflow-wrap:anywhere}.details-footer{flex:0 0 auto;padding:12px 18px 18px;background:#0b1220;border-top:1px solid #1c2a3d}.details-footer button{width:100%;min-height:44px;border:1px solid #2eafc9;border-radius:11px;background:#12384a;color:#e8fbff;font-size:13px;font-weight:800;cursor:pointer}.details-footer button:hover{background:#18536a}
+@media(max-width:380px){.details-modal{width:calc(100vw - 12px)!important;height:calc(100dvh - 12px);max-height:calc(100dvh - 12px);border-radius:15px!important}.details-head{padding:13px!important}.details-body{padding:13px!important;gap:12px!important}.details-hero{padding:14px!important}.details-tile{min-height:78px!important;padding:11px!important}.details-footer{padding:10px 13px 13px}}
 .request-detail-trigger{margin-top:10px;padding:7px 12px;border:1px solid #334155;border-radius:8px;background:rgba(56,189,248,.08);color:#7dd3fc;cursor:pointer;font:600 11.5px inherit;display:block;width:100%;text-align:center}.request-detail-trigger:hover{border-color:#38bdf8}
 #request-inspector{color:#e2e8f0;background:#0f172a;border:1px solid #334155;border-radius:16px;width:calc(100vw - 24px);max-width:640px;max-height:86dvh;padding:0;box-shadow:0 24px 80px #000a;margin:auto;box-sizing:border-box}
 #request-inspector::backdrop{background:#020617c4;backdrop-filter:blur(6px)}
@@ -1591,36 +1603,33 @@
         <!-- Custom Modal for API Key Details -->
         <div id="details-key-modal-overlay" class="modal-overlay" style="display:none" onclick="closeDetailsKeyModal(event)">
             <div class="modal-dialog glass-card details-modal" onclick="event.stopPropagation()">
-                <div class="details-head">
-                    <div class="details-title"><span class="details-icon">📊</span><div><strong>Key Analytics</strong><small id="details-key-name">Key Name</small></div></div>
-                    <div id="details-key-status-badge"></div>
-                    <button class="modal-close-btn" onclick="closeDetailsKeyModal()">&times;</button>
-                </div>
-                <div class="details-body">
-                    <div class="details-hero">
-                        <div class="details-hero-top"><span>AVAILABLE BALANCE</span><span id="details-access">—</span></div>
+                <header class="details-head">
+                    <div class="details-title"><div><strong>Key Analytics</strong><small id="details-key-name">Key Name</small></div></div>
+                    <div class="details-head-actions"><div id="details-key-status-badge"></div><button class="details-close" aria-label="Close" onclick="closeDetailsKeyModal()">&times;</button></div>
+                </header>
+                <main class="details-body">
+                    <section class="details-hero">
+                        <div class="details-hero-label"><span>AVAILABLE BALANCE</span><span id="details-access">—</span></div>
                         <div id="details-config-remaining" class="details-balance">Unlimited</div>
                         <div class="details-balance-sub"><span id="details-total-tokens">0</span> used <b>of</b> <span id="details-quota">Unlimited</span></div>
                         <div class="details-progress"><i id="details-progress-bar"></i></div>
-                        <div class="details-hero-foot"><span>🔑 <code id="details-key-id">id</code></span><span id="details-progress-label">0% used</span></div>
-                    </div>
-                    <div class="details-section-title">QUICK INFO</div>
-                    <div class="details-quick-grid">
-                        <div class="details-tile"><small>REQUESTS</small><strong id="details-total-requests">0</strong></div>
-                        <div class="details-tile"><small>AUTO-REFILL</small><strong id="details-refill">One-Time</strong><em id="details-next-refill">—</em></div>
-                        <div class="details-tile"><small>EXPIRES</small><strong id="details-expires-at">Never</strong></div>
-                        <div class="details-tile"><small>PROVIDERS</small><strong id="details-provider-limits">—</strong></div>
-                    </div>
-                    <details class="details-collapse"><summary>⚙️ Configuration & access</summary><div class="details-collapse-body"><div class="details-line"><span>Created</span><b id="details-created-at">—</b></div><div class="details-line"><span>Last updated</span><b id="details-updated-at">—</b></div><div class="details-line"><span>Allowed providers / models</span><b id="details-access-copy">—</b></div></div></details>
-                    <div class="details-section-title">USAGE BY PROVIDER</div>
-                    <div class="details-providers">
-                        <div class="details-provider codex"><span>🟣 <b>ChatGPT / Codex</b></span><strong><i id="details-codex-tokens">0</i> tokens</strong><small><span id="details-codex-reqs">0</span> requests</small></div>
-                        <div class="details-provider gemini"><span>🔵 <b>Google Gemini</b></span><strong><i id="details-gemini-tokens">0</i> tokens</strong><small><span id="details-gemini-reqs">0</span> requests</small></div>
-                    </div>
-                    <details class="details-collapse"><summary>🏆 Top models</summary><div id="details-top-models-container" class="details-collapse-body"></div></details>
-                    <details class="details-collapse"><summary>🕒 Change history</summary><div id="details-history-container" class="details-collapse-body"></div></details>
-                </div>
-                <div class="modal-actions"><button type="button" class="modal-btn-cancel" style="width:100%" onclick="closeDetailsKeyModal()">Close</button></div>
+                        <div class="details-hero-meta"><code id="details-key-id">[REDACTED]</code><span id="details-progress-label">0% used</span></div>
+                    </section>
+                    <section class="details-section"><div class="details-section-title">ESSENTIALS</div><div class="details-quick-grid">
+                        <div class="details-tile"><span>Requests</span><strong id="details-total-requests">0</strong></div>
+                        <div class="details-tile"><span>Auto-refill</span><strong id="details-refill">One-Time</strong><em id="details-next-refill">—</em><small id="details-refill-countdown"></small></div>
+                        <div class="details-tile details-expires-tile"><span>Expires</span><strong id="details-expires-at" class="details-date-main">Never</strong><em id="details-expiry-countdown" class="details-date-sub">—</em></div>
+                        <div class="details-tile"><span>Providers</span><strong id="details-provider-limits">—</strong></div>
+                    </div></section>
+                    <section class="details-section"><div class="details-section-title">USAGE BY PROVIDER</div><div class="details-providers">
+                        <div class="details-provider codex"><span>ChatGPT / Codex</span><strong><i id="details-codex-tokens">0</i> tokens <small>· <b id="details-codex-reqs">0</b> requests</small></strong></div>
+                        <div class="details-provider gemini"><span>Google Gemini</span><strong><i id="details-gemini-tokens">0</i> tokens <small>· <b id="details-gemini-reqs">0</b> requests</small></strong></div>
+                    </div></section>
+                    <details class="details-collapse"><summary>Advanced details</summary><div class="details-collapse-body"><div class="details-line"><span>Created</span><b id="details-created-at">—</b></div><div class="details-line"><span>Last updated</span><b id="details-updated-at">—</b></div><div class="details-line"><span>Access</span><b id="details-access-copy">—</b></div></div></details>
+                    <details id="details-top-models-section" class="details-collapse"><summary>Top models</summary><div id="details-top-models-container" class="details-collapse-body"></div></details>
+                    <details id="details-history-section" class="details-collapse"><summary>Change history</summary><div id="details-history-container" class="details-collapse-body"></div></details>
+                </main>
+                <footer class="details-footer"><button type="button" onclick="closeDetailsKeyModal()">Close</button></footer>
             </div>
         </div>
 
@@ -2818,7 +2827,7 @@
                 const d = data.details;
 
                 document.getElementById('details-key-name').textContent = d.name || 'Key';
-                document.getElementById('details-key-id').textContent = d.id;
+                document.getElementById('details-key-id').textContent = '[REDACTED]';
 
                 const fmtDate = (ts, fallback = '—') => {
                     if (!ts) return fallback;
@@ -2837,8 +2846,11 @@
                     const minutes = Math.floor((seconds % 3600) / 60);
                     return days ? `in ${days}d ${hours}h` : hours ? `in ${hours}h ${minutes}m` : `in ${minutes}m`;
                 };
-                const nextRefillLabel = d.next_refill_ts ? `${fmtDate(d.next_refill_ts)} · ${formatRemaining(Math.max(0, d.next_refill_ts - Date.now() / 1000))}` : '—';
-                const expiryLabel = d.expires_at ? `${fmtDate(d.expires_at)} · ${d.expired ? 'Expired' : formatRemaining(d.expiry_remaining_seconds)}` : 'Never';
+                const nextRefillDate = d.next_refill_ts ? fmtDate(d.next_refill_ts) : '—';
+                const nextRefillCountdown = d.next_refill_ts ? formatRemaining(Math.max(0, d.next_refill_ts - Date.now() / 1000)) : '—';
+                const expiryDate = d.expires_at ? fmtDate(d.expires_at) : 'Never';
+                const expiryCountdown = d.expires_at ? (d.expired ? 'Expired' : formatRemaining(d.expiry_remaining_seconds)) : '—';
+                const expiryLabel = expiryDate;
                 const accessLabel = `${(d.allowed_providers || []).length} providers · ${d.allowed_models?.length ? d.allowed_models.length + ' models' : 'All models'}`;
                 document.getElementById('details-created-at').textContent = fmtDate(d.created_at_ts, d.created_at || '—');
                 document.getElementById('details-updated-at').textContent = fmtDate(d.updated_at_ts);
@@ -2854,8 +2866,12 @@
                 const accessCopy = document.getElementById('details-access-copy');
                 if (accessCopy) accessCopy.textContent = `${(d.allowed_providers || []).join(', ') || 'None'} · ${d.allowed_models?.length ? d.allowed_models.join(', ') : 'All models'}`;
                 document.getElementById('details-refill').textContent = refillLabel;
-                document.getElementById('details-next-refill').textContent = nextRefillLabel;
-                document.getElementById('details-expires-at').textContent = expiryLabel;
+                document.getElementById('details-next-refill').textContent = nextRefillDate;
+                const refillCountdown = document.getElementById('details-refill-countdown');
+                if (refillCountdown) refillCountdown.textContent = nextRefillCountdown;
+                document.getElementById('details-expires-at').textContent = expiryDate;
+                const expiryCountdownEl = document.getElementById('details-expiry-countdown');
+                if (expiryCountdownEl) expiryCountdownEl.textContent = expiryCountdown;
                 document.getElementById('details-access').textContent = accessLabel;
                 const providerLimits = Object.entries(d.token_limits || {})
                     .filter(([, value]) => value != null)
@@ -2863,12 +2879,14 @@
                     .join(' · ');
                 document.getElementById('details-provider-limits').textContent = providerLimits || 'Unlimited';
                 const history = document.getElementById('details-history-container');
+                const historySection = document.getElementById('details-history-section');
                 if (history) {
                     const entries = d.timeline || [];
-                    history.innerHTML = entries.length ? entries.slice().reverse().map(item => {
+                    if (historySection) historySection.hidden = !entries.length;
+                    history.innerHTML = entries.slice().reverse().map(item => {
                         const changed = Object.keys(item.changes || {}).join(', ') || item.action || 'created';
                         return `<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;background:rgba(0,0,0,0.3);padding:7px 9px;border-radius:7px;font-size:10.5px;"><span style="color:#cbd5e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(changed)}</span><span style="color:#64748b;white-space:nowrap;">${fmtDate(item.timestamp)}</span></div>`;
-                    }).join('') : '<span style="color:#64748b;font-size:11px;">No changes recorded yet.</span>';
+                    }).join('');
                 }
                 
                 const statusBadge = document.getElementById('details-key-status-badge');
@@ -2905,9 +2923,11 @@
                 document.getElementById('details-gemini-reqs').textContent = (geminiStats.requests || 0).toLocaleString();
 
                 const topContainer = document.getElementById('details-top-models-container');
+                const topSection = document.getElementById('details-top-models-section');
+                if (topSection) topSection.hidden = !d.top_models?.length;
                 if (topContainer) {
                     if (!d.top_models || d.top_models.length === 0) {
-                        topContainer.innerHTML = '<div style="color: #64748b; font-size: 11.5px; padding: 6px 0;">No model activity recorded yet for this key.</div>';
+                        topContainer.innerHTML = '';
                     } else {
                         const medals = ['🥇', '🥈', '🥉'];
                         topContainer.innerHTML = d.top_models.map((m, idx) => `
