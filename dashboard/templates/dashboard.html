@@ -1653,32 +1653,41 @@
                         </div>
                     </div>
 
-                    <!-- Provider Specific Token Quotas -->
+                    <!-- Master Combined Token Quota -->
                     <div style="background: rgba(0,0,0,0.25); border: 1px solid rgba(255,255,255,0.06); border-radius: 10px; padding: 12px;">
-                        <label style="display: block; color: #e2e8f0; font-size: 12.5px; margin-bottom: 4px; font-weight: 700;">🎯 Quota Limits (Tokens Plan):</label>
-                        <span style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 10px;">Leave blank or 0 for unlimited usage. Supports shorthand like 10M, 100M, 500k.</span>
-                        
-                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
+                            <label style="color: #e2e8f0; font-size: 12.5px; font-weight: 700;">🎯 Total Master Token Quota:</label>
+                            <span id="modal-edit-total-preview" style="font-size: 11px; font-family: monospace; color: #34d399;">Unlimited</span>
+                        </div>
+                        <span style="display: block; font-size: 11px; color: #94a3b8; margin-bottom: 8px;">The overall token pool for this key across all providers. (e.g. 100M, 10M, 0 for unlimited)</span>
+                        <input type="text" id="modal-edit-limit-total" class="modal-input" placeholder="e.g. 100M, 50M, 0" oninput="updateQuotaPreview('total')" />
+
+                        <!-- Sub-limit Toggle Trigger -->
+                        <div style="margin-top: 12px; padding-top: 10px; border-top: 1px dashed rgba(255,255,255,0.1); display: flex; align-items: center; justify-content: space-between;">
+                            <span style="font-size: 11.5px; color: #cbd5e1; font-weight: 600;">Restrict Provider Sub-Limit?</span>
+                            <button type="button" id="btn-toggle-sublimits" onclick="toggleSublimits()" style="background: rgba(168,85,247,0.15); border: 1px solid rgba(168,85,247,0.3); color: #c084fc; border-radius: 6px; padding: 4px 10px; font-size: 11px; font-weight: 700; cursor: pointer;">
+                                ➕ Add Provider Cap
+                            </button>
+                        </div>
+
+                        <!-- Provider Specific Token Sub-limits (Hidden by default) -->
+                        <div id="sublimits-container" style="display: none; flex-direction: column; gap: 10px; margin-top: 12px; background: rgba(0,0,0,0.3); padding: 10px; border-radius: 8px; border: 1px solid rgba(168,85,247,0.2);">
+                            <span style="font-size: 11px; color: #94a3b8; line-height: 1.4;">
+                                Set an independent ceiling on one provider (e.g. 10M on Codex). If exhausted, that provider halts while remaining tokens (e.g. 90M) stay available for Gemini!
+                            </span>
                             <div>
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                    <span style="font-size: 11.5px; font-weight: 600; color: #c084fc;">🟣 Codex Token Limit:</span>
-                                    <span id="modal-edit-codex-preview" style="font-size: 11px; font-family: monospace; color: #fbbf24;">Unlimited</span>
+                                    <span style="font-size: 11.5px; font-weight: 600; color: #c084fc;">🟣 Codex Cap:</span>
+                                    <span id="modal-edit-codex-preview" style="font-size: 11px; font-family: monospace; color: #fbbf24;">No Cap</span>
                                 </div>
-                                <input type="text" id="modal-edit-limit-codex" class="modal-input" placeholder="e.g. 10M, 10000000" oninput="updateQuotaPreview('codex')" />
+                                <input type="text" id="modal-edit-limit-codex" class="modal-input" placeholder="e.g. 10M (leave empty for no cap)" oninput="updateQuotaPreview('codex')" />
                             </div>
                             <div>
                                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                    <span style="font-size: 11.5px; font-weight: 600; color: #38bdf8;">🔵 Gemini Token Limit:</span>
-                                    <span id="modal-edit-gemini-preview" style="font-size: 11px; font-family: monospace; color: #fbbf24;">Unlimited</span>
+                                    <span style="font-size: 11.5px; font-weight: 600; color: #38bdf8;">🔵 Gemini Cap:</span>
+                                    <span id="modal-edit-gemini-preview" style="font-size: 11px; font-family: monospace; color: #fbbf24;">No Cap</span>
                                 </div>
-                                <input type="text" id="modal-edit-limit-gemini" class="modal-input" placeholder="e.g. 100M, 100000000" oninput="updateQuotaPreview('gemini')" />
-                            </div>
-                            <div>
-                                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 4px;">
-                                    <span style="font-size: 11.5px; font-weight: 600; color: #e2e8f0;">⚡ Total Combined Token Quota:</span>
-                                    <span id="modal-edit-total-preview" style="font-size: 11px; font-family: monospace; color: #34d399;">Unlimited</span>
-                                </div>
-                                <input type="text" id="modal-edit-limit-total" class="modal-input" placeholder="e.g. 110M, or calculated automatically" oninput="updateQuotaPreview('total')" />
+                                <input type="text" id="modal-edit-limit-gemini" class="modal-input" placeholder="e.g. 10M (leave empty for no cap)" oninput="updateQuotaPreview('gemini')" />
                             </div>
                         </div>
                     </div>
@@ -2140,11 +2149,23 @@
             wrapper.classList.toggle('open');
         }
 
-        // Close dropdown when clicking outside
+        // Close dropdown & deselect active items when clicking outside
         document.addEventListener('click', (e) => {
             const wrapper = document.getElementById('custom-model-select');
             if (wrapper && !wrapper.contains(e.target)) {
                 wrapper.classList.remove('open');
+            }
+            // Close selected API key actions if clicking anywhere outside the key card
+            if (!e.target.closest('.api-key-item-pill')) {
+                document.querySelectorAll('.api-key-item-pill.selected').forEach(el => {
+                    el.classList.remove('selected');
+                });
+            }
+            // Close selected account pills if clicking outside
+            if (!e.target.closest('.account-item-pill')) {
+                document.querySelectorAll('.account-item-pill.selected').forEach(el => {
+                    el.classList.remove('selected');
+                });
             }
         });
 
@@ -2266,7 +2287,8 @@
                     `;
 
                     div.onclick = function(e) {
-                        if (e.target && e.target.closest && (e.target.closest('.api-key-btn-copy') || e.target.closest('.api-key-btn-edit') || e.target.closest('.api-key-btn-delete'))) return;
+                        if (e.target && e.target.closest && (e.target.closest('.api-key-btn-copy') || e.target.closest('.api-key-btn-detail') || e.target.closest('.api-key-btn-edit') || e.target.closest('.api-key-btn-delete'))) return;
+                        e.stopPropagation();
                         const isAlreadySelected = this.classList.contains('selected');
                         document.querySelectorAll('.api-key-item-pill.selected').forEach(el => {
                             el.classList.remove('selected');
@@ -2317,11 +2339,31 @@
             if (!input || !preview) return;
             const parsed = parseTokenShorthand(input.value);
             if (parsed === null) {
-                preview.textContent = 'Unlimited';
-                preview.style.color = kind === 'total' ? '#34d399' : '#fbbf24';
+                preview.textContent = kind === 'total' ? 'Unlimited' : 'No Cap';
+                preview.style.color = kind === 'total' ? '#34d399' : '#64748b';
             } else {
                 preview.textContent = parsed.toLocaleString() + ' tokens';
                 preview.style.color = '#38bdf8';
+            }
+        }
+
+        function toggleSublimits(forceShow) {
+            const container = document.getElementById('sublimits-container');
+            const btn = document.getElementById('btn-toggle-sublimits');
+            if (!container || !btn) return;
+            const shouldShow = forceShow !== undefined ? forceShow : container.style.display === 'none';
+            if (shouldShow) {
+                container.style.display = 'flex';
+                btn.textContent = '➖ Hide Provider Cap';
+                btn.style.background = 'rgba(239,68,68,0.15)';
+                btn.style.borderColor = 'rgba(239,68,68,0.3)';
+                btn.style.color = '#f87171';
+            } else {
+                container.style.display = 'none';
+                btn.textContent = '➕ Add Provider Cap';
+                btn.style.background = 'rgba(168,85,247,0.15)';
+                btn.style.borderColor = 'rgba(168,85,247,0.3)';
+                btn.style.color = '#c084fc';
             }
         }
 
@@ -2468,6 +2510,10 @@
             if (codexLimInput) codexLimInput.value = limits.codex ? formatTokenCount(limits.codex) : '';
             if (geminiLimInput) geminiLimInput.value = limits.gemini ? formatTokenCount(limits.gemini) : '';
             if (totalLimInput) totalLimInput.value = currentEditKeyData.max_tokens ? formatTokenCount(currentEditKeyData.max_tokens) : '';
+
+            // If key already had a provider sub-limit defined, auto-expand sublimits container
+            const hasSublimits = !!(limits.codex || limits.gemini);
+            toggleSublimits(hasSublimits);
 
             updateQuotaPreview('codex');
             updateQuotaPreview('gemini');
