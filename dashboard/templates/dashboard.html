@@ -1361,6 +1361,7 @@
             align-items: center;
             justify-content: center;
             padding: 16px;
+            overscroll-behavior: contain;
         }
         .modal-dialog {
             width: 100%;
@@ -1371,6 +1372,10 @@
             border-radius: 16px;
             padding: 22px;
             box-sizing: border-box;
+            overscroll-behavior: contain;
+        }
+        .modal-body {
+            overscroll-behavior: contain;
         }
         .modal-header {
             display: flex;
@@ -2795,6 +2800,7 @@
         }
 
         async function showKeyDetails(id) {
+            document.body.style.overflow = 'hidden';
             try {
                 const res = await fetch(resolveApiUrl('/api/tokens/details'), {
                     method: 'POST',
@@ -2871,11 +2877,13 @@
             if (event && event.target !== document.getElementById('details-key-modal-overlay') && !event.target.classList.contains('modal-close-btn') && !event.target.classList.contains('modal-btn-cancel')) {
                 return;
             }
+            document.body.style.overflow = '';
             const overlay = document.getElementById('details-key-modal-overlay');
             if (overlay) overlay.style.display = 'none';
         }
 
         function openEditKeyModal(id, name, isEnabled, keyData) {
+            document.body.style.overflow = 'hidden';
             currentEditKeyData = keyData || {};
             const overlay = document.getElementById('edit-key-modal-overlay');
             const idInput = document.getElementById('modal-edit-key-id');
@@ -2987,6 +2995,7 @@
             if (event && event.target !== document.getElementById('edit-key-modal-overlay') && !event.target.classList.contains('modal-close-btn') && !event.target.classList.contains('modal-btn-cancel')) {
                 return;
             }
+            document.body.style.overflow = '';
             const overlay = document.getElementById('edit-key-modal-overlay');
             if (overlay) overlay.style.display = 'none';
         }
