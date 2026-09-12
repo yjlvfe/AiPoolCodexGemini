@@ -97,6 +97,19 @@ def extract_gemini_catalog(payload: Any) -> tuple[list[str], dict[str, str]]:
     public: list[str] = []
     seen_public: set[str] = set()
     wire: dict[str, str] = {}
+
+    # Strict whitelist allowed by user:
+    # 1. gemini-3.6-flash to gemini-3.8-flash (no high/med/low subvariants)
+    # 2. gemini-3.1-pro
+    # 3. claude models (e.g. claude-opus-4-6, claude-sonnet-4-6)
+    # 4. gpt models (e.g. gpt-oss-120b)
+    def _is_curated_model(m_id: str) -> bool:
+        if m_id.startswith("claude-") or m_id.startswith("gpt-"):
+            return True
+        if m_id in ("gemini-3.8-flash", "gemini-3.7-flash", "gemini-3.6-flash", "gemini-3.1-pro", "gemini-3.1-pro-low"):
+            return True
+        return False
+
     for item in raw_ids:
         if isinstance(item, dict):
             upstream = item.get("id") or item.get("name") or item.get("model")
@@ -109,6 +122,8 @@ def extract_gemini_catalog(payload: Any) -> tuple[list[str], dict[str, str]]:
         if not public_id or upstream in deprecated or public_id in deprecated:
             continue
         if not public_id.startswith(_PUBLIC_GEMINI_PREFIXES):
+            continue
+        if not _is_curated_model(public_id):
             continue
         if public_id not in seen_public:
             public.append(public_id)
