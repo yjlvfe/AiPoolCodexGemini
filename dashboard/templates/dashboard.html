@@ -2348,9 +2348,11 @@
             val = String(val).trim().toUpperCase();
             if (!val || val === '0' || val === 'UNLIMITED') return null;
             let mult = 1;
-            if (val.endsWith('K')) { mult = 1000; val = val.slice(0, -1); }
-            else if (val.endsWith('M')) { mult = 1000000; val = val.slice(0, -1); }
-            else if (val.endsWith('B')) { mult = 1000000000; val = val.slice(0, -1); }
+            if (val.endsWith('K')) { mult = 1e3; val = val.slice(0, -1); }
+            else if (val.endsWith('M')) { mult = 1e6; val = val.slice(0, -1); }
+            else if (val.endsWith('B')) { mult = 1e9; val = val.slice(0, -1); }
+            else if (val.endsWith('T')) { mult = 1e12; val = val.slice(0, -1); }
+            else if (val.endsWith('Q')) { mult = 1e15; val = val.slice(0, -1); }
             const num = parseFloat(val);
             return isNaN(num) ? null : Math.round(num * mult);
         }
@@ -3091,9 +3093,11 @@
 
         function formatTokenCount(num) {
             if (!num || num <= 0) return '0';
-            if (num >= 1000000000) return (num / 1000000000).toFixed(1).replace(/\.0$/, '') + 'B';
-            if (num >= 1000000) return (num / 1000000).toFixed(1).replace(/\.0$/, '') + 'M';
-            if (num >= 1000) return (num / 1000).toFixed(1).replace(/\.0$/, '') + 'K';
+            if (num >= 1e15) return (num / 1e15).toFixed(1).replace(/\.0$/, '') + 'Q';
+            if (num >= 1e12) return (num / 1e12).toFixed(1).replace(/\.0$/, '') + 'T';
+            if (num >= 1e9) return (num / 1e9).toFixed(1).replace(/\.0$/, '') + 'B';
+            if (num >= 1e6) return (num / 1e6).toFixed(1).replace(/\.0$/, '') + 'M';
+            if (num >= 1e3) return (num / 1e3).toFixed(1).replace(/\.0$/, '') + 'K';
             return String(num);
         }
         window.formatTokenCount = formatTokenCount;
