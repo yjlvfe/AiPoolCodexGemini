@@ -285,7 +285,7 @@ class Manager:
             writes = {}
             if previous_live and previous != number:
                 writes[self.credential(previous)] = encoded(previous_live)
-            writes.update({target / self.filename: encoded(data), target / 'metadata.json': encoded(meta), self.live: encoded(data), self.store / 'active': (number + '\n').encode()})
+            writes.update({target / self.filename: encoded(data), target / 'metadata.json': encoded(meta), self.store / 'active': (number + '\n').encode()})
             if self.ag:
                 # Keep the historical explicit integration only when it already exists.
                 hermes = Path(os.environ.get('AG_HERMES_AUTH', Path.home() / '.hermes/.antigravity_oauth.json'))
@@ -310,7 +310,14 @@ class Manager:
                 if legacy is not None:
                     atomic_bytes(target, legacy)
                 raise
-            if self.ag and os.geteuid() == 0 and str(self.store).startswith('/var/lib/aipool/'):
+            # Best-effort compatibility sync for external CLI credentials.
+            # Hardened daemons (ProtectSystem=strict, ProtectHome=true) do not
+            # and should not have write permissions to external user homes.
+            try:
+                atomic_bytes(self.live, encoded(data))
+            except OSError:
+                pass
+            if os.geteuid() == 0 and str(self.store).startswith('/var/lib/aipool/'):
                 try:
                     owner = pwd.getpwnam('aipool')
                     for path in writes:
@@ -423,6 +430,8 @@ def main(provider):
         args = ['usage'] + args
     elif invoked.endswith('list'):
         args = ['list'] + args
+    elif invoked.endswith('who'):
+        args = ['who'] + args
     elif invoked.endswith('help'):
         args = ['help'] + args
     elif invoked in ('agswitch', 'cswitch'):
@@ -474,6 +483,17 @@ def main(provider):
                     print(f'Account {n} | INVALID AUTH')
             if not manager.ids():
                 print(f'No accounts registered. Run: {manager.prefix} add')
+        elif cmd in ('who',):
+            active = manager.active()
+            if not active:
+                print(f'No active {manager.label} account set.')
+            else:
+                try:
+                    identity = manager.identity(read_json(manager.credential(active)))
+                    email = identity.get("email") or "unverified"
+                    print(f'Active {manager.label} account: {active}\nEmail: {email}')
+                except (ValueError, OSError):
+                    print(f'Active {manager.label} account: {active} | INVALID AUTH')
         elif cmd == 'clean' and not rest:
             manager.clean()
         elif cmd in ('relogin', 'login'):

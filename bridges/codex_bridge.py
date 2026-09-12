@@ -265,12 +265,23 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
             attempts=POOL.candidates(model, include_cooldown=True)
             last_status=429 if not attempts else 503
             quota_exhausted=set()
+            next_index=0
             total_attempts=provider_attempts(os.environ.get('AIPOOL_CODEX_MAX_ATTEMPTS'))
             for attempt in range(total_attempts):
-                usable=[n for n in attempts if n not in quota_exhausted] or attempts
-                if not usable:
+                if not attempts or len(quota_exhausted) >= len(attempts):
                     break
-                number=usable[attempt % len(usable)]
+                # Keep the cursor in the original candidate list while
+                # skipping removed accounts.  Indexing the shrinking list can
+                # skip B after A is removed (A -> 429 must select B, not C).
+                number=None
+                for offset in range(len(attempts)):
+                    candidate=attempts[(next_index + offset) % len(attempts)]
+                    if candidate not in quota_exhausted:
+                        number=candidate
+                        break
+                if number is None:
+                    break
+                next_index=(attempts.index(number) + 1) % len(attempts)
                 try:
                     credentials=POOL.credentials(number)['tokens']
                     headers={'Authorization':'Bearer '+credentials['access_token'],'ChatGPT-Account-Id':credentials.get('account_id',''),'Content-Type':'application/json','Accept':'text/event-stream','User-Agent':'codex_cli_rs/0.1.0'}

@@ -135,7 +135,10 @@ class AccountPool:
                     if path.read_bytes() == original:
                         atomic_bytes(path, encoded(fresh))
                     if manager.active() == number:
-                        atomic_bytes(manager.live, encoded(fresh))
+                        try:
+                            atomic_bytes(manager.live, encoded(fresh))
+                        except OSError:
+                            pass
             return fresh
 
     def promote(self, number):

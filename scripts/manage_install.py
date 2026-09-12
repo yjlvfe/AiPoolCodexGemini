@@ -131,7 +131,7 @@ def integrate_installed_agents():
 
 def install_cli(prefix):
     bindir = prefix / 'bin'
-    links = {'ag': 'ag', 'cx': 'cx', 'c': 'cx', 'antigravity-account-switch': 'antigravity-account-switch', 'codex-account-switch': 'codex-account-switch', 'codex-account-query': 'codex-account-query', 'agusage': 'ag', 'agswitch': 'ag', 'aglist': 'ag', 'aghelp': 'ag', 'cusage': 'cx', 'cswitch': 'cx', 'clist': 'cx', 'chelp': 'cx'}
+    links = {'ag': 'ag', 'cx': 'cx', 'c': 'cx', 'antigravity-account-switch': 'antigravity-account-switch', 'codex-account-switch': 'codex-account-switch', 'codex-account-query': 'codex-account-query', 'agusage': 'ag', 'agswitch': 'ag', 'aglist': 'ag', 'aghelp': 'ag', 'agwho': 'ag', 'cusage': 'cx', 'cswitch': 'cx', 'clist': 'cx', 'chelp': 'cx', 'cwho': 'cx'}
     for i in range(1, 101):
         links[f'ag{i}'] = 'ag'
         links[f'c{i}'] = 'cx'

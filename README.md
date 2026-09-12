@@ -1,6 +1,6 @@
 # AiPool
 
-**AiPool 2.1.7** is a local gateway and operations dashboard for two independent account pools:
+**AiPool 2.1.8** is a local gateway and operations dashboard for two independent account pools:
 
 - **Codex** accounts and models
 - **Gemini** accounts and models

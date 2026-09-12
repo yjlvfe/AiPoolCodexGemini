@@ -54,7 +54,10 @@ def inspect(manager, number):
             if path.is_file() and path.read_bytes() == snapshot:
                 atomic_bytes(path, encoded(fresh))
                 if manager.active() == number and manager.live.is_file() and manager.live.read_bytes() == snapshot:
-                    atomic_bytes(manager.live, encoded(fresh))
+                    try:
+                        atomic_bytes(manager.live, encoded(fresh))
+                    except OSError:
+                        pass
         return info
 
 def show_account(manager, number, short=False):
