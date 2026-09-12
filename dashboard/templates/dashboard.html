@@ -2434,7 +2434,7 @@
 
         function resetAllModelsToDefault() {
             document.querySelectorAll('.modal-model-checkbox').forEach(c => {
-                c.checked = false;
+                c.checked = true;
             });
             updateModelsCountPreview();
         }
@@ -2462,10 +2462,13 @@
                 { id: 'claude-sonnet-4-6', name: 'claude-sonnet-4-6' }
             ];
 
-            const allowedSet = new Set((allowedModels || []).map(m => m.toLowerCase()));
+            const totalCount = codexModels.length + geminiModels.length;
+            const hasCustomList = Array.isArray(allowedModels) && allowedModels.length > 0;
+            const allowedSet = hasCustomList ? new Set(allowedModels.map(m => m.toLowerCase())) : null;
 
             const renderModelRow = (m) => {
-                const isChecked = allowedSet.has(m.id.toLowerCase());
+                // If custom list exists, check membership; otherwise DEFAULT TO CHECKED (ALL ENABLED)
+                const isChecked = allowedSet ? allowedSet.has(m.id.toLowerCase()) : true;
                 return `
                     <label style="display: flex; align-items: center; gap: 6px; color: #cbd5e1; font-size: 11px; cursor: pointer; padding: 5px 6px; border-radius: 4px; background: rgba(255,255,255,0.03);">
                         <input type="checkbox" class="modal-model-checkbox" value="${escapeHtml(m.id)}" ${isChecked ? 'checked' : ''} style="accent-color: #38bdf8; width: 14px; height: 14px;" onchange="updateModelsCountPreview()" />
@@ -2492,17 +2495,24 @@
             const countSpan = document.getElementById('modal-edit-models-count');
             const resetBtn = document.getElementById('btn-reset-all-models');
             const checkboxes = document.querySelectorAll('.modal-model-checkbox');
+            const totalCount = checkboxes.length;
             const checkedCount = Array.from(checkboxes).filter(c => c.checked).length;
             if (countSpan) {
-                if (checkedCount === 0) {
-                    countSpan.textContent = 'All models enabled (Default)';
+                countSpan.textContent = `Models Allowed: ${checkedCount} / ${totalCount}`;
+                if (checkedCount === totalCount) {
                     countSpan.style.color = '#34d399';
+                    countSpan.style.background = 'rgba(16,185,129,0.12)';
+                    countSpan.style.border = '1px solid rgba(16,185,129,0.25)';
                     if (resetBtn) resetBtn.style.display = 'none';
                 } else {
-                    countSpan.textContent = `Strict filter: ${checkedCount} allowed`;
                     countSpan.style.color = '#fbbf24';
+                    countSpan.style.background = 'rgba(245,158,11,0.12)';
+                    countSpan.style.border = '1px solid rgba(245,158,11,0.25)';
                     if (resetBtn) resetBtn.style.display = 'inline-block';
                 }
+                countSpan.style.padding = '2px 8px';
+                countSpan.style.borderRadius = '6px';
+                countSpan.style.fontFamily = "'JetBrains Mono', monospace";
             }
         }
 
@@ -2678,7 +2688,10 @@
 
             // Gather allowed models
             const modelCheckboxes = document.querySelectorAll('.modal-model-checkbox');
-            const allowed_models = Array.from(modelCheckboxes).filter(c => c.checked).map(c => c.value);
+            const totalModelsCount = modelCheckboxes.length;
+            const checkedBoxes = Array.from(modelCheckboxes).filter(c => c.checked);
+            // If ALL are checked, store empty array / null so key has full access to all models (future proof)
+            const allowed_models = checkedBoxes.length === totalModelsCount ? [] : checkedBoxes.map(c => c.value);
 
             const btn = document.getElementById('modal-btn-confirm-edit-key');
             if (btn) btn.disabled = true;
