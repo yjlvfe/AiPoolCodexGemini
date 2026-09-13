@@ -360,7 +360,21 @@ def discover_codex_models(
             slug = row.get("slug") or row.get("id") or row.get("model")
             if isinstance(slug, str) and slug.strip():
                 visible.add(slug.strip())
-    models = normalize_models(visible)
+    ORDER_PREFERENCE = [
+        "gpt-6-astra",
+        "gpt-5.6-terra",
+        "gpt-5.6-sol",
+        "gpt-5.6-luna",
+        "gpt-5.5",
+    ]
+    sorted_visible: list[str] = []
+    for pref in ORDER_PREFERENCE:
+        if pref in visible and pref not in sorted_visible:
+            sorted_visible.append(pref)
+    for v in sorted(visible, reverse=True):
+        if v not in sorted_visible:
+            sorted_visible.append(v)
+    models = normalize_models(sorted_visible)
     if not models:
         raise CatalogError("No visible Codex models found in account caches")
     return models
