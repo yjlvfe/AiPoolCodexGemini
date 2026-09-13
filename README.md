@@ -6,10 +6,8 @@
 </p>
 
 > [!WARNING]
-> **⚠️ DISCLAIMER / تحذير وإخلاء مسؤولية:**
+> **⚠️ DISCLAIMER:**
 > This tool automates multi-account session management and quota failover for upstream AI providers (including **Gemini / Google Antigravity** and **OpenAI Codex**). Using third-party pooling or reverse-engineering internal APIs may violate provider Terms of Service and could result in account restriction, suspension, or permanent termination. Use strictly at your own discretion and risk.
-> 
-> استخدام هذه الأداة في تدوير الحسابات والاتصال المجمّع قد يتعارض مع شروط وسياسات مزودي الخدمة (خصوصاً **Gemini / Antigravity**) وقد يعرض حساباتك للحظر أو التعليق. يتحمل المستخدم كامل المسؤولية عن استخدامه للأداة.
 
 **AiPool v2.2.1 (stable)** is an enterprise-grade autonomous failover gateway and management dashboard for multi-account AI pools:
 
@@ -199,26 +197,35 @@ The migration helper writes a manifest and verifies copied file hashes. It exclu
 
 ### Configure Accounts
 
-Use the installed CLI tools to add accounts to their corresponding pool:
+Use the installed CLI tools to enroll accounts into their corresponding pools:
 
 ```bash
-# Add or import a Codex account.
+# Enroll a Codex account:
 c add
 
-# Add or import a Gemini account.
+# Enroll a Gemini / Antigravity account (OAuth):
 ag add
+```
 
-# List accounts without a provider round trip.
+#### 🔑 Enrolling Gemini / Antigravity via OAuth:
+When you run `ag add`:
+1. The CLI will display a secure Google OAuth authorization URL.
+2. Copy the URL and open it in your browser to sign in with your Google account.
+3. After granting permissions, the browser will attempt to redirect to `http://localhost:...` (which may show a connection error if running on a remote server/VPS).
+4. **Copy the entire redirected URL** from your browser address bar and paste it back into your terminal prompt to complete authentication.
+
+```bash
+# List accounts without an external API call:
 c list
 ag list
 
-# Query current provider usage.
+# Check real-time quotas and token limits:
 c usage
 ag usage
 
-# Switch an existing account slot.
-c switch 1
-ag switch 1
+# Fast switch active account slot:
+c switch 1   # or alias: c1
+ag switch 1  # or alias: ag1
 ```
 
 Convenience commands such as `c1`, `ag1`, `clist`, `aglist`, `cusage`, and `agusage` are also installed. Account enrollment and credential changes belong in the CLI; the dashboard is intended for monitoring and controlled switching of existing slots.
