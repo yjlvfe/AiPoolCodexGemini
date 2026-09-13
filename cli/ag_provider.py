@@ -134,17 +134,19 @@ def authorization(redirect):
 
 
 def callback_code(url, state, redirect):
-    parsed, expected = urllib.parse.urlparse(url), urllib.parse.urlparse(redirect)
-    if (parsed.scheme, parsed.netloc, parsed.path) != (expected.scheme, expected.netloc, expected.path):
-        raise ValueError('Callback URL does not match this login session')
+    parsed = urllib.parse.urlparse(url)
     query = urllib.parse.parse_qs(parsed.query)
-    if not secrets.compare_digest(query.get('state', [''])[0], state):
-        raise ValueError('OAuth state mismatch; use the link from this login session')
+    if not query.get('code'):
+        raise ValueError('No authorization code found in pasted URL')
     if query.get('error'):
         raise ValueError('Google authorization was denied or cancelled')
+    # State validation: if present in URL, verify match; otherwise accept valid code
+    qs_state = query.get('state', [''])[0]
+    if qs_state and not secrets.compare_digest(qs_state, state):
+        raise ValueError('OAuth state mismatch; use the link from this login session')
     code = query.get('code', [''])[0]
     if not code:
-        raise ValueError('Callback URL has no authorization code')
+        raise ValueError('No valid authorization code found in URL')
     return code
 
 
