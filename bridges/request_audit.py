@@ -49,11 +49,17 @@ def detect_application(headers, client_identity=None):
     if client_hdr:
         return client_hdr
 
-    # 3. Inspect User-Agent for known agents and clients (concise labels)
+    # 3. Local loopback defaults for Hermes / OpenClaw when using their standard SDK transports
+    # Hermes uses openai-python SDK (User-Agent: OpenAI/Python ...)
+    # OpenClaw uses openai-node / JS SDK (User-Agent: OpenAI/JS ...)
     ua_lower = ua.lower()
+    if "hermes" in ua_lower or "openai/python" in ua_lower or "python-requests" in ua_lower:
+        return "Hermes"
+    if "openclaw" in ua_lower or "openai/js" in ua_lower or "openai-node" in ua_lower:
+        return "OpenClaw"
+
+    # 4. Inspect User-Agent for known agents and clients (concise labels)
     mapping = [
-        ("hermes", "Hermes"),
-        ("openclaw", "OpenClaw"),
         ("antigravity", "Antigravity"),
         ("codex", "Codex"),
         ("claude", "Claude"),
@@ -62,7 +68,6 @@ def detect_application(headers, client_identity=None):
         ("cline", "Cline"),
         ("roo", "Roo"),
         ("aider", "Aider"),
-        ("openai/python", "OpenAI Python"),
         ("openai/node", "OpenAI Node"),
         ("curl", "cURL"),
         ("requests", "Requests"),
@@ -73,7 +78,7 @@ def detect_application(headers, client_identity=None):
         if key in ua_lower:
             return label
 
-    # 4. Fallback: if UA has meaningful text, format it cleanly instead of generic Direct API
+    # 5. Fallback: if UA has meaningful text, format it cleanly instead of generic Direct API
     if ua and not any(k in ua_lower for k in ("mozilla", "gecko", "applewebkit")):
         return ua.split("/")[0].replace("_", " ").title()
 
@@ -274,13 +279,16 @@ def capture(handler, raw_payload, provider_payload=None):
                     artifact_refs.append(store_artifact("tool_output", content))
                 except (OSError, TypeError, ValueError):
                     pass
+    client_ident = getattr(handler, "_client_identity", None) or {}
     audit = {
         "request_id": str(uuid.uuid4()),
         "payload_sha256": hashlib.sha256(canonical).hexdigest(),
         "peer_ip": str(client_address),
         "forwarded_ip": str(forwarded_peer) if forwarded_peer else None,
         "endpoint": request_path,
-        "client_label": detect_application(headers, getattr(handler, "_client_identity", None)),
+        "client_label": detect_application(headers, client_ident),
+        "client_id": client_ident.get("credential_id") if isinstance(client_ident, dict) else None,
+        "authenticated_client": client_ident.get("authenticated_client") if isinstance(client_ident, dict) else None,
         "user_agent": redact(headers.get("User-Agent", ""))[:256],
         "prompt_capture_status": "recorded",
         "prompt_text": redact(raw_text),
