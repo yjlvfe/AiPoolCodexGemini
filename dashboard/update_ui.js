@@ -1,7 +1,8 @@
 /* Build identity is read from Git and the running process, never invented. */
 function buildLabel(data, running = false) {
-    const version = running ? data.running_version : data.version;
-    return `v${version || '1.9.2'}`;
+    const version = running ? (data.running_version || data.version) : data.version;
+    const tier = data.tier ? ` (${data.tier})` : '';
+    return `v${version || '2.2.1'}${tier}`;
 }
 
 function updateMessage(title, detail = '', state = 'info', showDots = false) {
