@@ -281,7 +281,10 @@ def report(path):
                         audit_parsed['client_label'] = aud.get('client_label')
                         audit_parsed['client_id'] = aud.get('client_id')
                         audit_parsed['peer_ip'] = aud.get('peer_ip')
+                        audit_parsed['forwarded_ip'] = aud.get('forwarded_ip')
                         audit_parsed['user_agent'] = aud.get('user_agent')
+                        audit_parsed['endpoint'] = aud.get('endpoint')
+                        audit_parsed['payload_sha256'] = aud.get('payload_sha256')
                 except Exception:
                     pass
             recent.append({

@@ -5011,18 +5011,19 @@ function openRequestInspector(request) {
         ['Account', req.account]
     ]);
 
-        // Helper to detect device type from User-Agent
+        // Helper to detect device type / OS from User-Agent and headers
         function detectDeviceType(ua) {
-            if (!ua) return 'Unknown';
+            if (!ua) return 'Linux Server (VPS)';
             const u = ua.toLowerCase();
-            if (u.includes('iphone') || u.includes('ipad') || u.includes('ipod')) return 'Apple iOS';
+            if (u.includes('iphone')) return 'Apple iPhone (iOS)';
+            if (u.includes('ipad')) return 'Apple iPad (iPadOS)';
             if (u.includes('android')) return 'Android Mobile';
-            if (u.includes('macintosh') || u.includes('mac os')) return 'Mac OS';
-            if (u.includes('windows')) return 'Windows PC';
-            if (u.includes('linux')) return 'Linux OS';
-            if (u.includes('curl')) return 'cURL CLI';
-            if (u.includes('python')) return 'Python Script';
-            return 'Desktop / CLI';
+            if (u.includes('macintosh') || u.includes('mac os') || u.includes('darwin')) return 'Apple Mac OS';
+            if (u.includes('windows') || u.includes('win32') || u.includes('win64')) return 'Windows PC';
+            if (u.includes('linux') || u.includes('ubuntu') || u.includes('debian')) return 'Linux OS';
+            if (u.includes('curl')) return 'cURL CLI (Terminal)';
+            // Fallback for agent / CLI running on local server
+            return 'Linux Server (VPS)';
         }
 
         section('02 · Origin & application', [
