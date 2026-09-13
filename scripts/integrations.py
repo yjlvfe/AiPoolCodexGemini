@@ -150,6 +150,11 @@ def merged(agent, original, catalogs: dict[str, list[str]] | None = None):
                     if str(model_key).startswith(old_key + "/"):
                         del defaults["models"][model_key]
             for key, entry in desired.items():
+                # Prune old models under this provider that are no longer in the active catalog
+                valid_keys = {key + "/" + m["id"] for m in entry.get("models", [])}
+                for model_key in list(defaults["models"]):
+                    if str(model_key).startswith(key + "/") and model_key not in valid_keys:
+                        del defaults["models"][model_key]
                 for model in entry["models"]:
                     defaults["models"].setdefault(key + "/" + model["id"], {})
     return data
@@ -382,25 +387,12 @@ def integrate(agent):
     evidence = None
     if data != original:
         if os.environ.get('AIPOOL_INTEGRATION_OFFLINE') != '1':
-            # Preferred path: the agent's own CLI writes and validates the config.
-            try:
-                evidence = apply_native(agent, path, data)
+            # Preferred and mandatory path: the agent's own CLI writes and validates the config.
+            evidence = apply_native(agent, path, data)
+            if evidence:
                 method = 'native-cli'
-            except ValueError:
-                evidence = None
-        if method == 'already-present':
-            method = 'file-edit'
-            evidence = 'guarded atomic file write + readback'
-            if agent == 'hermes':
-                import yaml
-                body = yaml.safe_dump(data, sort_keys=False, allow_unicode=True).encode()
             else:
-                body = (json.dumps(data, indent=2, ensure_ascii=False) + '\n').encode()
-            atomic_bytes(backup, before)
-            atomic_bytes(path, body)
-            if read_config(agent, path) != data:
-                atomic_bytes(path, before)
-                raise ValueError('Configuration readback failed; original restored')
+                raise ValueError(f'Native CLI configuration via {agent} failed')
     if agent == 'openclaw':
         # Provider-picker compatibility is a bundle-level fix; reload the
         # gateway so Telegram reads the repaired catalog immediately.

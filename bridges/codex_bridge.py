@@ -35,9 +35,24 @@ _codex_catalog = DynamicCatalog(
 
 def list_available_models(force_refresh=True):
     models = _codex_catalog.get(force=force_refresh)
+    # Order models newest to oldest
+    ORDER_PREFERENCE = [
+        "gpt-6-astra",
+        "gpt-5.6-terra",
+        "gpt-5.6-sol",
+        "gpt-5.6-luna",
+        "gpt-5.5",
+    ]
+    sorted_models = []
+    for pref in ORDER_PREFERENCE:
+        if pref in models and pref not in sorted_models:
+            sorted_models.append(pref)
+    for m in models:
+        if m not in sorted_models:
+            sorted_models.append(m)
     return [
         {'id': model, 'object': 'model', 'owned_by': 'codex'}
-        for model in models
+        for model in sorted_models
     ]
 
 
