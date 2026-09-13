@@ -9,23 +9,41 @@
 > **⚠️ DISCLAIMER:**
 > This tool automates multi-account session management and quota failover for upstream AI providers (including **Gemini / Google Antigravity** and **OpenAI Codex**). Using third-party pooling or reverse-engineering internal APIs may violate provider Terms of Service and could result in account restriction, suspension, or permanent termination. Use strictly at your own discretion and risk.
 
-**AiPool v2.2.1 (stable)** is an enterprise-grade autonomous failover gateway and management dashboard for multi-account AI pools:
-
-- **Codex / ChatGPT** accounts and model groups
-- **Gemini & Claude/GPT** sub-group accounts and models
-
-AiPool presents standard OpenAI-compatible HTTP endpoints, manages authenticated multi-account rotations on HTTP 429 and quota exhaustion, tracks lifetime token usage, enforces granular per-key API authorizations and rate limits, and exposes real-time state through an ultra-responsive web dashboard and CLI suite.
+**AiPool** is the ultimate enterprise-grade autonomous rotation gateway and high-availability dashboard for multi-account AI pools. It pools multiple **ChatGPT / OpenAI Codex** and **Google Gemini / Antigravity (Claude & GPT)** accounts into a single, seamless, self-healing OpenAI-compatible API.
 
 ---
 
-## 🚀 What's New in v2.2.1 (stable)
+## 🌟 Why AiPool? (Why You Need It)
 
-- **Independent Model Sub-groups Quota**: Split quota capacity tracking for Gemini Pool (`Gemini` models vs `Claude / GPT` models) with independent capacity metrics and 5h/weekly quotas.
-- **Dedicated Public API Page & Token Management**: Dedicated `/api` dashboard route featuring OpenAI-compatible endpoints, Bearer token authorization, provider restrictions, model-specific whitelisting, and quota caps.
-- **Persistent Lifetime Token Accounting**: Added `client_usage_counters` to SQLite schema ensuring total token metrics for API keys and accounts never reset or drop even during log rotatations.
-- **Live Reactive Telemetry**: Fast 3s reactive polling updating client token badges, usage streams, and active metrics without requiring page refreshes.
-- **Key Analytics & Activity Logs**: Replaced static details with a live per-key request activity stream, dynamic countdown timers for auto-refill and expiration cycles (calculated strictly from `first_used_ts`).
-- **Hardened UI & Modals**: Comprehensive button audit across all 49 UI actions with null-guards and decoupled state maps (`window._apiTokensMap`).
+If you actively use AI coding agents, autonomous frameworks, or LLM applications (Hermes, OpenClaw, Claude Code, Cline, Cursor, Roo Code, Aider), you hit provider rate limits (`HTTP 429`) and daily/weekly quota ceilings constantly. 
+
+**AiPool completely eliminates AI downtime:**
+- 🔄 **Autonomous Zero-Downtime Rotation**: When an account exhausts its tokens or hits a 429 limit, AiPool instantly rotates to the next available account without failing the user request.
+- 💰 **Pool Free & Paid Accounts Together**: Combine multiple free and paid accounts into a unified, massive collective quota.
+- ⚡ **100% OpenAI API Compatible**: Plug-and-play with any AI tool, SDK, or framework simply by setting `OPENAI_BASE_URL` and `OPENAI_API_KEY`.
+- 🔐 **Granular API Key Management**: Generate scoped Bearer tokens for friends, team members, or specific tools with model whitelisting, provider restrictions, and lifetime token quotas.
+- 📱 **Mobile-First Responsive Dashboard**: Real-time telemetry, live token counters, health indicators, and instant inspection of requests from your phone or desktop.
+- 🛡️ **Strict Pool & Privacy Isolation**: Prompt scrubbing, zero cross-provider leakage (Codex never pollutes Gemini), and robust access control.
+
+---
+
+## 🚀 Key Features
+
+1. **Smart Quota & Tier Awareness**:
+   - Automatically detects account tiers (Free vs Pro/Ultra).
+   - Dynamically tracks 5-hour rolling windows (Paid) and Weekly quotas (Free & Paid) without broken metrics.
+   - Intelligently ranks and prioritizes active, ready accounts (`ACTIVE`, `READY`, `COOLING`, `OUT`).
+
+2. **Full Spectrum Client Telemetry**:
+   - Deep inspection identifying client agents (Hermes, OpenClaw, Codex CLI, Antigravity, Claude Code, Cursor, Cline, Roo Code, Aider, Postman, cURL) in real time.
+   - Dedicated `/api` live operations stream isolating public API key traffic with emerald badges.
+
+3. **Persistent Lifetime Accounting**:
+   - High-performance SQLite engine (`client_usage_counters`) ensuring token consumption records never reset or lose data across restarts or log rotations.
+
+4. **Streamlined OAuth & CLI Onboarding**:
+   - Built-in `ag add` OAuth onboarding with adaptive mobile formatting and direct `Ctrl + Click` desktop browser launch.
+   - Full support for standard free accounts defaulting to canonical `aicode-consumers` project.
 
 ---
 
