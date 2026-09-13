@@ -232,6 +232,7 @@ def login(resume=False, slot=None):
         CYAN = '\033[96m'
         GREEN = '\033[92m'
         YELLOW = '\033[93m'
+        RED = '\033[91m'
         MAGENTA = '\033[95m'
         BOLD = '\033[1m'
         DIM = '\033[2m'
@@ -247,9 +248,10 @@ def login(resume=False, slot=None):
         print(f"{CYAN}║{RESET} {BOLD}{GREEN}[STEP 2]{RESET} Sign in with your Google Account & grant required permissions. {' ' * (box_width - 70)}{CYAN}║{RESET}")
         print(f"{CYAN}║{' ' * (box_width - 2)}║{RESET}")
         print(f"{CYAN}║{RESET} {BOLD}{GREEN}[STEP 3]{RESET} Google redirects to: {DIM}http://localhost:{port}/oauth-callback{RESET} {' ' * (box_width - 48 - len(str(port)))}{CYAN}║{RESET}")
-        print(f"{CYAN}║{RESET}   {DIM}*(Note: A 'Site cannot be reached' error is normal on remote VPS)*{RESET} {' ' * (box_width - 74)}{CYAN}║{RESET}")
+        print(f"{CYAN}║{RESET}   {BOLD}{RED}⚠️  IMPORTANT: 'Site cannot be reached' on remote VPS is NORMAL!{RESET} {' ' * (box_width - 71)}{CYAN}║{RESET}")
         print(f"{CYAN}║{' ' * (box_width - 2)}║{RESET}")
-        print(f"{CYAN}║{RESET} {BOLD}{GREEN}[STEP 4]{RESET} {BOLD}Copy the FULL redirected URL from address bar & paste below:{RESET} {' ' * (box_width - 74)}{CYAN}║{RESET}")
+        print(f"{CYAN}║{RESET} {BOLD}{GREEN}[STEP 4]{RESET} {BOLD}{YELLOW}👉 DO NOT PANIC: Copy the FULL URL from your browser address bar{RESET} {' ' * (box_width - 78)}{CYAN}║{RESET}")
+        print(f"{CYAN}║{RESET}   {BOLD}{RED}and paste it directly into this terminal prompt below:{RESET} {' ' * (box_width - 64)}{CYAN}║{RESET}")
         print(f"{CYAN}╚{'═' * (box_width - 2)}╝{RESET}")
         print(f"\n{YELLOW}⏳ Waiting for callback or pasted URL...{RESET} {DIM}(Ctrl+C to suspend session){RESET}\n", flush=True)
         if not os.environ.get('SSH_CONNECTION') and os.environ.get('AIPOOL_NO_BROWSER') != '1' and (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')):
