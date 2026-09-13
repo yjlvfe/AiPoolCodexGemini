@@ -249,7 +249,7 @@
         .provider-tab-btn {
             width: 100%;
             background: transparent;
-            border: none;
+            border: 1px solid transparent;
             color: var(--text-secondary);
             padding: 14px 20px;
             border-radius: 14px;
@@ -261,7 +261,7 @@
             align-items: center;
             justify-content: center;
             gap: 10px;
-            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
             position: relative;
         }
         .provider-tab-btn.active {
@@ -314,11 +314,13 @@
             align-items: center;
             justify-content: space-between;
             margin-bottom: 14px;
+            min-height: 32px;
         }
         .pool-title-group {
             display: flex;
             align-items: center;
             gap: 8px;
+            min-height: 28px;
         }
         .pool-title {
             font-size: 15px;
@@ -3977,7 +3979,10 @@
                 tabCodex.className = 'provider-tab-btn active codex-theme';
                 document.getElementById('pool-icon').innerText = '🟣';
                 document.getElementById('pool-title-label').innerText = 'ChatGPT Pool';
-                if (subgroupWrap) subgroupWrap.style.display = 'none';
+                if (subgroupWrap) {
+                    subgroupWrap.style.visibility = 'hidden';
+                    subgroupWrap.style.display = 'none';
+                }
                 if (capCard) capCard.style.display = 'block';
                 if (secTitle) secTitle.innerText = 'Connected Accounts:';
                 if (togBtn) togBtn.style.display = 'inline-flex';
@@ -3986,7 +3991,10 @@
                 tabAg.className = 'provider-tab-btn active antigravity-theme';
                 document.getElementById('pool-icon').innerText = '🟢';
                 document.getElementById('pool-title-label').innerText = 'Gemini Pool';
-                if (subgroupWrap) subgroupWrap.style.display = 'inline-flex';
+                if (subgroupWrap) {
+                    subgroupWrap.style.visibility = 'visible';
+                    subgroupWrap.style.display = 'inline-flex';
+                }
                 updateSubgroupButtonsUi();
                 if (capCard) capCard.style.display = 'block';
                 if (secTitle) secTitle.innerText = 'Connected Accounts:';
