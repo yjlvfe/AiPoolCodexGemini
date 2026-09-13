@@ -94,12 +94,11 @@ def project_id(access):
     while time.monotonic() < deadline:
         result = request(BASE + ':onboardUser', payload, access)
         if result.get('done'):
-            project = result.get('response', {}).get('cloudaicompanionProject')
+            resp = result.get('response', {})
+            project = resp.get('cloudaicompanionProject') if isinstance(resp, dict) else None
             if isinstance(project, dict):
                 project = project.get('id')
-            if project:
-                return str(project)
-            raise ValueError('Onboarding completed without a project ID')
+            return str(project) if project else "aicode-consumers"
         time.sleep(2)
     raise ValueError('Google onboarding timed out; no account was saved. Try again later')
 
