@@ -187,18 +187,18 @@ def _ensure_openclaw_model_picker_compat() -> str | None:
                 new = 'new Set(["codex-cli"])'
                 if old in text:
                     path.write_text(text.replace(old, new, 1), encoding='utf-8')
-            # Ensure OpenClaw Telegram /models picker preserves configured provider model order (newest to oldest)
-            # instead of alphabetical re-sorting
+            # Ensure OpenClaw Telegram /models picker matches configured provider model order (newest to oldest)
+            # by looking up models.providers[provider].models order first
             for path in sorted(root.glob('telegram-ingress-drain-factory-*.js')):
                 text = path.read_text(encoding='utf-8')
                 alpha_sort = 'const models = [...modelSet].toSorted((left, right) => left.localeCompare(right));'
-                preserve_order = 'const models = [...modelSet];'
+                preserve_order = 'const configuredList = (runtimeCfg?.models?.providers?.[provider]?.models || []).map(m => (typeof m === "string" ? m : m?.id)).filter(Boolean); const models = configuredList.length > 0 ? configuredList.filter(id => modelSet.has(id)).concat([...modelSet].filter(id => !configuredList.includes(id))) : [...modelSet];'
                 if alpha_sort in text:
-                    path.write_text(text.replace(alpha_sort, preserve_order, 1), encoding='utf-8')
-                else:
-                    alpha_sort2 = 'const models = [...modelSet].sort((left, right) => left.localeCompare(right));'
-                    if alpha_sort2 in text:
-                        path.write_text(text.replace(alpha_sort2, preserve_order, 1), encoding='utf-8')
+                    text = text.replace(alpha_sort, preserve_order, 1)
+                    path.write_text(text, encoding='utf-8')
+                elif 'const models = [...modelSet];' in text:
+                    text = text.replace('const models = [...modelSet];', preserve_order, 1)
+                    path.write_text(text, encoding='utf-8')
             return "repaired"
     except (OSError, subprocess.SubprocessError, UnicodeError):
         return None
