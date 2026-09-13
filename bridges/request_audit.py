@@ -49,38 +49,29 @@ def detect_application(headers, client_identity=None):
     if client_hdr:
         return client_hdr
 
-    # 3. Inspect User-Agent for known agents and clients
+    # 3. Inspect User-Agent for known agents and clients (concise labels)
     ua_lower = ua.lower()
-    if "hermes" in ua_lower:
-        return "Hermes Agent"
-    if "openclaw" in ua_lower:
-        return "OpenClaw Gateway"
-    if "claude" in ua_lower or "anthropic" in ua_lower:
-        return "Claude Code"
-    if "cursor" in ua_lower:
-        return "Cursor"
-    if "vscode" in ua_lower or "continue" in ua_lower:
-        return "Continue / VSCode"
-    if "cline" in ua_lower:
-        return "Cline"
-    if "roo" in ua_lower:
-        return "Roo Code"
-    if "aider" in ua_lower:
-        return "Aider"
-    if "codex" in ua_lower or "codex_cli" in ua_lower:
-        return "OpenAI Codex"
-    if "openai/python" in ua or "openai-python" in ua_lower:
-        return "OpenAI Python SDK"
-    if "openai/node" in ua or "openai-node" in ua_lower:
-        return "OpenAI Node SDK"
-    if "curl" in ua_lower:
-        return "cURL / HTTP"
-    if "python-requests" in ua_lower:
-        return "Python Requests"
-    if "httpx" in ua_lower:
-        return "HTTPX Client"
-    if "postman" in ua_lower:
-        return "Postman"
+    mapping = [
+        ("hermes", "Hermes"),
+        ("openclaw", "OpenClaw"),
+        ("antigravity", "Antigravity"),
+        ("codex", "Codex"),
+        ("claude", "Claude"),
+        ("cursor", "Cursor"),
+        ("continue", "Continue"),
+        ("cline", "Cline"),
+        ("roo", "Roo"),
+        ("aider", "Aider"),
+        ("openai/python", "OpenAI Python"),
+        ("openai/node", "OpenAI Node"),
+        ("curl", "cURL"),
+        ("requests", "Requests"),
+        ("httpx", "HTTPX"),
+        ("postman", "Postman"),
+    ]
+    for key, label in mapping:
+        if key in ua_lower:
+            return label
 
     # 4. Fallback: if UA has meaningful text, format it cleanly instead of generic Direct API
     if ua and not any(k in ua_lower for k in ("mozilla", "gecko", "applewebkit")):
