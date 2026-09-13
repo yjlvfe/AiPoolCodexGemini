@@ -1,8 +1,10 @@
 import sys
 import tempfile
 import json
+import hashlib
 import sqlite3
 import threading
+import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
@@ -15,7 +17,7 @@ sys.path.insert(0, str(ROOT / 'dashboard'))
 sys.path.insert(0, str(ROOT / 'scripts'))
 
 from artifact_store import get
-from app import TokenAuthManager, device_type_for_user_agent, is_link_preview_user_agent
+from app import TokenAuthManager, device_type_for_user_agent, is_link_preview_user_agent, normalize_client_ip
 import client_identity
 import codex_bridge
 import integrations
@@ -32,6 +34,88 @@ class SecurityAndIntegrationRegressionTests(unittest.TestCase):
             self.assertIsNotNone(first)
             self.assertIsNone(second)
 
+    def test_magic_and_session_secrets_are_hashed_at_rest_with_legacy_compatibility(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db = Path(directory) / 'auth.db'
+            auth = TokenAuthManager(str(db))
+            token = auth.generate_magic_link('https://example.test', 7).split('token=', 1)[1]
+            with sqlite3.connect(db) as conn:
+                stored_token = conn.execute('SELECT token FROM magic_tokens').fetchone()[0]
+            self.assertNotEqual(stored_token, token)
+            self.assertEqual(stored_token, hashlib.sha256(token.encode()).hexdigest())
+
+            session = auth.register_device(token, 'proxied', 'Mobile Safari')
+            with sqlite3.connect(db) as conn:
+                stored_session = conn.execute('SELECT session_id FROM authorized_devices').fetchone()[0]
+            self.assertEqual(stored_session, hashlib.sha256(session.encode()).hexdigest())
+            self.assertTrue(auth.validate_device(session, 'proxied'))
+
+    def test_live_legacy_rows_migrate_without_reactivating_dead_credentials(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db = Path(directory) / 'auth.db'
+            TokenAuthManager(str(db))
+            now = time.time()
+            with sqlite3.connect(db) as conn:
+                conn.executemany(
+                    'INSERT INTO magic_tokens(token,user_id,created_at,used) VALUES(?,?,?,?)',
+                    [
+                        ('legacy-live', 7, now, 0),
+                        ('legacy-expired', 7, now - 1801, 0),
+                        ('legacy-used', 7, now, 1),
+                    ],
+                )
+                conn.executemany(
+                    'INSERT INTO authorized_devices(session_id,user_id,client_ip,user_agent,device_type,created_at,last_seen,expires_at) VALUES(?,?,?,?,?,?,?,?)',
+                    [
+                        ('legacy-session', 7, '203.0.113.9', 'test', 'desktop', now, now, now + 3600),
+                        ('legacy-expired-session', 7, '203.0.113.9', 'test', 'desktop', now - 3601, now - 3601, now - 1),
+                    ],
+                )
+            auth = TokenAuthManager(str(db))
+            with sqlite3.connect(db) as conn:
+                tokens = {row[0] for row in conn.execute('SELECT token FROM magic_tokens')}
+                sessions = {row[0] for row in conn.execute('SELECT session_id FROM authorized_devices')}
+            self.assertIn(hashlib.sha256(b'legacy-live').hexdigest(), tokens)
+            self.assertNotIn('legacy-live', tokens)
+            self.assertNotIn('legacy-expired', tokens)
+            self.assertNotIn('legacy-used', tokens)
+            self.assertIn(hashlib.sha256(b'legacy-session').hexdigest(), sessions)
+            self.assertNotIn('legacy-session', sessions)
+            self.assertNotIn('legacy-expired-session', sessions)
+            self.assertIsNotNone(auth.register_device('legacy-live', '203.0.113.9', 'test'))
+            self.assertIsNone(auth.register_device('legacy-expired', '203.0.113.9', 'test'))
+            self.assertIsNone(auth.register_device('legacy-used', '203.0.113.9', 'test'))
+            self.assertTrue(auth.validate_device('legacy-session', '203.0.113.9'))
+
+    def test_pre_hash_hex_session_is_revoked_once_when_storage_is_upgraded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            db = Path(directory) / 'auth.db'
+            TokenAuthManager(str(db))
+            now = time.time()
+            with sqlite3.connect(db) as conn:
+                conn.execute('DROP TABLE IF EXISTS auth_storage_migrations')
+                conn.execute(
+                    'INSERT INTO authorized_devices(session_id,user_id,client_ip,user_agent,device_type,created_at,last_seen,expires_at) VALUES(?,?,?,?,?,?,?,?)',
+                    ('a' * 64, 7, '203.0.113.9', 'test', 'desktop', now, now, now + 3600),
+                )
+            TokenAuthManager(str(db))
+            with sqlite3.connect(db) as conn:
+                self.assertEqual(conn.execute('SELECT COUNT(*) FROM authorized_devices').fetchone()[0], 0)
+
+    def test_client_ip_normalization_trusts_nginx_headers_not_spoofed_remote_headers(self):
+        self.assertEqual(
+            normalize_client_ip({'X-Real-IP': '203.0.113.9', 'X-Forwarded-For': '198.51.100.7'}, '127.0.0.1'),
+            '203.0.113.9',
+        )
+        self.assertEqual(
+            normalize_client_ip({'X-Forwarded-For': '198.51.100.7, 203.0.113.9'}, '127.0.0.1'),
+            '203.0.113.9',
+        )
+        self.assertEqual(
+            normalize_client_ip({'X-Real-IP': '198.51.100.7'}, '192.0.2.44'),
+            '192.0.2.44',
+        )
+
     def test_link_preview_crawlers_cannot_consume_magic_links(self):
         self.assertTrue(is_link_preview_user_agent('TelegramBot (like TwitterBot)'))
         self.assertTrue(is_link_preview_user_agent('facebookexternalhit/1.1'))
@@ -45,7 +129,8 @@ class SecurityAndIntegrationRegressionTests(unittest.TestCase):
             self.assertIsNotNone(session)
             with sqlite3.connect(Path(directory) / 'auth.db') as conn:
                 conn.row_factory = sqlite3.Row
-                row = conn.execute('SELECT * FROM authorized_devices WHERE session_id = ?', (session,)).fetchone()
+                stored_session = hashlib.sha256(session.encode()).hexdigest()
+                row = conn.execute('SELECT * FROM authorized_devices WHERE session_id = ?', (stored_session,)).fetchone()
                 self.assertEqual(row['device_type'], 'mobile')
                 self.assertGreater(row['expires_at'] - row['created_at'], 29 * 24 * 3600)
             self.assertTrue(auth.validate_device(session, 'proxied'))
@@ -55,7 +140,7 @@ class SecurityAndIntegrationRegressionTests(unittest.TestCase):
         self.assertEqual(device_type_for_user_agent('Mozilla/5.0 (Windows NT 10.0) Chrome/128'), 'desktop')
         self.assertEqual(device_type_for_user_agent(''), 'unknown')
 
-    def test_magic_link_session_is_bound_to_redeeming_peer(self):
+    def test_magic_link_session_roams_across_client_ips_seamlessly(self):
         with tempfile.TemporaryDirectory() as directory:
             auth = TokenAuthManager(str(Path(directory) / 'auth.db'))
             link = auth.generate_magic_link('https://example.test', 7)
@@ -63,7 +148,10 @@ class SecurityAndIntegrationRegressionTests(unittest.TestCase):
             session = auth.register_device(token, '127.0.0.1', 'test')
             self.assertIsNotNone(session)
             self.assertTrue(auth.validate_device(session, '127.0.0.1'))
-            self.assertFalse(auth.validate_device(session, '192.0.2.10'))
+            self.assertTrue(auth.validate_device(session, '192.0.2.10'))
+            with auth._get_conn() as conn:
+                row = conn.execute("SELECT client_ip FROM authorized_devices WHERE session_id=?", (hashlib.sha256(session.encode()).hexdigest(),)).fetchone()
+                self.assertEqual(row["client_ip"], "192.0.2.10")
 
     def test_artifact_digest_must_be_hex(self):
         with tempfile.TemporaryDirectory() as directory, patch.dict(

@@ -58,6 +58,17 @@ def initialize(path=None):
             updated_at REAL NOT NULL,
             PRIMARY KEY (pool, account)
         )''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS client_usage_counters (
+            client_id TEXT NOT NULL PRIMARY KEY,
+            total_tokens INTEGER DEFAULT 0,
+            prompt_tokens INTEGER DEFAULT 0,
+            completion_tokens INTEGER DEFAULT 0,
+            requests INTEGER DEFAULT 0,
+            codex_tokens INTEGER DEFAULT 0,
+            gemini_tokens INTEGER DEFAULT 0,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL
+        )''')
         conn.execute('''CREATE TABLE IF NOT EXISTS usage_rollups (
             day TEXT NOT NULL,
             pool TEXT NOT NULL,
@@ -153,13 +164,32 @@ def _record(provider, model, usage=None, account=None, status='OK', request_id=N
                  (provider, str(account).strip(), total or 0, prompt or 0, completion or 0, now, now))
          except Exception:
              pass
+     client_label = (audit or {}).get('client_label')
+     if client_label and str(client_label).strip():
+         try:
+             c_key = str(client_label).strip().lower()
+             is_codex = 1 if str(provider).lower() in ('codex', 'openai') else 0
+             is_gemini = 1 if not is_codex else 0
+             conn.execute('''INSERT INTO client_usage_counters(client_id, total_tokens, prompt_tokens, completion_tokens, requests, codex_tokens, gemini_tokens, created_at, updated_at)
+                 VALUES(?,?,?,?,?,?,?,?,?)
+                 ON CONFLICT(client_id) DO UPDATE SET
+                 total_tokens = total_tokens + excluded.total_tokens,
+                 prompt_tokens = prompt_tokens + excluded.prompt_tokens,
+                 completion_tokens = completion_tokens + excluded.completion_tokens,
+                 requests = requests + 1,
+                 codex_tokens = codex_tokens + excluded.codex_tokens,
+                 gemini_tokens = gemini_tokens + excluded.gemini_tokens,
+                 updated_at = excluded.updated_at''',
+                 (c_key, total or 0, prompt or 0, completion or 0, 1, (total or 0) if is_codex else 0, (total or 0) if is_gemini else 0, now, now))
+         except Exception:
+             pass
      # Roll old detailed rows into compact daily aggregates; never discard usage.
      try:
          retention = max(0, int(os.environ.get('AIPOOL_REQUEST_RETENTION', '300') or 300))
      except (TypeError, ValueError):
          retention = 300
      if retention > 0:
-         old_rows = conn.execute("SELECT id, model, pool, prompt_tokens, completion_tokens, total_tokens, timestamp, wire_input_bytes, wire_provider_bytes, latency_ms, error_code, status FROM request_events WHERE id NOT IN (SELECT id FROM request_events ORDER BY id DESC LIMIT ?)", (retention,)).fetchall()
+         old_rows = conn.execute("SELECT id, model, pool, prompt_tokens, completion_tokens, total_tokens, timestamp, wire_input_bytes, wire_provider_bytes, latency_ms, error_code, status, audit_json FROM request_events WHERE id NOT IN (SELECT id FROM request_events ORDER BY id DESC LIMIT ?)", (retention,)).fetchall()
          if old_rows:
              for row in old_rows:
                  day = time.strftime('%Y-%m-%d', time.localtime(row[6] or time.time()))
@@ -174,6 +204,24 @@ def _record(provider, model, usage=None, account=None, status='OK', request_id=N
                      latency_count=latency_count+excluded.latency_count,
                      classified_errors=classified_errors+excluded.classified_errors""",
                      (day, row[2] or '', clean_model_name(row[1]), 1, row[3] or 0, row[4] or 0, row[5] or 0, row[7] or 0, row[8] or 0, float(row[9] or 0), 1 if row[9] is not None else 0, 1 if (row[10] or (row[11] not in (None, '', 'OK'))) else 0))
+                 # Ensure client_usage_counters recorded the old row before deleting
+                 if row[12]:
+                     try:
+                         aud = json.loads(row[12])
+                         cl = aud.get('client_label')
+                         if cl and str(cl).strip():
+                             c_k = str(cl).strip().lower()
+                             c_toks = int(row[5] or 0)
+                             c_p = int(row[3] or 0)
+                             c_c = int(row[4] or 0)
+                             is_cdx = 1 if str(row[2]).lower() in ('codex', 'openai') else 0
+                             conn.execute("""INSERT INTO client_usage_counters(client_id, total_tokens, prompt_tokens, completion_tokens, requests, codex_tokens, gemini_tokens, created_at, updated_at)
+                                 VALUES(?,?,?,?,?,?,?,?,?)
+                                 ON CONFLICT(client_id) DO UPDATE SET
+                                 updated_at=excluded.updated_at""",
+                                 (c_k, c_toks, c_p, c_c, 1, c_toks if is_cdx else 0, c_toks if not is_cdx else 0, row[6] or now, now))
+                     except Exception:
+                         pass
              ids = [(row[0],) for row in old_rows]
              conn.executemany("DELETE FROM request_events WHERE id=?", ids)
      conn.commit()
@@ -219,12 +267,23 @@ def report(path):
                 p['models'][m_name] = {'model':m_name,'provider':pool_name,'requests_count':r['calls'] or 0,'prompt_tokens':r['p'] or 0,'completion_tokens':r['c'] or 0,'total_tokens':r['t'] or 0,'last_used':r['day']}
         for r in conn.execute(
                 "SELECT id, model, pool, prompt_tokens, completion_tokens, total_tokens, "
-                "time_formatted, status, account, usage_known, request_id, "
+                "time_formatted, status, account, usage_known, request_id, audit_json, "
                 "(audit_json IS NOT NULL AND audit_json != '') AS audit_available "
                 "FROM request_events WHERE lower(pool) IN ('codex','gemini','antigravity','mixture') ORDER BY id DESC LIMIT 500"):
             pool_name = canonical_pool_name(r['pool'])
             if pool_name is None:
                 continue
+            audit_parsed = {'prompt_capture_status': 'on_demand' if r['audit_available'] else 'not_available'}
+            if r['audit_json']:
+                try:
+                    aud = json.loads(r['audit_json'])
+                    if isinstance(aud, dict):
+                        audit_parsed['client_label'] = aud.get('client_label')
+                        audit_parsed['client_id'] = aud.get('client_id')
+                        audit_parsed['peer_ip'] = aud.get('peer_ip')
+                        audit_parsed['user_agent'] = aud.get('user_agent')
+                except Exception:
+                    pass
             recent.append({
                 'id': r['id'],
                 'call_num': r['id'],
@@ -240,7 +299,7 @@ def report(path):
                 'usage_known': r['usage_known'],
                 'request_id': r['request_id'],
                 # Full prompt fields are intentionally fetched by get_request_prompt().
-                'audit': {'prompt_capture_status': 'on_demand' if r['audit_available'] else 'not_available'},
+                'audit': audit_parsed,
             })
     models = [v for p in providers.values() for v in p['models'].values()]
     with sqlite3.connect(path, timeout=10) as conn:

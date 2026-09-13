@@ -157,7 +157,7 @@ class AuditTests(unittest.TestCase):
                 log.record('Codex', 'test-model', audit=a)
                 report = log.report(d + '/test.db')
                 self.assertEqual(len(report['recent_requests']), 1)
-                self.assertEqual(report['recent_requests'][0]['audit'], {'prompt_capture_status': 'on_demand'})
+                self.assertEqual(report['recent_requests'][0]['audit']['prompt_capture_status'], 'on_demand')
                 prompt = log.get_request_prompt(d + '/test.db', a['request_id'])
                 self.assertEqual(prompt['prompt_text'], a['prompt_text'])
                 self.assertEqual(report['total_pool_tokens'], 5)

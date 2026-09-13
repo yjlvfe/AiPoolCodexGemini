@@ -33,7 +33,8 @@ def call_tg(method: str, payload: dict = None):
         return None
 
 def send_dashboard_link(chat_id: int, user_id: int):
-    allowed = {x.strip() for x in os.environ.get('AIPOOL_ADMIN_USER_IDS', '').split(',') if x.strip()}
+    admin_values = os.environ.get('AIPOOL_ADMIN_USER_IDS') or os.environ.get('TG_AUTHORIZED_USER_ID', '')
+    allowed = {x.strip() for x in admin_values.split(',') if x.strip()}
     # Administrative access is fail-closed and only delivered in a private chat.
     if str(user_id) not in allowed or chat_id != user_id:
         return

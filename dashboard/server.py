@@ -20,7 +20,7 @@ if BRIDGES_DIR not in sys.path:
 SCRIPTS_DIR = str(Path(__file__).resolve().parents[1] / 'scripts')
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
-from app import PoolManager, TokenAuthManager, is_link_preview_user_agent
+from app import PoolManager, TokenAuthManager, normalize_client_ip
 
 PORT = int(os.environ.get('DASHBOARD_PORT', '8444'))
 auth_manager = TokenAuthManager()
@@ -161,6 +161,17 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 import update_suite
 RUNNING_BUILD = update_suite.version()
 
+def get_registry_file() -> Path:
+    env_path = os.environ.get("AIPOOL_CLIENT_REGISTRY")
+    if env_path:
+        p = Path(env_path)
+        if p.is_file() or p.parent.is_dir():
+            return p
+    runtime_path = Path("/var/lib/aipool/runtime/client-identities.json")
+    if runtime_path.is_file() or runtime_path.parent.is_dir():
+        return runtime_path
+    return Path(__file__).resolve().parent / "client-identities.json"
+
 
 def get_system_version():
     result = update_suite.version()
@@ -205,20 +216,26 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             raise ValueError('Request body must be a JSON object')
         return value
 
+    def _client_ip(self):
+        return normalize_client_ip(self.headers, self.client_address[0])
+
     def do_GET(self):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         qs = urllib.parse.parse_qs(parsed.query)
 
-        client_ip = self.client_address[0]
-        # Forwarded requests never qualify for the direct-local maintenance bypass.
-        if self.headers.get("X-Forwarded-For") or self.headers.get("X-Real-IP"):
-            client_ip = "proxied"
-        if "," in client_ip:
-            client_ip = client_ip.split(",")[0].strip()
-        user_agent = self.headers.get("User-Agent", "")
+        sensitive_query_keys = {"session", "session_id", "token"}
+        if sensitive_query_keys.intersection(qs):
+            self.send_response(302)
+            self.send_header("Location", path or "/")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
 
-        # Session check via Cookie, Header, or Query param
+        client_ip = self._client_ip()
+
+        # Sessions are carried only by the shared HttpOnly cookie.
         cookie_header = self.headers.get("Cookie")
         session_cookie = None
         if cookie_header:
@@ -229,38 +246,19 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                     session_cookie = c["yj_aipool_session"].value
             except Exception: pass
 
-        header_session = self.headers.get("X-Session-ID")
-        query_session = qs.get("session_id", [None])[0]
-        cookie_session = qs.get("session", [None])[0]
-        effective_session = session_cookie or header_session or query_session or cookie_session
+        effective_session = session_cookie
 
         auth_mgr = TokenAuthManager()
         is_auth = False
-        new_session_id = None
+
 
         # Allow localhost / loopback internally
         if self.client_address[0] in ('127.0.0.1','::1') and not self.headers.get('X-Forwarded-For') and not self.headers.get('X-Real-IP'):
             is_auth = True
 
-        # Check existing 24h session FIRST before query tokens
         if not is_auth and effective_session:
             if auth_mgr.validate_device(effective_session, client_ip):
                 is_auth = True
-
-        # Check URL query token (e.g. ?token=...)
-        if not is_auth and "token" in qs and qs["token"]:
-            # Telegram and social crawlers fetch links for previews.  They must
-            # not consume a single-use token or bind it to a bot user-agent.
-            if is_link_preview_user_agent(user_agent):
-                self.send_response(204)
-                self.send_header("Cache-Control", "no-store")
-                self.end_headers()
-                return
-            t = qs["token"][0]
-            new_session_id = auth_mgr.register_device(t, client_ip, user_agent)
-            if new_session_id:
-                is_auth = True
-                effective_session = new_session_id
 
         # Unauthenticated handling
         if not is_auth:
@@ -336,13 +334,13 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
 
         # API: tokens management
         if path in ("/aipool/api/tokens/list", "/api/tokens/list"):
-            registry_file = Path(__file__).resolve().parent / "client-identities.json"
+            registry_file = get_registry_file()
             try:
-                data = json.loads(registry_file.read_text())
+                data = json.loads(registry_file.read_text()) if registry_file.is_file() else {"mode": "enforce", "clients": []}
                 clients = []
                 system_keys = ("hermes", "openclaw", "localtooling")
 
-                # Compute aggregated token usage per client from request_events DB
+                # Compute aggregated token usage per client from client_usage_counters and request_events DB
                 usage_by_client = {}
                 db_path = os.environ.get("AUTH_DB_PATH") or "/var/lib/aipool/runtime/auth.db"
                 if os.path.isfile(db_path):
@@ -350,16 +348,28 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                         import sqlite3
                         with sqlite3.connect(db_path, timeout=5) as conn:
                             conn.row_factory = sqlite3.Row
+                            # First load historical persistent counters
+                            try:
+                                for r in conn.execute("SELECT client_id, total_tokens FROM client_usage_counters"):
+                                    cid = (r["client_id"] or "").lower()
+                                    if cid:
+                                        usage_by_client[cid] = int(r["total_tokens"] or 0)
+                            except Exception:
+                                pass
+                            # Then add any active request_events not yet rolled into counters (or update)
                             cur = conn.execute("SELECT audit_json, total_tokens FROM request_events WHERE audit_json IS NOT NULL AND audit_json != ''")
+                            ev_counts = {}
                             for r in cur.fetchall():
                                 try:
                                     aud = json.loads(r["audit_json"])
                                     cl = aud.get("client_label")
                                     if cl:
                                         toks = int(r["total_tokens"] or 0)
-                                        usage_by_client[cl.lower()] = usage_by_client.get(cl.lower(), 0) + toks
+                                        ev_counts[cl.lower()] = ev_counts.get(cl.lower(), 0) + toks
                                 except Exception:
                                     pass
+                            for k, v in ev_counts.items():
+                                usage_by_client[k] = max(usage_by_client.get(k, 0), v)
                     except Exception:
                         pass
 
@@ -424,15 +434,12 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             if target_id in ("hermes", "openclaw", "localtooling"):
                 self.send_json_response({"success": False, "message": "Cannot revoke system internal keys"}, status_code=403)
                 return
-            registry_file = Path(__file__).resolve().parent / "client-identities.json"
+            registry_file = get_registry_file()
             try:
-                data = json.loads(registry_file.read_text())
+                data = json.loads(registry_file.read_text()) if registry_file.is_file() else {"mode": "enforce", "clients": []}
                 clients = [c for c in data.get("clients", []) if c.get("id") != target_id]
                 data["clients"] = clients
                 registry_file.write_text(json.dumps(data, indent=2))
-                alt_dest = Path("/var/lib/aipool/app/dashboard/client-identities.json")
-                if alt_dest.parent.is_dir() and alt_dest.resolve() != registry_file.resolve():
-                    alt_dest.write_text(json.dumps(data, indent=2))
                 self.send_json_response({"success": True, "message": f"Token {target_id} revoked"})
             except Exception as e:
                 self.send_json_response({"success": False, "message": str(e)}, status_code=500)
@@ -454,18 +461,9 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
 
         initial_data = pm.get_usage_logs_report()
         initial_json = _safe_json_for_script(initial_data)
-        sess_val = effective_session or new_session_id or ""
-        session_json = _safe_json_for_script(sess_val)
         injected_script = f"""<script>
             window.__INITIAL_DATA__ = {initial_json};
-            window.__SESSION_ID__ = {session_json};
             window.__ACTIVE_VIEW__ = "{active_view}";
-            if ({session_json}) {{ 
-                try {{ 
-                    localStorage.setItem('yj_aipool_session', {session_json}); 
-                    document.cookie = "yj_aipool_session=" + {session_json} + "; path=/; max-age=31536000; SameSite=Lax";
-                }} catch(e){{}} 
-            }}
         </script>"""
         
         # Pre-apply CSS display rules server-side so there is ZERO 1-second flicker
@@ -491,14 +489,6 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
-        session_to_persist = new_session_id or session_cookie
-        if session_to_persist:
-            max_age = max(1, int(auth_mgr.session_expiry_seconds))
-            is_secure = "Secure" if (self.headers.get("X-Forwarded-Proto") == "https") else ""
-            cookie_val = f"yj_aipool_session={session_to_persist}; Path=/; Max-Age={max_age}; HttpOnly; SameSite=Lax"
-            if is_secure:
-                cookie_val += "; Secure"
-            self.send_header("Set-Cookie", cookie_val)
         self.end_headers()
         self.wfile.write(body)
 
@@ -510,12 +500,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
 
-        client_ip = self.client_address[0]
-        # Forwarded requests never qualify for the direct-local maintenance bypass.
-        if self.headers.get("X-Forwarded-For") or self.headers.get("X-Real-IP"):
-            client_ip = "proxied"
-        if "," in client_ip:
-            client_ip = client_ip.split(",")[0].strip()
+        client_ip = self._client_ip()
 
         # Check session if auth DB exists
         cookie_header = self.headers.get("Cookie")
@@ -529,8 +514,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             except Exception:
                 pass
 
-        header_session = self.headers.get("X-Session-ID")
-        effective_session = session_cookie or header_session
+        effective_session = session_cookie
 
         auth_mgr = TokenAuthManager()
         is_auth = False
@@ -627,9 +611,9 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             return
 
         if path in ("/aipool/api/tokens/list", "/api/tokens/list"):
-            registry_file = Path(__file__).resolve().parent / "client-identities.json"
+            registry_file = get_registry_file()
             try:
-                data = json.loads(registry_file.read_text())
+                data = json.loads(registry_file.read_text()) if registry_file.is_file() else {"mode": "enforce", "clients": []}
                 clients = []
                 for c in data.get("clients", []):
                     clients.append({
@@ -654,7 +638,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             raw_token = "sk-aipool-" + secrets.token_hex(16)
             digest = hashlib.sha256(raw_token.encode()).hexdigest()
 
-            registry_file = Path(__file__).resolve().parent / "client-identities.json"
+            registry_file = get_registry_file()
             try:
                 data = json.loads(registry_file.read_text()) if registry_file.is_file() else {"mode": "enforce", "clients": []}
                 clients = data.get("clients", [])
@@ -671,10 +655,6 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                 })
                 data["clients"] = clients
                 registry_file.write_text(json.dumps(data, indent=2))
-                # Sync to runtime /var/lib/aipool/app if deployed
-                alt_dest = Path("/var/lib/aipool/app/dashboard/client-identities.json")
-                if alt_dest.parent.is_dir() and alt_dest.resolve() != registry_file.resolve():
-                    alt_dest.write_text(json.dumps(data, indent=2))
                 self.send_json_response({
                     "success": True,
                     "token": raw_token,
@@ -695,15 +675,12 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             if target_id in ("hermes", "openclaw", "localtooling"):
                 self.send_json_response({"success": False, "message": "Cannot revoke system internal keys"}, status_code=403)
                 return
-            registry_file = Path(__file__).resolve().parent / "client-identities.json"
+            registry_file = get_registry_file()
             try:
-                data = json.loads(registry_file.read_text())
+                data = json.loads(registry_file.read_text()) if registry_file.is_file() else {"mode": "enforce", "clients": []}
                 clients = [c for c in data.get("clients", []) if c.get("id") != target_id]
                 data["clients"] = clients
                 registry_file.write_text(json.dumps(data, indent=2))
-                alt_dest = Path("/var/lib/aipool/app/dashboard/client-identities.json")
-                if alt_dest.parent.is_dir() and alt_dest.resolve() != registry_file.resolve():
-                    alt_dest.write_text(json.dumps(data, indent=2))
                 self.send_json_response({"success": True, "message": f"Token {target_id} revoked"})
             except Exception as e:
                 self.send_json_response({"success": False, "message": str(e)}, status_code=500)
@@ -716,9 +693,9 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json_response({"success": False, "message": str(exc)}, status_code=400)
                 return
             target_id = str(payload.get("id", "")).strip()
-            registry_file = Path(__file__).resolve().parent / "client-identities.json"
+            registry_file = get_registry_file()
             try:
-                data = json.loads(registry_file.read_text())
+                data = json.loads(registry_file.read_text()) if registry_file.is_file() else {"mode": "enforce", "clients": []}
                 found_client = None
                 for c in data.get("clients", []):
                     if c.get("id") == target_id:
@@ -738,16 +715,20 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                 by_provider = {"codex": {"tokens": 0, "requests": 0}, "gemini": {"tokens": 0, "requests": 0}}
                 by_model = {}
 
+                now = time.time()
+                first_used_ts = None
+                key_recent_requests = []
                 if os.path.isfile(db_path):
                     try:
                         import sqlite3
                         with sqlite3.connect(db_path, timeout=5) as conn:
                             conn.row_factory = sqlite3.Row
-                            cur = conn.execute("SELECT audit_json, total_tokens, pool, model FROM request_events WHERE audit_json IS NOT NULL AND audit_json != ''")
+                            cur = conn.execute("SELECT id, model, pool, prompt_tokens, completion_tokens, total_tokens, time_formatted, status, timestamp, audit_json FROM request_events WHERE audit_json IS NOT NULL AND audit_json != '' ORDER BY id DESC LIMIT 500")
                             for r in cur.fetchall():
                                 try:
                                     aud = json.loads(r["audit_json"])
                                     cl = (aud.get("client_label") or "").lower()
+                                    cid = (aud.get("client_id") or "").lower()
                                     if cl and (cl == c_name or cl == c_id):
                                         toks = int(r["total_tokens"] or 0)
                                         m = str(r["model"] or "unknown")
@@ -757,8 +738,48 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                                         by_provider[prov]["tokens"] += toks
                                         by_provider[prov]["requests"] += 1
                                         by_model[m] = by_model.get(m, 0) + toks
+                                        ts = r["timestamp"]
+                                        if isinstance(ts, str):
+                                            import datetime
+                                            ts = datetime.datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
+                                        ts_float = float(ts or 0)
+                                        if ts_float > 0:
+                                            if first_used_ts is None or ts_float < first_used_ts:
+                                                first_used_ts = ts_float
+                                        key_recent_requests.append({
+                                            "id": r["id"],
+                                            "call_num": r["id"],
+                                            "model": m,
+                                            "provider": prov,
+                                            "prompt": r["prompt_tokens"],
+                                            "completion": r["completion_tokens"],
+                                            "tokens": toks,
+                                            "time_formatted": r["time_formatted"],
+                                            "status": r["status"] or "OK",
+                                            "timestamp": ts_float
+                                        })
                                 except Exception:
                                     pass
+                    except Exception:
+                        pass
+
+                # Check persistent client_usage_counters to never lose historical counts
+                if os.path.isfile(db_path):
+                    try:
+                        import sqlite3
+                        with sqlite3.connect(db_path, timeout=5) as conn:
+                            conn.row_factory = sqlite3.Row
+                            cur_c = conn.execute("SELECT total_tokens, requests, codex_tokens, gemini_tokens FROM client_usage_counters WHERE client_id IN (?, ?)", (c_name, c_id))
+                            row_c = cur_c.fetchone()
+                            if row_c:
+                                p_total = int(row_c["total_tokens"] or 0)
+                                p_reqs = int(row_c["requests"] or 0)
+                                p_cdx = int(row_c["codex_tokens"] or 0)
+                                p_gem = int(row_c["gemini_tokens"] or 0)
+                                total_tokens = max(total_tokens, p_total)
+                                total_requests = max(total_requests, p_reqs)
+                                by_provider["codex"]["tokens"] = max(by_provider["codex"]["tokens"], p_cdx)
+                                by_provider["gemini"]["tokens"] = max(by_provider["gemini"]["tokens"], p_gem)
                     except Exception:
                         pass
 
@@ -770,29 +791,29 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                     created_at_ts = float(created_at_ts) if created_at_ts else None
                 except (TypeError, ValueError):
                     created_at_ts = None
+                # Refill cycle starts on first use, not registration
                 refill_seconds = found_client.get("refill_period_seconds")
                 cycle_start_ts = None
-                if refill_seconds and created_at_ts:
-                    cycle_start_ts = created_at_ts + (int(max(0, now - created_at_ts) // float(refill_seconds)) * float(refill_seconds))
+                next_refill_ts = None
+                refill_remaining_seconds = None
+                if refill_seconds:
+                    ref_s = float(refill_seconds)
+                    base_ts = first_used_ts or created_at_ts
+                    if base_ts:
+                        elapsed = max(0, now - base_ts)
+                        cycle_num = int(elapsed // ref_s)
+                        cycle_start_ts = base_ts + (cycle_num * ref_s)
+                        next_refill_ts = cycle_start_ts + ref_s
+                        refill_remaining_seconds = max(0, int(next_refill_ts - now))
+
                 cycle_used = 0
                 if cycle_start_ts is not None and os.path.isfile(db_path):
-                    try:
-                        with sqlite3.connect(db_path, timeout=5) as conn:
-                            for row in conn.execute("SELECT audit_json, total_tokens, timestamp FROM request_events WHERE audit_json IS NOT NULL AND audit_json != ''"):
-                                try:
-                                    aud = json.loads(row[0])
-                                    if (aud.get("client_label") or "").lower() not in (c_name, c_id):
-                                        continue
-                                    ts = row[2]
-                                    if isinstance(ts, str):
-                                        import datetime
-                                        ts = datetime.datetime.fromisoformat(ts.replace("Z", "+00:00")).timestamp()
-                                    if float(ts or 0) >= cycle_start_ts:
-                                        cycle_used += int(row[1] or 0)
-                                except Exception:
-                                    pass
-                    except Exception:
-                        pass
+                    for req_item in key_recent_requests:
+                        if req_item["timestamp"] >= cycle_start_ts:
+                            cycle_used += int(req_item["tokens"] or 0)
+                elif not refill_seconds:
+                    cycle_used = total_tokens
+
                 expires_at = found_client.get("expires_at")
                 try:
                     expires_at = float(expires_at) if expires_at is not None else None
@@ -821,8 +842,10 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                         "remaining_tokens": remaining_tokens, "cycle_used_tokens": cycle_used,
                         "refill_period": found_client.get("refill_period"), "refill_period_seconds": refill_seconds,
                         "refill_unit": found_client.get("refill_unit"), "refill_val": found_client.get("refill_val"),
+                        "first_used_ts": first_used_ts,
                         "cycle_start_ts": cycle_start_ts,
-                        "next_refill_ts": cycle_start_ts + float(refill_seconds) if cycle_start_ts is not None else None,
+                        "next_refill_ts": next_refill_ts,
+                        "refill_remaining_seconds": refill_remaining_seconds,
                         "expiration_duration": found_client.get("expiration_duration"),
                         "expiration_unit": found_client.get("expiration_unit"), "expiration_val": found_client.get("expiration_val"),
                         "expires_at": expires_at, "expired": bool(expires_at and now > expires_at),
@@ -830,6 +853,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                         "allowed_models_count": len(found_client.get("allowed_models") or []),
                         "total_tokens": total_tokens, "total_requests": total_requests,
                         "by_provider": by_provider, "top_models": top_models,
+                        "recent_requests": key_recent_requests[:100],
                         "timeline": found_client.get("change_history", [])[-20:]
                     }
                 })
@@ -862,9 +886,9 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             refill_val = payload.get("refill_val")
             expires_at = payload.get("expires_at")
 
-            registry_file = Path(__file__).resolve().parent / "client-identities.json"
+            registry_file = get_registry_file()
             try:
-                data = json.loads(registry_file.read_text())
+                data = json.loads(registry_file.read_text()) if registry_file.is_file() else {"mode": "enforce", "clients": []}
                 found = False
                 for c in data.get("clients", []):
                     if c.get("id") == target_id:
@@ -917,9 +941,6 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                     self.send_json_response({"success": False, "message": f"Token {target_id} not found"}, status_code=404)
                     return
                 registry_file.write_text(json.dumps(data, indent=2))
-                alt_dest = Path("/var/lib/aipool/app/dashboard/client-identities.json")
-                if alt_dest.parent.is_dir() and alt_dest.resolve() != registry_file.resolve():
-                    alt_dest.write_text(json.dumps(data, indent=2))
                 self.send_json_response({"success": True, "message": f"Token {target_id} updated successfully"})
             except Exception as e:
                 self.send_json_response({"success": False, "message": str(e)}, status_code=500)

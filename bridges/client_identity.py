@@ -11,7 +11,13 @@ import os
 import time
 from pathlib import Path
 
-REGISTRY = Path(__file__).resolve().parents[1] / 'dashboard/client-identities.json'
+def _default_registry() -> Path:
+    runtime_path = Path("/var/lib/aipool/runtime/client-identities.json")
+    if runtime_path.is_file() or runtime_path.parent.is_dir():
+        return runtime_path
+    return Path(__file__).resolve().parents[1] / 'dashboard/client-identities.json'
+
+REGISTRY = _default_registry()
 LOOPBACK = ('127.0.0.1', '::1', '::ffff:127.0.0.1')
 
 
@@ -126,41 +132,66 @@ def authorize(handler, provider):
                             total_used = 0
                             prov_used = 0
 
-                            # Determine quota window start timestamp if refill_period is set
-                            refill_period_s = client_obj.get('refill_period_seconds')
-                            window_start_ts = None
-                            if refill_period_s and float(refill_period_s) > 0:
-                                created_at_ts = float(client_obj.get('created_at_ts') or time.time())
-                                now = time.time()
-                                elapsed = max(0, now - created_at_ts)
-                                cycle_num = int(elapsed // float(refill_period_s))
-                                window_start_ts = created_at_ts + (cycle_num * float(refill_period_s))
-
+                            # Fetch all events first to find first_used_ts and count cycle tokens
+                            raw_events = []
+                            first_used_ts = None
                             for r in cur.fetchall():
                                 try:
-                                    # If refill period is active, ignore events from older cycles
-                                    if window_start_ts is not None:
+                                    aud = json.loads(r['audit_json'])
+                                    cl = (aud.get('client_label') or '').lower()
+                                    cid = (aud.get('client_id') or '').lower()
+                                    if cl and (cl == c_name or cl == c_id):
                                         row_time = r['timestamp']
+                                        row_ts = 0.0
                                         if row_time:
                                             import datetime
                                             if isinstance(row_time, str):
                                                 row_dt = datetime.datetime.fromisoformat(row_time.replace('Z', '+00:00'))
-                                                row_ts = row_dt.timestamp()
+                                                row_ts = float(row_dt.timestamp())
                                             else:
                                                 row_ts = float(row_time)
-                                            if row_ts < window_start_ts:
-                                                continue
-
-                                    aud = json.loads(r['audit_json'])
-                                    cl = (aud.get('client_label') or '').lower()
-                                    if cl and (cl == c_name or cl == c_id):
-                                        toks = int(r['total_tokens'] or 0)
-                                        total_used += toks
-                                        row_prov = 'codex' if str(r['pool']).lower() in ('codex', 'openai') else 'gemini'
-                                        if row_prov == norm_prov:
-                                            prov_used += toks
+                                        if row_ts > 0:
+                                            if first_used_ts is None or row_ts < first_used_ts:
+                                                first_used_ts = row_ts
+                                        raw_events.append({
+                                            'ts': row_ts,
+                                            'tokens': int(r['total_tokens'] or 0),
+                                            'pool': str(r['pool']).lower()
+                                        })
                                 except Exception:
                                     pass
+
+                            # Determine quota window start timestamp from first use (if refill_period is set)
+                            refill_period_s = client_obj.get('refill_period_seconds')
+                            window_start_ts = None
+                            if refill_period_s and float(refill_period_s) > 0:
+                                base_ts = first_used_ts or float(client_obj.get('created_at_ts') or time.time())
+                                now = time.time()
+                                elapsed = max(0, now - base_ts)
+                                cycle_num = int(elapsed // float(refill_period_s))
+                                window_start_ts = base_ts + (cycle_num * float(refill_period_s))
+                            elif not refill_period_s:
+                                # For keys without refill_period, load historical persistent counters
+                                try:
+                                    cur_c = conn.execute("SELECT total_tokens, codex_tokens, gemini_tokens FROM client_usage_counters WHERE client_id IN (?, ?)", (c_name, c_id))
+                                    row_c = cur_c.fetchone()
+                                    if row_c:
+                                        total_used = max(total_used, int(row_c['total_tokens'] or 0))
+                                        if norm_prov == 'codex':
+                                            prov_used = max(prov_used, int(row_c['codex_tokens'] or 0))
+                                        else:
+                                            prov_used = max(prov_used, int(row_c['gemini_tokens'] or 0))
+                                except Exception:
+                                    pass
+
+                            for ev in raw_events:
+                                if window_start_ts is not None and ev['ts'] < window_start_ts:
+                                    continue
+                                toks = ev['tokens']
+                                total_used += toks
+                                row_prov = 'codex' if ev['pool'] in ('codex', 'openai') else 'gemini'
+                                if row_prov == norm_prov:
+                                    prov_used += toks
                             if prov_limit is not None and prov_used >= prov_limit:
                                 body = f'{{"error":{{"message":"Token quota for provider {provider} exceeded ({prov_used:,}/{prov_limit:,})","type":"quota_exceeded"}}}}'.encode()
                                 handler.send_response(429)

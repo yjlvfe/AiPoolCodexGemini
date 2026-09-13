@@ -331,6 +331,38 @@
             font-weight: 800;
             font-family: 'JetBrains Mono', monospace;
         }
+        .quota-subgroup-toggle-wrap {
+            display: inline-flex;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            padding: 2px;
+            gap: 2px;
+            margin-left: 6px;
+        }
+        .quota-subgroup-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-secondary);
+            font-size: 10.5px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 16px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.2;
+            white-space: nowrap;
+        }
+        .quota-subgroup-btn:hover {
+            color: #fff;
+        }
+        .quota-subgroup-btn.active {
+            background: rgba(56, 189, 248, 0.2);
+            color: #38bdf8;
+            border: 1px solid rgba(56, 189, 248, 0.35);
+            box-shadow: 0 0 8px rgba(56, 189, 248, 0.2);
+        }
 
         /* CUSTOM LUXURY ANIMATED DROPDOWN */
         .custom-select-wrapper {
@@ -2118,22 +2150,16 @@
                         </div>
                     </section>
 
-                    <details class="details-collapse">
-                        <summary>Advanced details</summary>
-                        <div class="details-collapse-body">
-                            <div class="details-line"><span>Created</span><b id="details-created-at">—</b></div>
-                            <div class="details-line"><span>Last updated</span><b id="details-updated-at">—</b></div>
-                            <div class="details-line"><span>Access</span><b id="details-access-copy">—</b></div>
+                    <!-- Dedicated Key Activity Requests List -->
+                    <section class="details-section" id="details-requests-section" style="margin-top: 6px;">
+                        <div class="details-section-title" style="display:flex; justify-content:space-between; align-items:center;">
+                            <span>KEY ACTIVITY REQUESTS</span>
+                            <span id="details-requests-count" style="font-family:'JetBrains Mono',monospace; font-size:10px; padding:2px 7px; border-radius:6px; background:rgba(56,189,248,0.15); color:#38bdf8; font-weight:700;">0</span>
                         </div>
-                    </details>
-                    <details id="details-top-models-section" class="details-collapse">
-                        <summary>Top models</summary>
-                        <div id="details-top-models-container" class="details-collapse-body"></div>
-                    </details>
-                    <details id="details-history-section" class="details-collapse">
-                        <summary>Change history</summary>
-                        <div id="details-history-container" class="details-collapse-body"></div>
-                    </details>
+                        <div id="details-requests-container" style="display:flex; flex-direction:column; gap:8px; max-height:260px; overflow-y:auto; padding-right:2px;">
+                            <!-- Injected dynamically -->
+                        </div>
+                    </section>
                 </main>
                 <footer class="details-footer">
                     <button type="button" onclick="closeDetailsKeyModal()">Close</button>
@@ -2404,7 +2430,7 @@
             </div>
             <div class="header-sub-row">
                 <div class="brand-subtitle">Autonomous Failover Architecture</div>
-                <span class="version-badge" id="system-version-pill" title="Active Release Version">v2.1.8</span>
+                <span class="version-badge" id="system-version-pill" title="Active Release Version">v2.2.1 (stable)</span>
             </div>
         </header>
 
@@ -2426,6 +2452,10 @@
                 <div class="pool-title-group">
                     <span id="pool-icon" style="font-size: 18px;">🟣</span>
                     <span class="pool-title" id="pool-title-label">ChatGPT Pool</span>
+                    <div id="gemini-subgroup-selector" class="quota-subgroup-toggle-wrap" style="display: none;">
+                        <button type="button" id="btn-subgroup-gemini" class="quota-subgroup-btn active" onclick="switchGeminiSubgroup('gemini')">Gemini</button>
+                        <button type="button" id="btn-subgroup-claude" class="quota-subgroup-btn" onclick="switchGeminiSubgroup('claude')">Claude / GPT</button>
+                    </div>
                 </div>
                 <button class="refresh-btn" id="main-refresh-btn" onclick="fetchLiveLogs(true)" title="Sync real-time metrics and stream">
                     <div class="fill-progress" id="main-refresh-progress"></div>
@@ -2765,37 +2795,28 @@
     <script>
         let cachedReportData = null;
         let currentProvider = 'Codex';
+        let currentGeminiSubgroup = 'gemini'; // 'gemini' or 'claude'
         // Keep account rows hidden independently until the user opens them.
         let accountsVisibleByProvider = { Codex: false, Gemini: false };
         let accountsVisible = false;
         let currentSelectedModel = 'gpt-6-astra';
-        let clientSessionId = localStorage.getItem('yj_aipool_session') || '';
-        const urlParams = new URLSearchParams(window.location.search);
-        const urlToken = urlParams.get('token') || '';
 
         function resolveApiUrl(subpath) {
-            const hasAipool = window.location.pathname.startsWith('/aipool');
+            const hasAipool = window.location.pathname.toLowerCase().startsWith('/aipool');
             const cleanPath = subpath.startsWith('/') ? subpath : '/' + subpath;
-            const fullPath = (hasAipool ? '/aipool' : '') + cleanPath;
+            const fullPath = (hasAipool ? '/AiPool' : '') + cleanPath;
         
             // Parse existing query params from subpath if any
             const parts = fullPath.split('?');
             const basePath = parts[0];
             const params = new URLSearchParams(parts[1] || '');
         
-            if (clientSessionId && !params.has('session_id')) params.set('session_id', clientSessionId);
-            if (urlToken && !params.has('token')) params.set('token', urlToken);
-        
             const qs = params.toString();
             return basePath + (qs ? '?' + qs : '');
         }
 
         function apiHeaders(extraHeaders = {}) {
-            const headers = { ...extraHeaders };
-            if (clientSessionId) {
-                headers['X-Session-ID'] = clientSessionId;
-            }
-            return headers;
+            return { ...extraHeaders };
         }
 
         function toggleDropdown() {
@@ -2839,12 +2860,13 @@
         let isApiViewOpen = false;
 
         function updateUrlPath(page) {
-            let path = '/';
-            if (page === 'api') path = '/api';
-            else if (page === 'settings') path = '/settings';
+            let path = '/AiPool/Dashboard';
+            if (page === 'api') path = '/AiPool/API';
+            else if (page === 'settings') path = '/AiPool/Settings';
             
             const url = new URL(window.location);
             url.pathname = path;
+            url.search = '';
             window.history.pushState({ page }, '', url);
         }
 
@@ -2914,7 +2936,10 @@
                     }
                     
                     const totalTokensNum = Number(t.total_tokens || 0);
-                    const tokenBadge = `<span style="font-size: 9px; font-family: 'JetBrains Mono', monospace; padding: 1px 6px; border-radius: 4px; background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.3); color: #fbbf24; font-weight: 700; flex-shrink: 0;" title="Total Tokens used by this key">⚡ ${formatTokenCount(totalTokensNum)}</span>`;
+                    const tokenBadge = `<span id="api-key-token-badge-${escapeHtml(t.id)}" style="font-size: 9px; font-family: 'JetBrains Mono', monospace; padding: 1px 6px; border-radius: 4px; background: rgba(245,158,11,0.15); border: 1px solid rgba(245,158,11,0.3); color: #fbbf24; font-weight: 700; flex-shrink: 0;" title="Total Tokens used by this key">⚡ ${formatTokenCount(totalTokensNum)}</span>`;
+
+                    window._apiTokensMap = window._apiTokensMap || {};
+                    window._apiTokensMap[t.id] = t;
 
                     const div = document.createElement('div');
                     div.className = 'api-key-item-pill';
@@ -2937,7 +2962,7 @@
                             <button type="button" class="api-key-btn-detail" onclick="event.stopPropagation(); showKeyDetails('${t.id}')" title="Key Usage Details">
                                 <span>📊</span><span>Detail</span>
                             </button>
-                            <button type="button" class="api-key-btn-edit" onclick="event.stopPropagation(); openEditKeyModal('${t.id}', '${escapeHtml(t.name || '')}', ${isEnabled}, ${JSON.stringify(t).replace(/"/g, '&quot;')})" title="Edit Key & Quota">
+                            <button type="button" class="api-key-btn-edit" onclick="event.stopPropagation(); triggerEditKey('${t.id}')" title="Edit Key & Quota">
                                 <span>⚙️</span><span>Config</span>
                             </button>
                             <button type="button" class="api-key-btn-delete" onclick="event.stopPropagation(); revokeApiKey('${t.id}')" title="Revoke Key">
@@ -3360,16 +3385,49 @@
                     const minutes = Math.floor((seconds % 3600) / 60);
                     return days ? `in ${days}d ${hours}h` : hours ? `in ${hours}h ${minutes}m` : `in ${minutes}m`;
                 };
-                const nextRefillDate = d.next_refill_ts ? fmtDate(d.next_refill_ts) : '—';
-                const nextRefillCountdown = d.next_refill_ts ? formatRemaining(Math.max(0, d.next_refill_ts - Date.now() / 1000)) : '—';
-                const expiryDate = d.expires_at ? fmtDate(d.expires_at) : 'Never';
-                const expiryCountdown = d.expires_at ? (d.expired ? 'Expired' : formatRemaining(d.expiry_remaining_seconds)) : '—';
-                const expiryLabel = expiryDate;
+                let keyCountdownTimer = null;
+                const updateKeyCountdowns = () => {
+                    const nowSec = Date.now() / 1000;
+                    if (d.next_refill_ts) {
+                        const secLeft = Math.max(0, d.next_refill_ts - nowSec);
+                        const rEl = document.getElementById('details-refill');
+                        if (rEl) rEl.textContent = formatRemaining(secLeft);
+                        const rSub = document.getElementById('details-next-refill');
+                        if (rSub) rSub.textContent = refillLabel;
+                    } else {
+                        const rEl = document.getElementById('details-refill');
+                        if (rEl) rEl.textContent = refillLabel;
+                        const rSub = document.getElementById('details-next-refill');
+                        if (rSub) rSub.textContent = '—';
+                    }
+
+                    if (d.expires_at) {
+                        const secLeft = Math.max(0, d.expires_at - nowSec);
+                        const eEl = document.getElementById('details-expires-at');
+                        if (eEl) eEl.textContent = d.expired ? 'Expired' : formatRemaining(secLeft);
+                        const eSub = document.getElementById('details-expiry-countdown');
+                        if (eSub) eSub.textContent = fmtDate(d.expires_at);
+                    } else {
+                        const eEl = document.getElementById('details-expires-at');
+                        if (eEl) eEl.textContent = 'Never';
+                        const eSub = document.getElementById('details-expiry-countdown');
+                        if (eSub) eSub.textContent = '—';
+                    }
+                };
+                updateKeyCountdowns();
+                if (window._keyCountdownInterval) clearInterval(window._keyCountdownInterval);
+                window._keyCountdownInterval = setInterval(updateKeyCountdowns, 1000);
+
                 const accessLabel = `${(d.allowed_providers || []).length} providers · ${d.allowed_models?.length ? d.allowed_models.length + ' models' : 'All models'}`;
-                document.getElementById('details-created-at').textContent = fmtDate(d.created_at_ts, d.created_at || '—');
-                document.getElementById('details-updated-at').textContent = fmtDate(d.updated_at_ts);
-                document.getElementById('details-quota').textContent = quotaLabel;
-                document.getElementById('details-config-remaining').textContent = remainingLabel;
+                const elCreatedAt = document.getElementById('details-created-at');
+                if (elCreatedAt) elCreatedAt.textContent = fmtDate(d.created_at_ts, d.created_at || '—');
+                const elUpdatedAt = document.getElementById('details-updated-at');
+                if (elUpdatedAt) elUpdatedAt.textContent = fmtDate(d.updated_at_ts);
+                const elQuota = document.getElementById('details-quota');
+                if (elQuota) elQuota.textContent = quotaLabel;
+                const elRemaining = document.getElementById('details-config-remaining');
+                if (elRemaining) elRemaining.textContent = remainingLabel;
+
                 const usedForProgress = d.cycle_used_tokens || d.total_tokens || 0;
                 const progressMax = d.max_tokens || 0;
                 const progressPct = progressMax ? Math.min(100, Math.round((usedForProgress / progressMax) * 100)) : 0;
@@ -3377,30 +3435,60 @@
                 const progressLabel = document.getElementById('details-progress-label');
                 if (progressBar) progressBar.style.width = `${progressPct}%`;
                 if (progressLabel) progressLabel.textContent = progressMax ? `${progressPct}% used` : 'No quota limit';
+
                 const accessCopy = document.getElementById('details-access-copy');
                 if (accessCopy) accessCopy.textContent = `${(d.allowed_providers || []).join(', ') || 'None'} · ${d.allowed_models?.length ? d.allowed_models.join(', ') : 'All models'}`;
-                document.getElementById('details-refill').textContent = refillLabel;
-                document.getElementById('details-next-refill').textContent = nextRefillDate;
-                const refillCountdown = document.getElementById('details-refill-countdown');
-                if (refillCountdown) refillCountdown.textContent = nextRefillCountdown;
-                document.getElementById('details-expires-at').textContent = expiryDate;
-                const expiryCountdownEl = document.getElementById('details-expiry-countdown');
-                if (expiryCountdownEl) expiryCountdownEl.textContent = expiryCountdown;
-                document.getElementById('details-access').textContent = accessLabel;
+                const elAccess = document.getElementById('details-access');
+                if (elAccess) elAccess.textContent = accessLabel;
+
                 const providerLimits = Object.entries(d.token_limits || {})
                     .filter(([, value]) => value != null)
                     .map(([provider, value]) => `${provider}: ${formatTokenCount(value)}`)
                     .join(' · ');
-                document.getElementById('details-provider-limits').textContent = providerLimits || 'Unlimited';
+                const elProvLimits = document.getElementById('details-provider-limits');
+                if (elProvLimits) elProvLimits.textContent = providerLimits || 'Unlimited';
+
                 const history = document.getElementById('details-history-container');
                 const historySection = document.getElementById('details-history-section');
-                if (history) {
+                if (history && historySection) {
                     const entries = d.timeline || [];
-                    if (historySection) historySection.hidden = !entries.length;
-                    history.innerHTML = entries.slice().reverse().map(item => {
-                        const changed = Object.keys(item.changes || {}).join(', ') || item.action || 'created';
-                        return `<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;background:rgba(0,0,0,0.3);padding:7px 9px;border-radius:7px;font-size:10.5px;"><span style="color:#cbd5e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(changed)}</span><span style="color:#64748b;white-space:nowrap;">${fmtDate(item.timestamp)}</span></div>`;
-                    }).join('');
+                    if (entries.length > 0) {
+                        historySection.style.display = 'block';
+                        history.innerHTML = entries.slice().reverse().map(item => {
+                            const changed = Object.keys(item.changes || {}).join(', ') || item.action || 'created';
+                            return `<div style="display:flex;justify-content:space-between;gap:8px;align-items:center;background:rgba(0,0,0,0.3);padding:7px 9px;border-radius:7px;font-size:10.5px;"><span style="color:#cbd5e1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${escapeHtml(changed)}</span><span style="color:#64748b;white-space:nowrap;">${fmtDate(item.timestamp)}</span></div>`;
+                        }).join('');
+                    } else {
+                        historySection.style.display = 'none';
+                    }
+                }
+
+                const reqList = document.getElementById('details-requests-container');
+                const reqSection = document.getElementById('details-requests-section');
+                const reqCount = document.getElementById('details-requests-count');
+                if (reqList && reqSection) {
+                    const keyReqs = d.recent_requests || [];
+                    if (reqCount) reqCount.textContent = keyReqs.length;
+                    if (keyReqs.length > 0) {
+                        reqSection.style.display = 'block';
+                        reqList.innerHTML = keyReqs.map(r => `
+                            <div style="display:flex;justify-content:space-between;align-items:center;background:rgba(255,255,255,0.03);border:1px solid rgba(255,255,255,0.06);padding:8px 12px;border-radius:10px;font-size:11.5px;">
+                                <div style="display:flex;align-items:center;gap:8px;min-width:0;">
+                                    <span style="font-size:14px;">${r.provider === 'codex' ? '🟣' : '🟢'}</span>
+                                    <div style="display:flex;flex-direction:column;min-width:0;">
+                                        <span style="color:#f8fafc;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:160px;">${escapeHtml(r.model)}</span>
+                                        <span style="color:#64748b;font-size:10px;font-family:'JetBrains Mono',monospace;">#${escapeHtml(r.call_num || r.id)} · ${escapeHtml(r.time_formatted || '—')}</span>
+                                    </div>
+                                </div>
+                                <div style="display:flex;align-items:center;gap:8px;font-family:'JetBrains Mono',monospace;">
+                                    <span style="color:#38bdf8;font-weight:700;font-size:12px;">+${(r.tokens || 0).toLocaleString()} tok</span>
+                                </div>
+                            </div>
+                        `).join('');
+                    } else {
+                        reqSection.style.display = 'block';
+                        reqList.innerHTML = '<div style="text-align:center;padding:16px;color:#64748b;font-size:11.5px;">No requests recorded for this key yet</div>';
+                    }
                 }
                 
                 const statusBadge = document.getElementById('details-key-status-badge');
@@ -3467,9 +3555,18 @@
             if (event && event.target !== document.getElementById('details-key-modal-overlay') && !event.target.classList.contains('modal-close-btn') && !event.target.classList.contains('modal-btn-cancel')) {
                 return;
             }
+            if (window._keyCountdownInterval) {
+                clearInterval(window._keyCountdownInterval);
+                window._keyCountdownInterval = null;
+            }
             document.body.style.overflow = '';
             const overlay = document.getElementById('details-key-modal-overlay');
             if (overlay) overlay.style.display = 'none';
+        }
+
+        function triggerEditKey(id) {
+            const t = (window._apiTokensMap && window._apiTokensMap[id]) || {};
+            openEditKeyModal(id, t.name || '', t.enabled !== false && !t.expired, t);
         }
 
         function openEditKeyModal(id, name, isEnabled, keyData) {
@@ -3870,6 +3967,7 @@
             const capCard = document.getElementById('pool-capacity-card');
             const secTitle = document.getElementById('accounts-section-title');
             const togBtn = document.getElementById('accounts-toggle-btn');
+            const subgroupWrap = document.getElementById('gemini-subgroup-selector');
             currentProvider = ['Codex', 'Gemini'].includes(prov) ? prov : 'Codex';
 
             tabCodex.className = 'provider-tab-btn codex-theme';
@@ -3879,6 +3977,7 @@
                 tabCodex.className = 'provider-tab-btn active codex-theme';
                 document.getElementById('pool-icon').innerText = '🟣';
                 document.getElementById('pool-title-label').innerText = 'ChatGPT Pool';
+                if (subgroupWrap) subgroupWrap.style.display = 'none';
                 if (capCard) capCard.style.display = 'block';
                 if (secTitle) secTitle.innerText = 'Connected Accounts:';
                 if (togBtn) togBtn.style.display = 'inline-flex';
@@ -3887,6 +3986,8 @@
                 tabAg.className = 'provider-tab-btn active antigravity-theme';
                 document.getElementById('pool-icon').innerText = '🟢';
                 document.getElementById('pool-title-label').innerText = 'Gemini Pool';
+                if (subgroupWrap) subgroupWrap.style.display = 'inline-flex';
+                updateSubgroupButtonsUi();
                 if (capCard) capCard.style.display = 'block';
                 if (secTitle) secTitle.innerText = 'Connected Accounts:';
                 if (togBtn) togBtn.style.display = 'inline-flex';
@@ -3895,6 +3996,24 @@
 
             updateProviderStatsAndModels();
             renderAccountsList();
+        }
+
+        function switchGeminiSubgroup(subgroup) {
+            if (currentGeminiSubgroup === subgroup) return;
+            currentGeminiSubgroup = subgroup;
+            updateSubgroupButtonsUi();
+            renderAccountsList();
+        }
+
+        function updateSubgroupButtonsUi() {
+            const btnGemini = document.getElementById('btn-subgroup-gemini');
+            const btnClaude = document.getElementById('btn-subgroup-claude');
+            if (btnGemini) {
+                btnGemini.className = 'quota-subgroup-btn' + (currentGeminiSubgroup === 'gemini' ? ' active' : '');
+            }
+            if (btnClaude) {
+                btnClaude.className = 'quota-subgroup-btn' + (currentGeminiSubgroup === 'claude' ? ' active' : '');
+            }
         }
 
         async function fetchSettingsStatus() {
@@ -3929,7 +4048,8 @@
                 }
                 if (data.version && data.version.version) {
                     const pillHeader = document.getElementById('system-version-pill');
-                    if (pillHeader) pillHeader.textContent = 'v' + data.version.version;
+                    const tier = data.version.tier ? ` (${data.version.tier})` : '';
+                    if (pillHeader) pillHeader.textContent = 'v' + data.version.version + tier;
                 }
                 for (const agent of ['hermes','openclaw']) {
                     const badge = document.getElementById(agent + '-badge');
@@ -4206,9 +4326,9 @@
                     h5_pct = poolMetrics['5h_pool_pct'] || 0;
                     wk_pct = poolMetrics['wk_pool_pct'] || 0;
                 } else {
-                    const gemM = poolMetrics.gemini || {};
-                    h5_pct = gemM['5h_pool_pct'] || 0;
-                    wk_pct = gemM['wk_pool_pct'] || 0;
+                    const gemGroup = (currentGeminiSubgroup === 'claude') ? (poolMetrics.claude || {}) : (poolMetrics.gemini || {});
+                    h5_pct = gemGroup['5h_pool_pct'] || 0;
+                    wk_pct = gemGroup['wk_pool_pct'] || 0;
                 }
 
                 document.getElementById('pool-total-capacity-text').innerText = `${tot_accs} Accounts (${h5_pct}% Active)`;
@@ -4630,7 +4750,7 @@
                 // Only include in API view if it came with an explicit authorized API key identity
                 if (apiListContainer) {
                     const client = req.audit?.client_label;
-                    const isSystemClient = !client || ['hermes', 'openclaw', 'localtooling', 'direct api'].includes(String(client).toLowerCase());
+                    const isSystemClient = !client || ['hermes', 'hermes agent', 'openclaw', 'localtooling', 'direct api'].includes(String(client).toLowerCase().trim());
                     // Only show truly remote external custom API keys
                     if (!isSystemClient) {
                         apiCount++;
@@ -4729,6 +4849,10 @@
                 updateProviderStatsAndModels();
                 renderAccountsList();
                 renderGeneralActivityStream(data.recent_requests || []);
+                // Reactively refresh API tokens whenever new requests arrive or when on API view
+                if (isApiViewOpen || (data.recent_requests && data.recent_requests.length > 0)) {
+                    loadApiTokens();
+                }
                 
                 if (btn && force) {
                     // Snap progress to 100% full green
@@ -4789,7 +4913,8 @@
         window.addEventListener('load', () => {
             if (!cachedReportData) initDashboard();
         });
-        setInterval(fetchLiveLogs, 10000);
+        // Poll live logs and API tokens every 3 seconds for near-instant reactive updates
+        setInterval(fetchLiveLogs, 3000);
 
         // Auto Live-Reload on deployment: polls build hash every 3 seconds
         let currentBuildHash = null;

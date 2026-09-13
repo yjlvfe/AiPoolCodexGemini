@@ -11,6 +11,8 @@ import json
 import time
 import secrets
 import hmac
+import hashlib
+import ipaddress
 import sqlite3
 import subprocess
 import threading
@@ -18,7 +20,7 @@ from typing import Dict, Any, Optional
 
 _CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.environ.get("AUTH_DB_PATH", "/var/lib/aipool/runtime/auth.db")
-DEFAULT_SESSION_EXPIRY_HOURS = 30 * 24
+DEFAULT_SESSION_EXPIRY_HOURS = 100 * 365 * 24
 
 
 def configured_session_expiry_hours() -> int:
@@ -59,6 +61,31 @@ def device_type_for_user_agent(user_agent: str) -> str:
     if normalized:
         return "desktop"
     return "unknown"
+
+
+def normalize_client_ip(headers, socket_peer: str) -> str:
+    """Use only the reverse proxy's normalized address, never a remote header."""
+    def parse(value):
+        try:
+            return str(ipaddress.ip_address(str(value).strip()))
+        except ValueError:
+            return ""
+
+    peer = parse(socket_peer)
+    if peer not in {"127.0.0.1", "::1"}:
+        return peer
+    explicit = parse(headers.get("X-Real-IP", ""))
+    if explicit:
+        return explicit
+    for candidate in reversed(str(headers.get("X-Forwarded-For", "")).split(",")):
+        normalized = parse(candidate)
+        if normalized:
+            return normalized
+    return peer
+
+
+def _is_digest(value: str) -> bool:
+    return len(value) == 64 and all(char in "0123456789abcdef" for char in value.casefold())
 
 
 class TokenAuthManager:
@@ -117,15 +144,51 @@ class TokenAuthManager:
                 except sqlite3.OperationalError as exc:
                     if 'duplicate column name' not in str(exc).casefold():
                         raise
+            self._migrate_legacy_rows(conn, time.time())
             conn.commit()
+
+    def _migrate_legacy_rows(self, conn, now: float):
+        conn.execute(
+            "CREATE TABLE IF NOT EXISTS auth_storage_migrations (key TEXT PRIMARY KEY, applied_at REAL NOT NULL)"
+        )
+        claimed = conn.execute(
+            "INSERT OR IGNORE INTO auth_storage_migrations(key, applied_at) VALUES(?, ?)",
+            ("revoke_ambiguous_raw_sessions_v1", now),
+        )
+        if claimed.rowcount == 1:
+            # Old sessions and new SHA-256 rows are both 64 hex characters;
+            # they cannot be distinguished safely, so revoke them once.
+            conn.execute("DELETE FROM authorized_devices")
+        conn.execute(
+            "DELETE FROM magic_tokens WHERE used IS NULL OR used != 0 OR created_at IS NULL OR created_at < ?",
+            (now - 1800,),
+        )
+        for row in conn.execute("SELECT token FROM magic_tokens WHERE used=0").fetchall():
+            token = str(row["token"])
+            if _is_digest(token):
+                continue
+            try:
+                conn.execute("UPDATE magic_tokens SET token=? WHERE token=? AND used=0", (hashlib.sha256(token.encode()).hexdigest(), token))
+            except sqlite3.IntegrityError:
+                conn.execute("DELETE FROM magic_tokens WHERE token=? AND used=0", (token,))
+        conn.execute("DELETE FROM authorized_devices WHERE expires_at IS NULL OR expires_at <= ?", (now,))
+        for row in conn.execute("SELECT session_id FROM authorized_devices").fetchall():
+            session_id = str(row["session_id"])
+            if _is_digest(session_id):
+                continue
+            try:
+                conn.execute("UPDATE authorized_devices SET session_id=? WHERE session_id=?", (hashlib.sha256(session_id.encode()).hexdigest(), session_id))
+            except sqlite3.IntegrityError:
+                conn.execute("DELETE FROM authorized_devices WHERE session_id=?", (session_id,))
 
     def generate_magic_link(self, base_url: str, user_id: int) -> str:
         token = secrets.token_urlsafe(32)
+        token_digest = hashlib.sha256(token.encode()).hexdigest()
         now = time.time()
         with self._get_conn() as conn:
             conn.execute(
                 "INSERT INTO magic_tokens (token, user_id, created_at, used) VALUES (?, ?, ?, 0)",
-                (token, user_id, now)
+                (token_digest, user_id, now)
             )
             conn.execute("DELETE FROM magic_tokens WHERE created_at < ?", (now - 1800,))
             conn.commit()
@@ -135,23 +198,27 @@ class TokenAuthManager:
         if not token:
             return None
         now = time.time()
+        token_digest = hashlib.sha256(token.encode()).hexdigest()
         with self._get_conn() as conn:
-            cur = conn.execute("SELECT * FROM magic_tokens WHERE token = ?", (token,))
+            self._migrate_legacy_rows(conn, now)
+            cur = conn.execute("SELECT * FROM magic_tokens WHERE token = ?", (token_digest,))
             row = cur.fetchone()
             if not row:
                 return None
+            stored_token = row["token"]
             if now - row["created_at"] > 1800:
-                conn.execute("DELETE FROM magic_tokens WHERE token = ?", (token,))
+                conn.execute("DELETE FROM magic_tokens WHERE token = ?", (stored_token,))
                 conn.commit()
                 return None
 
             consumed = conn.execute(
                 "UPDATE magic_tokens SET used = 1 WHERE token = ? AND used = 0 AND created_at >= ?",
-                (token, now - 1800),
+                (stored_token, now - 1800),
             )
             if consumed.rowcount != 1:
                 return None
             session_id = secrets.token_hex(32)
+            stored_session_id = hashlib.sha256(session_id.encode()).hexdigest()
             expires_at = now + self.session_expiry_seconds
             device_type = device_type_for_user_agent(user_agent)
             conn.execute("""
@@ -160,7 +227,7 @@ class TokenAuthManager:
                     created_at, last_seen, expires_at
                 ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """, (
-                session_id, row["user_id"], client_ip, user_agent, device_type,
+                stored_session_id, row["user_id"], client_ip, user_agent, device_type,
                 now, now, expires_at,
             ))
             conn.commit()
@@ -170,13 +237,16 @@ class TokenAuthManager:
         if not session_id:
             return False
         now = time.time()
+        session_digest = hashlib.sha256(session_id.encode()).hexdigest()
         with self._get_conn() as conn:
-            cur = conn.execute("SELECT * FROM authorized_devices WHERE session_id = ?", (session_id,))
+            self._migrate_legacy_rows(conn, now)
+            cur = conn.execute("SELECT * FROM authorized_devices WHERE session_id = ?", (session_digest,))
             row = cur.fetchone()
             if not row:
                 return False
+            stored_session_id = row["session_id"]
             if now > row["expires_at"]:
-                conn.execute("DELETE FROM authorized_devices WHERE session_id = ?", (session_id,))
+                conn.execute("DELETE FROM authorized_devices WHERE session_id = ?", (stored_session_id,))
                 conn.commit()
                 return False
             # A magic-link session is bound to the address that redeemed it.
@@ -184,11 +254,15 @@ class TokenAuthManager:
             # different peer.  Reverse-proxied requests are normalized by the
             # handler before reaching this method.
             if client_ip and not hmac.compare_digest(str(row["client_ip"]), str(client_ip)):
-                return False
+                # Update client_ip to allow seamless roaming across Wi-Fi and mobile networks
+                conn.execute(
+                    "UPDATE authorized_devices SET client_ip = ? WHERE session_id = ?",
+                    (client_ip, stored_session_id),
+                )
             # Keep an active trusted device alive for the configured window.
             conn.execute(
                 "UPDATE authorized_devices SET last_seen = ?, expires_at = ? WHERE session_id = ?",
-                (now, now + self.session_expiry_seconds, session_id),
+                (now, now + self.session_expiry_seconds, stored_session_id),
             )
             conn.commit()
             return True

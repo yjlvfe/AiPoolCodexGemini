@@ -96,3 +96,14 @@ def test_bot_denies_unlisted_user(monkeypatch):
     monkeypatch.setattr(bot.auth_manager,'generate_magic_link',lambda *a:pytest.fail('unauthorized link minted'))
     bot.send_dashboard_link(999,999)
     assert not sent
+
+
+def test_bot_accepts_existing_single_admin_environment_key(monkeypatch):
+    import bot_service as bot
+    monkeypatch.delenv('AIPOOL_ADMIN_USER_IDS', raising=False)
+    monkeypatch.setenv('TG_AUTHORIZED_USER_ID', '777')
+    sent=[]
+    monkeypatch.setattr(bot, 'call_tg', lambda method, payload=None: sent.append((method, payload)))
+    monkeypatch.setattr(bot.auth_manager, 'generate_magic_link', lambda base, user: 'https://example.test/auth?token=safe')
+    bot.send_dashboard_link(777, 777)
+    assert sent and sent[0][0] == 'sendMessage'
