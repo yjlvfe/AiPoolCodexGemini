@@ -38,47 +38,63 @@ def redact(value: Any) -> Any:
 
 def detect_application(headers, client_identity=None):
     ua = (headers.get("User-Agent", "") or "").strip()
-    client_hdr = (headers.get("X-AI-Client", "") or headers.get("X-Client", "") or "").strip()
+    client_hdr = (headers.get("X-AI-Client", "") or headers.get("X-Client", "") or headers.get("X-Title", "") or "").strip()
     auth_hdr = (headers.get("Authorization", "") or "").strip()
+    referer = (headers.get("Referer", "") or headers.get("Origin", "") or "").strip()
 
     # 1. If an authenticated client API Key was used, prioritize its assigned name
     if isinstance(client_identity, dict) and client_identity.get("authenticated_client"):
         return client_identity["authenticated_client"]
 
-    # 2. Check explicitly provided client headers
+    # 2. Inspect all identifying telemetry headers collectively (both keys and values)
+    headers_pairs = []
+    if hasattr(headers, "items"):
+        for k, v in headers.items():
+            headers_pairs.append(f"{k}: {v}")
+    custom_hdr_text = " ".join(headers_pairs).lower()
+    combined = f"{ua} {client_hdr} {referer} {custom_hdr_text}".lower()
+
+    # Priority Agent/Tool matchers (handles custom extensions, OpenRouter headers, VS Code plugins)
+    if any(k in combined for k in ("claude", "anthropic")):
+        return "Claude"
+    if any(k in combined for k in ("cline",)):
+        return "Cline"
+    if any(k in combined for k in ("roo", "roocode")):
+        return "Roo"
+    if any(k in combined for k in ("continue", "vscode")):
+        return "Continue"
+    if any(k in combined for k in ("cursor",)):
+        return "Cursor"
+    if any(k in combined for k in ("antigravity",)):
+        return "Antigravity"
+    if any(k in combined for k in ("aider",)):
+        return "Aider"
+    if any(k in combined for k in ("codex", "codex_cli")):
+        return "Codex"
+
+    # 3. Explicit client headers
     if client_hdr:
         return client_hdr
 
-    # 3. Local loopback defaults for Hermes / OpenClaw when using their standard SDK transports
-    # Hermes uses openai-python SDK (User-Agent: OpenAI/Python ...)
-    # OpenClaw uses openai-node / JS SDK (User-Agent: OpenAI/JS ...)
+    # 4. Local loopback defaults for Hermes / OpenClaw when using their standard SDK transports
     ua_lower = ua.lower()
-    if "hermes" in ua_lower or "openai/python" in ua_lower or "python-requests" in ua_lower:
+    if "hermes" in ua_lower or "openai/python" in ua_lower or (ua_lower == "python-requests" and not any(k in combined for k in ("continue", "vscode"))):
         return "Hermes"
     if "openclaw" in ua_lower or "openai/js" in ua_lower or "openai-node" in ua_lower:
         return "OpenClaw"
 
-    # 4. Inspect User-Agent for known agents and clients (concise labels)
-    mapping = [
-        ("antigravity", "Antigravity"),
-        ("codex", "Codex"),
-        ("claude", "Claude"),
-        ("cursor", "Cursor"),
-        ("continue", "Continue"),
-        ("cline", "Cline"),
-        ("roo", "Roo"),
-        ("aider", "Aider"),
-        ("openai/node", "OpenAI Node"),
+    # 5. Generic HTTP Clients & SDKs
+    sdk_mapping = [
         ("curl", "cURL"),
         ("requests", "Requests"),
         ("httpx", "HTTPX"),
         ("postman", "Postman"),
     ]
-    for key, label in mapping:
+    for key, label in sdk_mapping:
         if key in ua_lower:
             return label
 
-    # 5. Fallback: if UA has meaningful text, format it cleanly instead of generic Direct API
+    # 6. Fallback: if UA has meaningful text, format it cleanly instead of generic Direct API
     if ua and not any(k in ua_lower for k in ("mozilla", "gecko", "applewebkit")):
         return ua.split("/")[0].replace("_", " ").title()
 
