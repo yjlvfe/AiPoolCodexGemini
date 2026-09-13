@@ -1,33 +1,41 @@
 # AiPool
 
-**AiPool 2.1.8** is a local gateway and operations dashboard for two independent account pools:
+**AiPool v2.2.1 (stable)** is an enterprise-grade autonomous failover gateway and management dashboard for multi-account AI pools:
 
-- **Codex** accounts and models
-- **Gemini** accounts and models
+- **Codex / ChatGPT** accounts and model groups
+- **Gemini & Claude/GPT** sub-group accounts and models
 
-AiPool presents provider-compatible HTTP endpoints, selects an authenticated account for each request, rotates accounts when a provider returns a quota or rate-limit failure, records usage, and exposes the same operational state through a web dashboard and command-line tools.
+AiPool presents standard OpenAI-compatible HTTP endpoints, manages authenticated multi-account rotations on HTTP 429 and quota exhaustion, tracks lifetime token usage, enforces granular per-key API authorizations and rate limits, and exposes real-time state through an ultra-responsive web dashboard and CLI suite.
 
-AiPool is not a model router that silently changes providers. A request sent to one provider remains in that provider's pool.
+---
 
-## What AiPool Provides
+## 🚀 What's New in v2.2.1 (stable)
 
-- OpenAI-compatible local endpoints for Codex and Gemini traffic.
-- Separate account storage, health checks, cooldowns, and usage totals for each provider.
-- Same-model account rotation on HTTP 429, quota exhaustion, and account authentication failures.
-- Persistent request history, token usage, latency, and classified error metrics.
-- A dashboard for pool status, account status, analytics, and a unified live operations stream.
-- Official setup scripts for Hermes Agent and OpenClaw.
-- Official `install.sh` and `update.sh` entry points for systemd deployments.
+- **Independent Model Sub-groups Quota**: Split quota capacity tracking for Gemini Pool (`Gemini` models vs `Claude / GPT` models) with independent capacity metrics and 5h/weekly quotas.
+- **Dedicated Public API Page & Token Management**: Dedicated `/api` dashboard route featuring OpenAI-compatible endpoints, Bearer token authorization, provider restrictions, model-specific whitelisting, and quota caps.
+- **Persistent Lifetime Token Accounting**: Added `client_usage_counters` to SQLite schema ensuring total token metrics for API keys and accounts never reset or drop even during log rotatations.
+- **Live Reactive Telemetry**: Fast 3s reactive polling updating client token badges, usage streams, and active metrics without requiring page refreshes.
+- **Key Analytics & Activity Logs**: Replaced static details with a live per-key request activity stream, dynamic countdown timers for auto-refill and expiration cycles (calculated strictly from `first_used_ts`).
+- **Hardened UI & Modals**: Comprehensive button audit across all 49 UI actions with null-guards and decoupled state maps (`window._apiTokensMap`).
 
-## Official Providers and Services
+---
 
-Only the following provider identifiers and systemd services are part of the current AiPool interface.
+## ⚡ Architecture & Endpoints
 
-| Provider | Service | Local endpoint | Purpose |
-| --- | --- | --- | --- |
-| `codex` | `codex.service` | `http://127.0.0.1:8124/v1` | Codex Responses and compatible chat requests |
-| `gemini` | `gemini.service` | `http://127.0.0.1:8123/v1` | Gemini-compatible chat and completion requests |
-| Dashboard | `dashboard.service` | `http://127.0.0.1:8444` | Pool control, analytics, settings, and live operations |
+| Provider | Service | Internal Endpoint | Public Proxy Route | Purpose |
+| --- | --- | --- | --- | --- |
+| `codex` | `codex.service` | `http://127.0.0.1:8124/v1` | `/v1/chat/completions` | Codex and OpenAI-compatible completions |
+| `gemini` | `gemini.service` | `http://127.0.0.1:8123/v1` | `/gemini/v1/chat/completions` | Gemini and Claude/GPT completion requests |
+| `dashboard` | `dashboard.service` | `http://127.0.0.1:8444` | `/AiPool` / `/AiPool/API` | Full management dashboard, API control, and stream |
+
+---
+
+## Key Features
+
+1. **Autonomous Account Rotation**: Immediate, zero-downtime failover to another pool account upon rate-limit (429) or token exhaustion.
+2. **Opt-Out Model Control**: Keys and accounts enable all available models by default with clean model count badges (`Allowed: X / Y`).
+3. **Audit & Safety**: Prompts and completions are tracked in SQLite (`request_events`), scrubbed of secrets, and inspectable via the UI.
+4. **Mobile-First Responsive UI**: Stacked cards, copy-to-clipboard buttons, live countdowns, and clean segmented navigations.
 
 The bridges listen on loopback by default. If a reverse proxy or another host must access them, configure authentication and network exposure explicitly before changing the bind address.
 
