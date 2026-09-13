@@ -1,5 +1,11 @@
 # AiPool
 
+> [!WARNING]
+> **⚠️ DISCLAIMER / تحذير وإخلاء مسؤولية:**
+> This tool automates multi-account session management and quota failover for upstream AI providers (including **Gemini / Google Antigravity** and **OpenAI Codex**). Using third-party pooling or reverse-engineering internal APIs may violate provider Terms of Service and could result in account restriction, suspension, or permanent termination. Use strictly at your own discretion and risk.
+> 
+> استخدام هذه الأداة في تدوير الحسابات والاتصال المجمّع قد يتعارض مع شروط وسياسات مزودي الخدمة (خصوصاً **Gemini / Antigravity**) وقد يعرض حساباتك للحظر أو التعليق. يتحمل المستخدم كامل المسؤولية عن استخدامه للأداة.
+
 **AiPool v2.2.1 (stable)** is an enterprise-grade autonomous failover gateway and management dashboard for multi-account AI pools:
 
 - **Codex / ChatGPT** accounts and model groups
