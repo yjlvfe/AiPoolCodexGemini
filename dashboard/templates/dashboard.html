@@ -4431,9 +4431,12 @@
                 const tokenBadgeHtml = `<span style="font-size:9px; background:rgba(245,158,11,0.16); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); padding:2px 6px; border-radius:6px; font-weight:700; font-family:'JetBrains Mono',monospace;" title="Total Tokens consumed by this account">🔥 ${formatTokenCount(totalTok)}</span>`;
 
                 const accountStatus = String(acc.status || '').toUpperCase();
-                const statusBadge = accountStatus && accountStatus !== 'OK'
-                    ? `<span style="font-size:9px; background:rgba(248,113,113,0.15); color:#f87171; padding:2px 7px; border-radius:6px; font-weight:800; font-family:monospace; letter-spacing:.3px;">${escapeHtml(accountStatus)}</span>`
-                    : '';
+                const isVerify = accountStatus === 'VERIFY' || !!acc.validation_url;
+                const statusBadge = accountStatus && isVerify
+                    ? `<span style="font-size:9px; background:rgba(234,179,8,0.18); color:#eab308; border:1px solid rgba(234,179,8,0.3); padding:2px 7px; border-radius:6px; font-weight:800; font-family:monospace; letter-spacing:.3px;">VERIFY</span>`
+                    : (accountStatus && accountStatus !== 'OK'
+                        ? `<span style="font-size:9px; background:rgba(248,113,113,0.15); color:#f87171; padding:2px 7px; border-radius:6px; font-weight:800; font-family:monospace; letter-spacing:.3px;">${escapeHtml(accountStatus)}</span>`
+                        : '');
 
                 if (currentProvider === 'Codex') {
                     const isFree = String(acc.plan || '').toLowerCase() === 'free';
@@ -4466,9 +4469,10 @@
                     const wk = formatQuotaPct(gem['wk_pct']);
                     const wk_res = escapeHtml(gem['wk_reset'] || 'N/A');
 
+                    const has5h = gem['5h_pct'] !== null && gem['5h_pct'] !== undefined;
                     metricsHtml = `
                         <div style="text-align:right; font-family:'JetBrains Mono',monospace; font-size:10px; line-height:1.4;">
-                            <div style="color:#67e8f9; font-weight:700;">5h: ${escapeHtml(gem_5h)} <span style="color:var(--text-tertiary); font-weight:400;">(${gem_res})</span></div>
+                            ${has5h ? `<div style="color:#67e8f9; font-weight:700;">5h: ${escapeHtml(gem_5h)} <span style="color:var(--text-tertiary); font-weight:400;">(${gem_res})</span></div>` : ''}
                             <div style="color:#c084fc; font-weight:700;">Wk: ${escapeHtml(wk)} <span style="color:var(--text-tertiary); font-weight:400;">(${wk_res})</span></div>
                         </div>
                     `;
@@ -4492,9 +4496,15 @@
                         </div>
                     </div>
                     <div class="account-actions-bar">
-                        ${isActive 
-                            ? `<button type="button" class="account-btn-switch" disabled style="opacity:0.5; cursor:not-allowed;">Active</button>`
-                            : `<button type="button" class="account-btn-switch" onclick="event.stopPropagation(); switchAccount(${acc.account}, this)" title="Switch to Account #${acc.account}">⚡ Switch</button>`
+                        ${isVerify
+                            ? (acc.validation_url 
+                                ? `<a href="${escapeHtml(acc.validation_url)}" target="_blank" rel="noopener noreferrer" class="account-btn-switch" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center; background:linear-gradient(135deg, #eab308, #ca8a04); color:#000; font-weight:700;" onclick="event.stopPropagation();" title="Verify Account #${acc.account}">🔐 Verify</a>`
+                                : `<button type="button" class="account-btn-switch" style="background:linear-gradient(135deg, #eab308, #ca8a04); color:#000; font-weight:700;" onclick="event.stopPropagation(); alert('Open Google Antigravity / Gemini Code Assist in your browser to complete verification for this account.');" title="Verify Account #${acc.account}">🔐 Verify</button>`
+                              )
+                            : (isActive 
+                                ? `<button type="button" class="account-btn-switch" disabled style="opacity:0.5; cursor:not-allowed;">Active</button>`
+                                : `<button type="button" class="account-btn-switch" onclick="event.stopPropagation(); switchAccount(${acc.account}, this)" title="Switch to Account #${acc.account}">⚡ Switch</button>`
+                              )
                         }
                         ${isActive
                             ? `<button type="button" class="account-btn-delete" disabled style="opacity:0.4; cursor:not-allowed;" title="Cannot delete active account">Active (Protected)</button>`
