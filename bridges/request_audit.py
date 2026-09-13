@@ -37,19 +37,56 @@ def redact(value: Any) -> Any:
 
 
 def detect_application(headers, client_identity=None):
-    ua = headers.get("User-Agent", "") or ""
-    client_hdr = headers.get("X-AI-Client", "") or headers.get("X-Client", "") or ""
+    ua = (headers.get("User-Agent", "") or "").strip()
+    client_hdr = (headers.get("X-AI-Client", "") or headers.get("X-Client", "") or "").strip()
+    auth_hdr = (headers.get("Authorization", "") or "").strip()
+
+    # 1. If an authenticated client API Key was used, prioritize its assigned name
     if isinstance(client_identity, dict) and client_identity.get("authenticated_client"):
         return client_identity["authenticated_client"]
-    if "Hermes" in client_hdr or "hermes" in ua.lower():
+
+    # 2. Check explicitly provided client headers
+    if client_hdr:
+        return client_hdr
+
+    # 3. Inspect User-Agent for known agents and clients
+    ua_lower = ua.lower()
+    if "hermes" in ua_lower:
         return "Hermes Agent"
-    if "OpenClaw" in client_hdr or "openclaw" in ua.lower():
+    if "openclaw" in ua_lower:
         return "OpenClaw Gateway"
-    if "codex" in ua.lower() or "codex_cli" in ua.lower():
+    if "claude" in ua_lower or "anthropic" in ua_lower:
+        return "Claude Code"
+    if "cursor" in ua_lower:
+        return "Cursor"
+    if "vscode" in ua_lower or "continue" in ua_lower:
+        return "Continue / VSCode"
+    if "cline" in ua_lower:
+        return "Cline"
+    if "roo" in ua_lower:
+        return "Roo Code"
+    if "aider" in ua_lower:
+        return "Aider"
+    if "codex" in ua_lower or "codex_cli" in ua_lower:
         return "OpenAI Codex"
-    if "python-requests" in ua.lower() or "OpenAI/Python" in ua:
-        return "Hermes Agent"
-    return client_hdr or "Direct API"
+    if "openai/python" in ua or "openai-python" in ua_lower:
+        return "OpenAI Python SDK"
+    if "openai/node" in ua or "openai-node" in ua_lower:
+        return "OpenAI Node SDK"
+    if "curl" in ua_lower:
+        return "cURL / HTTP"
+    if "python-requests" in ua_lower:
+        return "Python Requests"
+    if "httpx" in ua_lower:
+        return "HTTPX Client"
+    if "postman" in ua_lower:
+        return "Postman"
+
+    # 4. Fallback: if UA has meaningful text, format it cleanly instead of generic Direct API
+    if ua and not any(k in ua_lower for k in ("mozilla", "gecko", "applewebkit")):
+        return ua.split("/")[0].replace("_", " ").title()
+
+    return "Direct API"
 
 
 def _json_text(value: Any) -> str:
