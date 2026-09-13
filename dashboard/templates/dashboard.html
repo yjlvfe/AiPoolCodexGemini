@@ -4372,7 +4372,8 @@
                     }
                 } else {
                     const gem = acc.gemini || {};
-                    h5 = typeof gem['5h_pct'] === 'number' ? gem['5h_pct'] : 0;
+                    const has5h = typeof gem['5h_pct'] === 'number';
+                    h5 = has5h ? gem['5h_pct'] : (typeof gem['wk_pct'] === 'number' ? gem['wk_pct'] : 100);
                     wk = typeof gem['wk_pct'] === 'number' ? gem['wk_pct'] : 100;
                 }
 
@@ -4382,7 +4383,7 @@
                         return { rank: 4, score: h5 }; // Paid out of weekly
                     }
                     if (h5 === 0) {
-                        return { rank: 4, score: 0 }; // Paid out of 5h
+                        return { rank: 4, score: 0 }; // Paid out of 5h / token
                     }
                     return { rank: 2, score: h5 }; // Paid Ready
                 } else {
