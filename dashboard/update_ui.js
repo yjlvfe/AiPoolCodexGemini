@@ -93,7 +93,7 @@ function renderBuild(data) {
             updatePill.style.color = '#fbbf24';
             updatePill.style.borderColor = 'rgba(245, 158, 11, 0.3)';
         } else {
-            updatePill.textContent = 'Live ' + (data.running_version || data.version || 'v1.8');
+            updatePill.textContent = 'Live ' + (data.running_version || data.version || 'v2.2.1');
             updatePill.style.background = 'rgba(56, 189, 248, 0.15)';
             updatePill.style.color = '#38bdf8';
             updatePill.style.borderColor = 'rgba(56, 189, 248, 0.3)';
