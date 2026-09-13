@@ -229,18 +229,29 @@ def login(resume=False, slot=None):
             redirect = 'http://localhost:' + str(port) + '/oauth-callback'
             url, state, verifier = authorization(redirect)
             save_pending(url, state, verifier, redirect, slot)
-        print('=' * 72)
-        print(' 🔐 Google Antigravity / Gemini Account Login (OAuth 2.0)')
-        print('=' * 72)
-        print('\n 📌 الخطوة 1: انسخ هذا الرابط وافتحه في المتصفح:')
-        print('    ' + url)
-        print('\n 📌 الخطوة 2: سجل دخول بحساب Google ووافق على الصلاحيات.')
-        print('\n 📌 الخطوة 3: بعد الموافقة، سيحاول المتصفح التوجيه إلى رابط يبدأ بـ:')
-        print('    http://localhost:' + str(port) + '/...')
-        print('    *(طبيعي تظهر صفحة تعذر الاتصال إذا كنت متصلاً بسيرفر VPS عن بعد)*')
-        print('\n 📌 الخطوة 4: انسخ الرابط كاملاً من شريط عنوان المتصفح والصقه هنا 👇')
-        print('=' * 72)
-        print('⏳ في انتظار لصق الرابط... (أو اضغط Ctrl+C للإيقاف المؤقت)\n', flush=True)
+        CYAN = '\033[96m'
+        GREEN = '\033[92m'
+        YELLOW = '\033[93m'
+        MAGENTA = '\033[95m'
+        BOLD = '\033[1m'
+        DIM = '\033[2m'
+        RESET = '\033[0m'
+
+        box_width = 76
+        print(f"\n{CYAN}╔{'═' * (box_width - 2)}╗{RESET}")
+        print(f"{CYAN}║{BOLD}{MAGENTA} 🔐  GOOGLE ANTIGRAVITY / GEMINI OAUTH ENROLLMENT {RESET}{' ' * (box_width - 53)}{CYAN}║{RESET}")
+        print(f"{CYAN}╠{'═' * (box_width - 2)}╣{RESET}")
+        print(f"{CYAN}║{RESET} {BOLD}{GREEN}[STEP 1]{RESET} Copy and open this URL in your browser: {' ' * (box_width - 48)}{CYAN}║{RESET}")
+        print(f"{CYAN}║{RESET}   {YELLOW}{url}{RESET}")
+        print(f"{CYAN}║{' ' * (box_width - 2)}║{RESET}")
+        print(f"{CYAN}║{RESET} {BOLD}{GREEN}[STEP 2]{RESET} Sign in with your Google Account & grant required permissions. {' ' * (box_width - 70)}{CYAN}║{RESET}")
+        print(f"{CYAN}║{' ' * (box_width - 2)}║{RESET}")
+        print(f"{CYAN}║{RESET} {BOLD}{GREEN}[STEP 3]{RESET} Google redirects to: {DIM}http://localhost:{port}/oauth-callback{RESET} {' ' * (box_width - 48 - len(str(port)))}{CYAN}║{RESET}")
+        print(f"{CYAN}║{RESET}   {DIM}*(Note: A 'Site cannot be reached' error is normal on remote VPS)*{RESET} {' ' * (box_width - 74)}{CYAN}║{RESET}")
+        print(f"{CYAN}║{' ' * (box_width - 2)}║{RESET}")
+        print(f"{CYAN}║{RESET} {BOLD}{GREEN}[STEP 4]{RESET} {BOLD}Copy the FULL redirected URL from address bar & paste below:{RESET} {' ' * (box_width - 74)}{CYAN}║{RESET}")
+        print(f"{CYAN}╚{'═' * (box_width - 2)}╝{RESET}")
+        print(f"\n{YELLOW}⏳ Waiting for callback or pasted URL...{RESET} {DIM}(Ctrl+C to suspend session){RESET}\n", flush=True)
         if not os.environ.get('SSH_CONNECTION') and os.environ.get('AIPOOL_NO_BROWSER') != '1' and (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')):
             webbrowser.open(url)
         deadline = time.monotonic() + 600
