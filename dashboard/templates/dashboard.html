@@ -4708,7 +4708,7 @@
                             </div>
                         </div>
                         <!-- Bottom Tier: IN & OUT on Left | Total on Right -->
-                        <div style="font-size:10px;color:#94a3b8">${isCodex ? 'Codex' : 'Gemini'} · ${escapeHtml(req.status || 'Recorded')} ${req.account ? '· Account ' + escapeHtml(req.account) : ''} · <span style="color:#7dd3fc; font-weight:600;">${escapeHtml(req.audit?.client_label || 'Direct API')}</span></div>
+                        <div style="font-size:10px;color:#94a3b8">${isCodex ? 'Codex' : 'Gemini'} · ${escapeHtml(req.status || 'Recorded')} ${req.account ? '· Account ' + escapeHtml(req.account) : ''} · <span style="color:${req.audit?.client_id || req.audit?.authenticated_client ? '#34d399' : '#7dd3fc'}; font-weight:600;">${escapeHtml(req.audit?.client_label || (req.audit?.client_id ? 'API Key' : 'Direct API'))}</span></div>
                         <div class="stream-card-bottom">
                             <div style="display:flex; align-items:center; gap:5px; flex-shrink:1; min-width:0; overflow:hidden; font-size:10px;">
                                 <span style="color:#38bdf8; font-weight:700; white-space:nowrap;">📥 ${req.prompt == null ? "—" : formatPoolNumber(req.prompt)}</span>
@@ -4750,9 +4750,10 @@
                 // Only include in API view if it came with an explicit authorized API key identity
                 if (apiListContainer) {
                     const client = req.audit?.client_label;
-                    const isSystemClient = !client || ['hermes', 'hermes agent', 'openclaw', 'localtooling', 'direct api'].includes(String(client).toLowerCase().trim());
-                    // Only show truly remote external custom API keys
-                    if (!isSystemClient) {
+                    const hasApiKey = !!(req.audit?.client_id || req.audit?.authenticated_client);
+                    const isSystemClient = !hasApiKey && (!client || ['hermes', 'openclaw', 'localtooling', 'direct api'].includes(String(client).toLowerCase().trim()));
+                    // Only show authorized API key usage in API tab
+                    if (hasApiKey || !isSystemClient) {
                         apiCount++;
                         const apiItem = item.cloneNode(true);
                         setupTrigger(apiItem);
@@ -4955,7 +4956,15 @@ function openRequestInspector(request) {
 
     const appBadge = document.getElementById('ri-app-badge');
     if (appBadge) {
-        appBadge.textContent = audit.client_label || 'Direct API';
+        const isApiKey = !!(audit.client_id || audit.authenticated_client);
+        appBadge.textContent = audit.client_label || (isApiKey ? 'API Key' : 'Direct API');
+        if (isApiKey) {
+            appBadge.style.background = 'rgba(52,211,153,0.15)';
+            appBadge.style.color = '#34d399';
+        } else {
+            appBadge.style.background = 'rgba(56,189,248,0.15)';
+            appBadge.style.color = '#38bdf8';
+        }
     }
 
     function section(title, rows) {
