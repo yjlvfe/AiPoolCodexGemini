@@ -35,8 +35,14 @@ def oauth_client():
     return module.oauth_credentials()
 
 
+class ValidationRequiredError(ValueError):
+    def __init__(self, message, validation_url=None):
+        super().__init__(message)
+        self.validation_url = validation_url
+
+
 def request(url, payload=None, access=None, form=False):
-    headers = {'User-Agent': 'antigravity/hub/2.1.4 linux/amd64'}
+    headers = {'User-Agent':'antigravity/hub/2.1.4 linux/amd64'}
     if access:
         headers['Authorization'] = 'Bearer ' + access
     data = None
@@ -50,6 +56,20 @@ def request(url, payload=None, access=None, form=False):
             raise ValueError('Provider returned a non-object response')
         return result
     except urllib.error.HTTPError as exc:
+        # Check if validation / verification is required
+        validation_url = None
+        try:
+            body = json.loads(exc.read().decode())
+            if isinstance(body, dict):
+                details = body.get('error', {}).get('details', [])
+                for d in details:
+                    if d.get('reason') == 'VALIDATION_REQUIRED':
+                        validation_url = d.get('metadata', {}).get('validation_url')
+                        break
+        except Exception:
+            pass
+        if validation_url:
+            raise ValidationRequiredError('Verify your account to continue.', validation_url=validation_url) from None
         # Never include OAuth codes, refresh tokens, or response bodies in errors.
         label = {400:'OAuth rejected; sign in again', 401:'Login expired or revoked', 403:'Account is not eligible or lacks permission', 429:'Provider quota/rate limit reached'}.get(exc.code, 'Provider request failed')
         raise ValueError(f'{label} (HTTP {exc.code})') from None
@@ -238,22 +258,22 @@ def login(resume=False, slot=None):
         DIM = '\033[2m'
         RESET = '\033[0m'
 
-        box_width = 76
-        print(f"\n{CYAN}╔{'═' * (box_width - 2)}╗{RESET}")
-        print(f"{CYAN}║{BOLD}{MAGENTA} 🔐  GOOGLE ANTIGRAVITY / GEMINI OAUTH ENROLLMENT {RESET}{' ' * (box_width - 53)}{CYAN}║{RESET}")
-        print(f"{CYAN}╠{'═' * (box_width - 2)}╣{RESET}")
-        print(f"{CYAN}║{RESET} {BOLD}{GREEN}[STEP 1]{RESET} Copy and open this URL in your browser: {' ' * (box_width - 48)}{CYAN}║{RESET}")
-        print(f"{CYAN}║{RESET}   {YELLOW}{url}{RESET}")
-        print(f"{CYAN}║{' ' * (box_width - 2)}║{RESET}")
-        print(f"{CYAN}║{RESET} {BOLD}{GREEN}[STEP 2]{RESET} Sign in with your Google Account & grant required permissions. {' ' * (box_width - 70)}{CYAN}║{RESET}")
-        print(f"{CYAN}║{' ' * (box_width - 2)}║{RESET}")
-        print(f"{CYAN}║{RESET} {BOLD}{GREEN}[STEP 3]{RESET} Google redirects to: {DIM}http://localhost:{port}/oauth-callback{RESET} {' ' * (box_width - 48 - len(str(port)))}{CYAN}║{RESET}")
-        print(f"{CYAN}║{RESET}   {BOLD}{RED}⚠️  IMPORTANT: 'Site cannot be reached' on remote VPS is NORMAL!{RESET} {' ' * (box_width - 71)}{CYAN}║{RESET}")
-        print(f"{CYAN}║{' ' * (box_width - 2)}║{RESET}")
-        print(f"{CYAN}║{RESET} {BOLD}{GREEN}[STEP 4]{RESET} {BOLD}{YELLOW}👉 DO NOT PANIC: Copy the FULL URL from your browser address bar{RESET} {' ' * (box_width - 78)}{CYAN}║{RESET}")
-        print(f"{CYAN}║{RESET}   {BOLD}{RED}and paste it directly into this terminal prompt below:{RESET} {' ' * (box_width - 64)}{CYAN}║{RESET}")
-        print(f"{CYAN}╚{'═' * (box_width - 2)}╝{RESET}")
-        print(f"\n{YELLOW}⏳ Waiting for callback or pasted URL...{RESET} {DIM}(Ctrl+C to suspend session){RESET}\n", flush=True)
+        print(f"\n{CYAN}{'═' * 70}{RESET}")
+        print(f"{BOLD}{MAGENTA} 🔐 GOOGLE ANTIGRAVITY / GEMINI OAUTH ENROLLMENT{RESET}")
+        print(f"{CYAN}{'═' * 70}{RESET}\n")
+
+        print(f" {BOLD}{GREEN}[STEP 1]{RESET} Copy and open this URL in your browser:")
+        print(f" {YELLOW}{url}{RESET}\n")
+
+        print(f" {BOLD}{GREEN}[STEP 2]{RESET} Sign in with your Google Account & grant permissions.\n")
+
+        print(f" {BOLD}{GREEN}[STEP 3]{RESET} Browser will redirect to: {DIM}http://localhost:{port}/...{RESET}")
+        print(f"         {BOLD}{RED}⚠️  'Site cannot be reached' error is 100% NORMAL on remote VPS!{RESET}\n")
+
+        print(f" {BOLD}{GREEN}[STEP 4]{RESET} {BOLD}{YELLOW}Copy the ENTIRE redirected URL from your browser address bar{RESET}")
+        print(f"         {BOLD}{RED}and paste it right here in the terminal prompt 👇{RESET}")
+        print(f"\n{CYAN}{'═' * 70}{RESET}")
+        print(f"{YELLOW}⏳ Waiting for callback or pasted URL...{RESET} {DIM}(Ctrl+C to suspend session){RESET}\n", flush=True)
         if not os.environ.get('SSH_CONNECTION') and os.environ.get('AIPOOL_NO_BROWSER') != '1' and (os.environ.get('DISPLAY') or os.environ.get('WAYLAND_DISPLAY')):
             webbrowser.open(url)
         deadline = time.monotonic() + 600
