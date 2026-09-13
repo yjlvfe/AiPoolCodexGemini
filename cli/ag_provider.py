@@ -262,7 +262,7 @@ def login(resume=False, slot=None):
         print(f"{BOLD}{MAGENTA} 🔐 GOOGLE ANTIGRAVITY / GEMINI OAUTH ENROLLMENT{RESET}")
         print(f"{CYAN}{'═' * 70}{RESET}\n")
 
-        print(f" {BOLD}{GREEN}[STEP 1]{RESET} Copy and open this URL in your browser:")
+        print(f" {BOLD}{GREEN}[STEP 1]{RESET} Click the URL below {DIM}(Ctrl + Click to open directly in browser){RESET}, or copy it:")
         print(f" {YELLOW}{url}{RESET}\n")
 
         print(f" {BOLD}{GREEN}[STEP 2]{RESET} Sign in with your Google Account & grant permissions.\n")
