@@ -85,7 +85,9 @@ def show_account(manager, number, short=False):
         for group in groups:
             buckets = {b.get('window'):b for b in group.get('buckets') or []}
             lines.append(group.get('displayName') or 'Models')
-            for window, label in [('5h','5-hour'), ('weekly','Weekly')]:
+            # Only display 5-hour window if present in quota buckets (Pro/Ultra accounts)
+            windows_to_show = [('5h','5-hour'), ('weekly','Weekly')] if '5h' in buckets else [('weekly','Weekly')]
+            for window, label in windows_to_show:
                 bucket = buckets.get(window, {})
                 fraction = bucket.get('remainingFraction')
                 text = 'N/A' if fraction is None else f'{bar(float(fraction) * 100)} {round(float(fraction) * 100)}% left'
