@@ -1,5 +1,10 @@
 # AiPool
 
+<p align="center">
+  <a href="README.md"><b>English</b></a> •
+  <a href="README.ar.md"><b>العربية</b></a>
+</p>
+
 > [!WARNING]
 > **⚠️ DISCLAIMER / تحذير وإخلاء مسؤولية:**
 > This tool automates multi-account session management and quota failover for upstream AI providers (including **Gemini / Google Antigravity** and **OpenAI Codex**). Using third-party pooling or reverse-engineering internal APIs may violate provider Terms of Service and could result in account restriction, suspension, or permanent termination. Use strictly at your own discretion and risk.
