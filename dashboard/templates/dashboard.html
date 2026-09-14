@@ -754,41 +754,6 @@
         }
         .stream-list::-webkit-scrollbar { width: 4px; }
         .stream-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
-        
-        /* Activity Stream Header & Items (Approved Luxury Cards) */
-        .stream-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 14px;
-        }
-        .stream-title-text {
-            font-size: 14px;
-            font-weight: 800;
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .stream-badge {
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            padding: 4px 10px;
-            border-radius: 20px;
-            font-size: 11px;
-            color: var(--text-secondary);
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            font-weight: 600;
-        }
-        .stream-list {
-            display: flex;
-            flex-direction: column;
-            gap: 12px;
-            max-height: 520px;
-            overflow-y: auto;
-            padding-right: 4px;
-        }
-        .stream-list::-webkit-scrollbar { width: 4px; }
-        .stream-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 4px; }
 
         .stream-card-item {
             background: rgba(15, 20, 32, 0.45);
@@ -830,6 +795,8 @@
             align-items: center;
             justify-content: space-between;
             direction: ltr;
+            gap: 8px;
+            min-width: 0;
         }
         .stream-card-bottom {
             display: flex;
@@ -840,7 +807,7 @@
             font-size: 10.5px;
             border-top: 1px solid rgba(255, 255, 255, 0.04);
             padding-top: 6px;
-            gap: 6px;
+            gap: 8px;
             flex-wrap: nowrap;
             overflow-x: auto;
             scrollbar-width: none;
@@ -876,25 +843,24 @@
             align-items: center;
             gap: 6px;
             white-space: nowrap;
-            flex-shrink: 0;
+            min-width: 0;
+            flex: 1 1 auto;
+            overflow: hidden;
+        }
+        .stream-model-title {
+            color: #f8fafc;
+            font-weight: 700;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            min-width: 0;
         }
         .stream-time-text {
             font-size: 10px;
             color: var(--text-tertiary);
             font-family: 'JetBrains Mono', monospace;
-        }
-        .stream-tok-badge {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 12px;
-            font-weight: 800;
-            padding: 4px 10px;
-            border-radius: 8px;
-            letter-spacing: -0.3px;
-        }
-        .stream-tok-badge.codex {
-            background: rgba(139, 92, 246, 0.15);
-            color: #c084fc;
-            border: 1px solid rgba(139, 92, 246, 0.3);
+            flex-shrink: 0;
+            white-space: nowrap;
         }
         /* Clean Linear Progress Fill Refresh Button */
         .refresh-btn {
@@ -1441,7 +1407,7 @@
             }
         }
 
-        /* Delete Confirmation Modal */
+        /* Delete Confirmation & Standard Modal */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -1461,12 +1427,16 @@
             width: 100%;
             max-width: 420px;
             background: rgba(15, 23, 42, 0.96);
-            border: 1px solid rgba(239, 68, 68, 0.35);
-            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 24px rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 24px rgba(56, 189, 248, 0.08);
             border-radius: 16px;
             padding: 22px;
             box-sizing: border-box;
             overscroll-behavior: contain;
+        }
+        #delete-modal-overlay .modal-dialog {
+            border-color: rgba(239, 68, 68, 0.35);
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 24px rgba(239, 68, 68, 0.15);
         }
         .modal-body {
             overscroll-behavior: contain;
@@ -2112,7 +2082,7 @@
 .ri-row{display:grid;grid-template-columns:110px 1fr;gap:10px;font-size:11.5px;padding:6px 0;border-bottom:1px solid #ffffff08}
 .ri-row span:first-child{color:#94a3b8}
 .ri-row span:last-child{white-space:pre-wrap;overflow-wrap:anywhere;min-width:0}
-.ri-prompt{display:block;width:100%;box-sizing:border-box;white-space:pre-wrap;overflow-wrap:anywhere;font:11.5px/1.6 monospace;margin:0;min-height:220px;max-height:320px;resize:vertical;overflow:auto;background:rgba(0,0,0,0.25);border:1px solid #334155;padding:10px;border-radius:8px;color:#e2e8f0}
+.ri-prompt{display:block;width:100%;box-sizing:border-box;white-space:pre-wrap;overflow-wrap:anywhere;font:11.5px/1.6 monospace;margin:0;min-height:180px;max-height:360px;resize:vertical;overflow:auto;background:rgba(0,0,0,0.25);border:1px solid #334155;padding:10px;border-radius:8px;color:#e2e8f0;unicode-bidi:plaintext;}
 .ri-note{color:#94a3b8;font-size:11px;line-height:1.5;margin:0}
 
 @media (max-width: 480px) {
@@ -4764,16 +4734,16 @@
                         <!-- Top Tier: Model on Left | Pure Numeric Date on Right -->
                         <div class="stream-card-top">
                             <div class="stream-model-name">
-                                <span>${provIcon}</span>
-                                <span style="color:#f8fafc; font-weight:700;">${escapeHtml(req.model)}</span>
-                                <span style="font-size:10.5px; color:#38bdf8; font-weight:700; font-family:'JetBrains Mono',monospace;">#${escapeHtml(req.call_num || req.id)}</span>
+                                <span style="flex-shrink:0;">${provIcon}</span>
+                                <span class="stream-model-title" title="${escapeHtml(req.model)}">${escapeHtml(req.model)}</span>
+                                <span style="font-size:10.5px; color:#38bdf8; font-weight:700; font-family:'JetBrains Mono',monospace; flex-shrink:0;">#${escapeHtml(req.call_num || req.id)}</span>
                             </div>
-                            <div style="font-family:'JetBrains Mono',monospace; font-size:11px; color:#94a3b8; font-weight:600;">
+                            <div class="stream-time-text" style="font-size:11px; color:#94a3b8; font-weight:600;">
                                 ${escapeHtml(timeStr)}
                             </div>
                         </div>
-                        <!-- Bottom Tier: IN & OUT on Left | Total on Right -->
-                        <div style="font-size:10px;color:#94a3b8">${isCodex ? 'Codex' : 'Gemini'} · ${escapeHtml(req.status || 'Recorded')} ${req.account ? '· Account ' + escapeHtml(req.account) : ''} · <span style="color:${req.audit?.client_id || req.audit?.authenticated_client ? '#34d399' : '#7dd3fc'}; font-weight:600;">${escapeHtml(req.audit?.client_label || (req.audit?.client_id ? 'API Key' : 'Direct API'))}</span></div>
+                        <!-- Middle Tier: Provider · Status · Client -->
+                        <div style="font-size:10px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${isCodex ? 'Codex' : 'Gemini'} · ${escapeHtml(req.status || 'Recorded')} ${req.account ? '· Account ' + escapeHtml(req.account) : ''} · ${escapeHtml(req.audit?.client_label || (req.audit?.client_id ? 'API Key' : 'Direct API'))}">${isCodex ? 'Codex' : 'Gemini'} · ${escapeHtml(req.status || 'Recorded')} ${req.account ? '· Account ' + escapeHtml(req.account) : ''} · <span style="color:${req.audit?.client_id || req.audit?.authenticated_client ? '#34d399' : '#7dd3fc'}; font-weight:600;">${escapeHtml(req.audit?.client_label || (req.audit?.client_id ? 'API Key' : 'Direct API'))}</span></div>
                         <div class="stream-card-bottom">
                             <div style="display:flex; align-items:center; gap:5px; flex-shrink:1; min-width:0; overflow:hidden; font-size:10px;">
                                 <span style="color:#38bdf8; font-weight:700; white-space:nowrap;">📥 ${req.prompt == null ? "—" : formatPoolNumber(req.prompt)}</span>
@@ -5003,11 +4973,11 @@
     </script>
 <dialog id="request-inspector" aria-labelledby="ri-title">
     <header class="ri-header">
-        <div style="display:flex; align-items:center; gap:8px; min-width:0;">
-            <h2 id="ri-title" style="margin:0; font-size:16px; font-weight:800; color:#fff;">Request inspector</h2>
-            <span id="ri-app-badge" style="font-size:11px; padding:2px 8px; border-radius:6px; background:rgba(56,189,248,0.15); color:#38bdf8; font-weight:700;">Direct API</span>
+        <div style="display:flex; align-items:center; gap:8px; min-width:0; flex:1 1 auto; overflow:hidden;">
+            <h2 id="ri-title" style="margin:0; font-size:15px; font-weight:800; color:#fff; white-space:nowrap; flex-shrink:0;">Request Inspector</h2>
+            <span id="ri-app-badge" style="font-size:11px; padding:2px 8px; border-radius:6px; background:rgba(56,189,248,0.15); color:#38bdf8; font-weight:700; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; min-width:0;">Direct API</span>
         </div>
-        <button type="button" aria-label="Close details" onclick="document.getElementById('request-inspector').close()" style="border:1px solid #475569; border-radius:50%; background:transparent; color:white; width:32px; height:32px; cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">✕</button>
+        <button type="button" aria-label="Close details" onclick="document.getElementById('request-inspector').close()" style="border:1px solid #475569; border-radius:50%; background:transparent; color:white; width:30px; height:30px; cursor:pointer; font-size:14px; display:flex; align-items:center; justify-content:center; flex-shrink:0;">✕</button>
     </header>
     <div class="ri-body" id="ri-body"></div>
 </dialog>
@@ -5150,6 +5120,7 @@ function openRequestInspector(request) {
         function setText(value, emptyMessage) {
             currentText = String(value || '');
             promptBox.value = currentText || emptyMessage;
+            promptBox.dir = /[\u0600-\u06FF\u0750-\u077F\u08A0-\u08FF\uFB50-\uFDFF\uFE70-\uFEFF]/.test(currentText) ? 'auto' : 'ltr';
         }
         setText(currentText, 'No prompt content recorded.');
         body.appendChild(promptSection);
@@ -5195,6 +5166,37 @@ function openRequestInspector(request) {
     }
 }
 document.getElementById('request-inspector').addEventListener('click',function(e){if(e.target===this){const r=this.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)this.close()}});
+
+// Global keyboard accessibility: dismiss open modals on Escape key
+document.addEventListener('keydown', function(e) {
+    if (e.key === 'Escape' || e.key === 'Esc') {
+        const inspector = document.getElementById('request-inspector');
+        if (inspector && inspector.open) {
+            inspector.close();
+            return;
+        }
+        const createOverlay = document.getElementById('create-key-modal-overlay');
+        if (createOverlay && createOverlay.style.display !== 'none') {
+            closeCreateKeyModal();
+            return;
+        }
+        const editOverlay = document.getElementById('edit-key-modal-overlay');
+        if (editOverlay && editOverlay.style.display !== 'none') {
+            closeEditKeyModal();
+            return;
+        }
+        const deleteOverlay = document.getElementById('delete-modal-overlay');
+        if (deleteOverlay && deleteOverlay.style.display !== 'none') {
+            closeDeleteModal();
+            return;
+        }
+        const detailsOverlay = document.getElementById('details-key-modal-overlay');
+        if (detailsOverlay && detailsOverlay.style.display !== 'none') {
+            closeDetailsKeyModal();
+            return;
+        }
+    }
+});
     
 </script></body>
 </html>
