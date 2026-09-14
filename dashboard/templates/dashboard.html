@@ -2135,8 +2135,8 @@
                                     <div class="details-provider-name">ChatGPT / Codex</div>
                                 </div>
                                 <div class="details-provider-metrics">
-                                    <span class="details-provider-tokens"><i id="details-codex-tokens">0</i> tokens</span>
-                                    <span class="details-provider-reqs"><b id="details-codex-reqs">0</b> requests</span>
+                                    <span class="details-provider-tokens"><i id="details-codex-tokens">0</i> lifetime tokens</span>
+                                    <span class="details-provider-reqs"><b id="details-codex-reqs">0</b> retained requests</span>
                                 </div>
                             </div>
                             <div class="details-provider gemini">
@@ -2145,11 +2145,16 @@
                                     <div class="details-provider-name">Google Gemini</div>
                                 </div>
                                 <div class="details-provider-metrics">
-                                    <span class="details-provider-tokens"><i id="details-gemini-tokens">0</i> tokens</span>
-                                    <span class="details-provider-reqs"><b id="details-gemini-reqs">0</b> requests</span>
+                                    <span class="details-provider-tokens"><i id="details-gemini-tokens">0</i> lifetime tokens</span>
+                                    <span class="details-provider-reqs"><b id="details-gemini-reqs">0</b> retained requests</span>
                                 </div>
                             </div>
                         </div>
+                    </section>
+
+                    <section class="details-section" id="details-top-models-section" hidden>
+                        <div class="details-section-title">TOP RETAINED MODELS</div>
+                        <div id="details-top-models-container" style="display:flex; flex-direction:column; gap:8px;"></div>
                     </section>
 
                     <!-- Dedicated Key Activity Requests List -->
@@ -2432,7 +2437,7 @@
             </div>
             <div class="header-sub-row">
                 <div class="brand-subtitle">Autonomous Failover Architecture</div>
-                <span class="version-badge" id="system-version-pill" title="Active Release Version">v2.2.1 (stable)</span>
+                <span class="version-badge" id="system-version-pill" title="Active Release Version">v2.2.2 (stable)</span>
             </div>
         </header>
 
@@ -3018,8 +3023,9 @@
             else if (val.endsWith('B')) { mult = 1e9; val = val.slice(0, -1); }
             else if (val.endsWith('T')) { mult = 1e12; val = val.slice(0, -1); }
             else if (val.endsWith('Q')) { mult = 1e15; val = val.slice(0, -1); }
-            const num = parseFloat(val);
-            return isNaN(num) ? null : Math.round(num * mult);
+            if (!/^\d+(?:\.\d+)?$/.test(val)) return NaN;
+            const num = Number(val);
+            return Number.isFinite(num) ? Math.round(num * mult) : NaN;
         }
 
         function updateQuotaPreview(kind) {
@@ -3027,7 +3033,14 @@
             const preview = document.getElementById('modal-edit-' + kind + '-preview');
             if (!input || !preview) return;
             const parsed = parseTokenShorthand(input.value);
-            if (parsed === null) {
+            if (Number.isNaN(parsed)) {
+                preview.textContent = 'Invalid quota';
+                preview.style.color = '#f87171';
+                if (kind === 'total') {
+                    preview.style.background = 'rgba(239,68,68,0.12)';
+                    preview.style.borderColor = 'rgba(239,68,68,0.25)';
+                }
+            } else if (parsed === null) {
                 preview.textContent = kind === 'total' ? 'Unlimited' : 'No Cap';
                 preview.style.color = kind === 'total' ? '#34d399' : '#64748b';
                 if (kind === 'total') {
@@ -3430,7 +3443,7 @@
                 const elRemaining = document.getElementById('details-config-remaining');
                 if (elRemaining) elRemaining.textContent = remainingLabel;
 
-                const usedForProgress = d.cycle_used_tokens || d.total_tokens || 0;
+                const usedForProgress = d.cycle_used_tokens ?? d.total_tokens ?? 0;
                 const progressMax = d.max_tokens || 0;
                 const progressPct = progressMax ? Math.min(100, Math.round((usedForProgress / progressMax) * 100)) : 0;
                 const progressBar = document.getElementById('details-progress-bar');
@@ -3713,6 +3726,10 @@
             const codexLimit = parseTokenShorthand(document.getElementById('modal-edit-limit-codex')?.value);
             const geminiLimit = parseTokenShorthand(document.getElementById('modal-edit-limit-gemini')?.value);
             let totalLimit = parseTokenShorthand(document.getElementById('modal-edit-limit-total')?.value);
+            if ([codexLimit, geminiLimit, totalLimit].some(Number.isNaN)) {
+                showToast('⚠️ Quota values must be zero or positive numbers', true);
+                return;
+            }
 
             // If totalLimit not explicitly given but provider limits are, optionally sum them
             if (totalLimit === null && (codexLimit !== null || geminiLimit !== null)) {
@@ -4256,62 +4273,6 @@
             const status = cachedReportData.status;
             const container = document.getElementById('pool-accounts-container');
             container.innerHTML = '';
-
-            if (currentProvider === 'Mixture') {
-                const provData = (cachedReportData.providers && cachedReportData.providers['Mixture']) || {};
-                const modelsMap = provData.models || {};
-                const activeAgg = (window.activeMoaAggregator || 'gpt-5.6-luna');
-
-                const refModels = [
-                    { id: 'gpt-5.6-luna',     name: 'ChatGPT Luna 5.6' },
-                    { id: 'gemini-3.8-flash', name: 'Gemini Flash 3.8' },
-                    { id: 'gemini-3.1-pro',   name: 'Gemini Pro 3.1' }
-                ];
-
-                refModels.forEach(m => {
-                    const stats = modelsMap[m.id] || {};
-                    const totalTok = stats.total_tokens || 0;
-                    const isAggregator = (m.id === activeAgg);
-
-                    const div = document.createElement('div');
-                    div.className = 'account-item-pill' + (isAggregator ? ' active' : '');
-
-                    // وسم MoA موحد لجميع الموديلات بجانب الاسم مباشرة
-                    const moaBadgeHtml = '<span style="font-size:9px; background:rgba(236,72,153,0.22); color:#f472b6; border:1px solid rgba(236,72,153,0.38); padding:2px 7px; border-radius:6px; font-weight:800; font-family:monospace; letter-spacing:0.5px;">MoA</span>';
-
-                    // وسم التوكنات المحروقة بجانب وسم MoA مباشرة
-                    const tokenBadgeHtml = `<span style="font-size:10px; background:rgba(245,158,11,0.16); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); padding:2px 7px; border-radius:6px; font-weight:700; font-family:'JetBrains Mono',monospace;" title="Total Tokens burned by this model">🔥 ${formatTokenCount(totalTok)}</span>`;
-
-                    div.innerHTML = `
-                        <div class="account-normal-content" style="padding: 10px 14px; min-height: unset;">
-                            <div style="display:flex; align-items:center; gap:8px; width:100%;">
-                                <div class="acc-dot ${isAggregator ? 'active' : ''}"></div>
-                                <span class="acc-email" style="font-size:13px; font-weight:700; color:var(--text-primary); margin-left:0; margin-right:4px;">${m.name}</span>
-                                ${moaBadgeHtml}
-                                ${tokenBadgeHtml}
-                            </div>
-                        </div>
-                        <div class="account-actions-bar">
-                            ${isAggregator
-                                ? `<button type="button" class="account-btn-switch" disabled style="opacity:0.6; cursor:not-allowed; background:rgba(236,72,153,0.3); color:#f472b6; border-color:rgba(236,72,153,0.5);">Active MoA</button>`
-                                : `<button type="button" class="account-btn-switch" onclick="event.stopPropagation(); switchMoaAggregator('${m.id}', this)" title="Make ${m.name} the Primary Decider">⚡ Switch</button>`
-                            }
-                        </div>
-                    `;
-
-                    div.style.cursor = 'pointer';
-                    div.title = 'Click to show action buttons';
-                    div.onclick = function(e) {
-                        if (e.target && e.target.closest && e.target.closest('.account-btn-switch')) return;
-                        const isAlreadySelected = this.classList.contains('selected');
-                        document.querySelectorAll('.account-item-pill.selected').forEach(el => el.classList.remove('selected'));
-                        if (!isAlreadySelected) this.classList.add('selected');
-                    };
-
-                    container.appendChild(div);
-                });
-                return;
-            }
 
             let rawAccounts = [];
             let poolMetrics = null;
@@ -5149,37 +5110,6 @@ function openRequestInspector(request) {
     }
 }
 document.getElementById('request-inspector').addEventListener('click',function(e){if(e.target===this){const r=this.getBoundingClientRect();if(e.clientX<r.left||e.clientX>r.right||e.clientY<r.top||e.clientY>r.bottom)this.close()}});
-
-        async function switchMoaAggregator(modelId, btnEl) {
-            const oldText = btnEl ? btnEl.innerText : 'Switch';
-            if (btnEl) {
-                btnEl.disabled = true;
-                btnEl.innerText = 'Switching...';
-            }
-            try {
-                const res = await fetch(resolveApiUrl('/api/mixture/switch'), {
-                    method: 'POST',
-                    headers: apiHeaders(),
-                    credentials: 'same-origin',
-                    body: JSON.stringify({ model: modelId })
-                });
-                const data = await res.json();
-                if (res.ok && data.success) {
-                    window.activeMoaAggregator = modelId;
-                    showToast('✓ Primary Decider switched to: ' + modelId);
-                    renderAccountsList();
-                } else {
-                    showToast('⚠️ Switch failed: ' + (data.message || 'Unknown error'));
-                }
-            } catch (err) {
-                showToast('⚠️ Switch request failed');
-            } finally {
-                if (btnEl) {
-                    btnEl.disabled = false;
-                    btnEl.innerText = oldText;
-                }
-            }
-        }
     
 </script></body>
 </html>

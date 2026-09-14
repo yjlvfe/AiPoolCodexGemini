@@ -21,6 +21,29 @@ REGISTRY = _default_registry()
 LOOPBACK = ('127.0.0.1', '::1', '::ffff:127.0.0.1')
 
 
+def _resolved_legacy_client_id(config, label):
+    """Resolve a label only when it identifies exactly one configured key."""
+    value = str(label or '').strip().lower()
+    if not value:
+        return None
+    candidates = {
+        str(client.get('id') or '').strip().lower()
+        for client in config.get('clients', [])
+        if str(client.get('id') or '').strip().lower() == value
+        or str(client.get('name') or '').strip().lower() == value
+    }
+    candidates.discard('')
+    return next(iter(candidates)) if len(candidates) == 1 else None
+
+
+def _runtime_quota(value):
+    if value is None or value == 0:
+        return None
+    if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+        raise ValueError('Invalid stored quota')
+    return value
+
+
 def is_loopback(peer_ip):
     return str(peer_ip or '') in LOOPBACK
 
@@ -29,9 +52,14 @@ def identify(headers, path=None, peer_ip=None):
     path = Path(path or os.environ.get('AIPOOL_CLIENT_REGISTRY', REGISTRY))
     # Missing/invalid configuration fails closed for remote peers.
     config = json.loads(path.read_text())
+    if not isinstance(config, dict):
+        raise ValueError('Invalid client registry')
     mode = config.get('mode')
-    if mode not in ('observe', 'enforce'):
+    clients = config.get('clients')
+    if mode not in ('observe', 'enforce') or not isinstance(clients, list):
         raise ValueError('Invalid client authentication mode')
+    if any(not isinstance(client, dict) for client in clients):
+        raise ValueError('Invalid client registry entry')
     value = headers.get('Authorization', '')
     token = value[7:] if value.startswith('Bearer ') else ''
     digest = hashlib.sha256(token.encode()).hexdigest()
@@ -39,7 +67,7 @@ def identify(headers, path=None, peer_ip=None):
     client_name = None
     credential_id = None
     client_obj = None
-    for client in config.get('clients', []):
+    for client in clients:
         if token and hmac.compare_digest(digest, client['sha256']):
             client_name = client.get('name')
             credential_id = client.get('id')
@@ -58,7 +86,7 @@ def identify(headers, path=None, peer_ip=None):
     allowed = (mode == 'observe') or local or verified
     return {'authenticated_client': client_name, 'credential_id': credential_id,
             'identity_verified': verified, 'auth_mode': mode, 'allowed': allowed,
-            'client_obj': client_obj}
+            'client_obj': client_obj, 'registry_config': config}
 
 
 def authorize(handler, provider):
@@ -77,7 +105,7 @@ def authorize(handler, provider):
         # Registry/configuration error: local traffic stays up; remote fails closed.
         identity = {'authenticated_client': None, 'credential_id': None,
                     'identity_verified': False, 'auth_mode': 'configuration_error',
-                    'allowed': is_loopback(peer)}
+                    'allowed': is_loopback(peer), 'registry_config': {}}
     handler._client_identity = identity
     if identity['allowed']:
         # Enforce provider and quota permissions if configured on the client
@@ -114,10 +142,23 @@ def authorize(handler, provider):
                     handler.close_connection = True
                     return False
 
-            # Check provider token quota
+            # Check provider token quota. Invalid stored policy fails closed.
             token_limits = client_obj.get('token_limits', {})
-            prov_limit = token_limits.get(norm_prov)
-            overall_limit = client_obj.get('max_tokens')
+            try:
+                if not isinstance(token_limits, dict):
+                    raise ValueError('Invalid stored quota')
+                prov_limit = _runtime_quota(token_limits.get(norm_prov))
+                overall_limit = _runtime_quota(client_obj.get('max_tokens'))
+            except ValueError:
+                body = b'{"error":{"message":"API key quota configuration is invalid","type":"configuration_error"}}'
+                handler.send_response(500)
+                handler.send_header('Content-Type', 'application/json')
+                handler.send_header('Content-Length', str(len(body)))
+                handler.send_header('Connection', 'close')
+                handler.end_headers()
+                handler.wfile.write(body)
+                handler.close_connection = True
+                return False
             if prov_limit is not None or overall_limit is not None:
                 # Query used tokens from request_events DB
                 db_path = os.environ.get('AUTH_DB_PATH') or '/var/lib/aipool/runtime/auth.db'
@@ -129,10 +170,22 @@ def authorize(handler, provider):
                             cur = conn.execute("SELECT audit_json, total_tokens, pool, timestamp FROM request_events WHERE audit_json IS NOT NULL AND audit_json != ''")
                             c_name = (client_obj.get('name') or '').lower()
                             c_id = (client_obj.get('id') or '').lower()
+                            registry_config = identity.get('registry_config') or {}
                             total_used = 0
                             prov_used = 0
+                            counter_row = conn.execute(
+                                "SELECT total_tokens, codex_tokens, gemini_tokens, created_at "
+                                "FROM client_usage_counters WHERE client_id=?",
+                                (c_id,),
+                            ).fetchone()
+                            if not counter_row and _resolved_legacy_client_id(registry_config, c_name) == c_id:
+                                counter_row = conn.execute(
+                                    "SELECT total_tokens, codex_tokens, gemini_tokens, created_at "
+                                    "FROM client_usage_counters WHERE client_id=?",
+                                    (c_name,),
+                                ).fetchone()
 
-                            # Fetch all events first to find first_used_ts and count cycle tokens
+                            # Retained events provide current refill-window usage.
                             raw_events = []
                             first_used_ts = None
                             for r in cur.fetchall():
@@ -140,7 +193,12 @@ def authorize(handler, provider):
                                     aud = json.loads(r['audit_json'])
                                     cl = (aud.get('client_label') or '').lower()
                                     cid = (aud.get('client_id') or '').lower()
-                                    if cl and (cl == c_name or cl == c_id):
+                                    is_current_identity = bool(c_id and cid == c_id)
+                                    is_legacy_identity = bool(
+                                        not cid and cl
+                                        and _resolved_legacy_client_id(registry_config, cl) == c_id
+                                    )
+                                    if is_current_identity or is_legacy_identity:
                                         row_time = r['timestamp']
                                         row_ts = 0.0
                                         if row_time:
@@ -161,37 +219,31 @@ def authorize(handler, provider):
                                 except Exception:
                                     pass
 
-                            # Determine quota window start timestamp from first use (if refill_period is set)
                             refill_period_s = client_obj.get('refill_period_seconds')
                             window_start_ts = None
                             if refill_period_s and float(refill_period_s) > 0:
-                                base_ts = first_used_ts or float(client_obj.get('created_at_ts') or time.time())
+                                counter_created_at = float(counter_row['created_at']) if counter_row else None
+                                base_ts = counter_created_at or first_used_ts or float(client_obj.get('created_at_ts') or time.time())
                                 now = time.time()
                                 elapsed = max(0, now - base_ts)
                                 cycle_num = int(elapsed // float(refill_period_s))
                                 window_start_ts = base_ts + (cycle_num * float(refill_period_s))
-                            elif not refill_period_s:
-                                # For keys without refill_period, load historical persistent counters
-                                try:
-                                    cur_c = conn.execute("SELECT total_tokens, codex_tokens, gemini_tokens FROM client_usage_counters WHERE client_id IN (?, ?)", (c_name, c_id))
-                                    row_c = cur_c.fetchone()
-                                    if row_c:
-                                        total_used = max(total_used, int(row_c['total_tokens'] or 0))
-                                        if norm_prov == 'codex':
-                                            prov_used = max(prov_used, int(row_c['codex_tokens'] or 0))
-                                        else:
-                                            prov_used = max(prov_used, int(row_c['gemini_tokens'] or 0))
-                                except Exception:
-                                    pass
+                            elif not refill_period_s and counter_row:
+                                total_used = int(counter_row['total_tokens'] or 0)
+                                if norm_prov == 'codex':
+                                    prov_used = int(counter_row['codex_tokens'] or 0)
+                                else:
+                                    prov_used = int(counter_row['gemini_tokens'] or 0)
 
-                            for ev in raw_events:
-                                if window_start_ts is not None and ev['ts'] < window_start_ts:
-                                    continue
-                                toks = ev['tokens']
-                                total_used += toks
-                                row_prov = 'codex' if ev['pool'] in ('codex', 'openai') else 'gemini'
-                                if row_prov == norm_prov:
-                                    prov_used += toks
+                            if window_start_ts is not None or not counter_row:
+                                for ev in raw_events:
+                                    if window_start_ts is not None and ev['ts'] < window_start_ts:
+                                        continue
+                                    toks = ev['tokens']
+                                    total_used += toks
+                                    row_prov = 'codex' if ev['pool'] in ('codex', 'openai') else 'gemini'
+                                    if row_prov == norm_prov:
+                                        prov_used += toks
                             if prov_limit is not None and prov_used >= prov_limit:
                                 body = f'{{"error":{{"message":"Token quota for provider {provider} exceeded ({prov_used:,}/{prov_limit:,})","type":"quota_exceeded"}}}}'.encode()
                                 handler.send_response(429)

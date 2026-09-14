@@ -126,6 +126,143 @@ def _usage_int(value):
     return value if isinstance(value, int) and not isinstance(value, bool) and value >= 0 else None
 
 
+def _client_registry():
+    registry_path = os.environ.get('AIPOOL_CLIENT_REGISTRY')
+    runtime_path = Path('/var/lib/aipool/runtime/client-identities.json')
+    if registry_path:
+        path = Path(registry_path)
+    else:
+        path = runtime_path if runtime_path.is_file() or runtime_path.parent.is_dir() else Path(__file__).resolve().parents[1] / 'dashboard/client-identities.json'
+    if not path.is_file():
+        if registry_path or (not registry_path and path == runtime_path):
+            return None
+        return []
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError, TypeError):
+        return None
+    clients = data.get('clients') if isinstance(data, dict) else None
+    if not isinstance(clients, list) or any(not isinstance(client, dict) for client in clients):
+        return None
+    return clients
+
+
+def _current_refill_window_starts(conn, now):
+    """Return current quota-window starts for stable client IDs."""
+    clients = _client_registry()
+    if clients is None:
+        return None
+
+    starts = {}
+    for client in clients:
+        client_id = str(client.get('id') or '').strip().lower()
+        client_name = str(client.get('name') or '').strip().lower()
+        try:
+            period = float(client.get('refill_period_seconds') or 0)
+        except (TypeError, ValueError):
+            continue
+        if not client_id or period <= 0:
+            continue
+        row = conn.execute(
+            "SELECT created_at FROM client_usage_counters WHERE client_id=?",
+            (client_id,),
+        ).fetchone()
+        if not row and _legacy_label_is_unique(client_id, client_name):
+            row = conn.execute(
+                "SELECT created_at FROM client_usage_counters WHERE client_id=?",
+                (client_name,),
+            ).fetchone()
+        try:
+            base = float(row[0]) if row else float(client.get('created_at_ts') or now)
+        except (TypeError, ValueError):
+            base = now
+        starts[client_id] = base + int(max(0, now - base) // period) * period
+    return starts
+
+
+def _stable_id_for_unique_label(client_label):
+    clients = _client_registry()
+    if not clients:
+        return None
+    label = str(client_label or '').strip().lower()
+    matching_ids = {
+        str(client.get('id') or '').strip().lower()
+        for client in clients
+        if str(client.get('name') or '').strip().lower() == label
+    }
+    stable_id_collisions = {
+        str(client.get('id') or '').strip().lower()
+        for client in clients
+        if str(client.get('id') or '').strip().lower() == label
+    }
+    if len(matching_ids) != 1 or stable_id_collisions.difference(matching_ids):
+        return None
+    return next(iter(matching_ids))
+
+
+def _legacy_label_is_unique(client_id, client_label):
+    stable_id = str(client_id or '').strip().lower()
+    return bool(stable_id and _stable_id_for_unique_label(client_label) == stable_id)
+
+
+def _adopt_legacy_counter(conn, legacy_key, stable_key):
+    select_counter = (
+        "SELECT total_tokens,prompt_tokens,completion_tokens,requests,"
+        "codex_tokens,gemini_tokens,created_at,updated_at "
+        "FROM client_usage_counters WHERE client_id=?"
+    )
+    legacy = conn.execute(select_counter, (legacy_key,)).fetchone()
+    if legacy:
+        current = conn.execute(select_counter, (stable_key,)).fetchone()
+        if not current:
+            conn.execute(
+                "UPDATE client_usage_counters SET client_id=? WHERE client_id=?",
+                (stable_key, legacy_key),
+            )
+        else:
+            conn.execute(
+                """UPDATE client_usage_counters SET
+                   total_tokens=?,prompt_tokens=?,completion_tokens=?,requests=?,
+                   codex_tokens=?,gemini_tokens=?,created_at=?,updated_at=?
+                   WHERE client_id=?""",
+                tuple(int(current[index] or 0) + int(legacy[index] or 0) for index in range(6))
+                + (min(float(current[6]), float(legacy[6])), max(float(current[7]), float(legacy[7])), stable_key),
+            )
+            conn.execute("DELETE FROM client_usage_counters WHERE client_id=?", (legacy_key,))
+
+    # Make retained legacy events stable too, so later retention cannot recreate
+    # the retired label counter or lose refill-window ownership.
+    for event_id, audit_json in conn.execute(
+        "SELECT id,audit_json FROM request_events WHERE audit_json IS NOT NULL AND audit_json != ''"
+    ):
+        try:
+            audit = json.loads(audit_json)
+        except (TypeError, ValueError, json.JSONDecodeError):
+            continue
+        if audit.get('client_id'):
+            continue
+        if str(audit.get('client_label') or '').strip().lower() != legacy_key:
+            continue
+        audit['client_id'] = stable_key
+        conn.execute(
+            "UPDATE request_events SET audit_json=? WHERE id=?",
+            (json.dumps(audit, ensure_ascii=False), event_id),
+        )
+
+
+def _is_quota_window_event(row, window_starts):
+    if not row[12] or not window_starts:
+        return False
+    try:
+        audit = json.loads(row[12])
+        client_id = str(audit.get('client_id') or '').strip().lower()
+        if not client_id:
+            client_id = _stable_id_for_unique_label(audit.get('client_label')) or ''
+        return bool(client_id and client_id in window_starts and float(row[6] or 0) >= window_starts[client_id])
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return False
+
+
 def _record(provider, model, usage=None, account=None, status='OK', request_id=None, audit=None, error_code=None):
     path = initialize()
     model = clean_model_name(model)
@@ -164,10 +301,17 @@ def _record(provider, model, usage=None, account=None, status='OK', request_id=N
                  (provider, str(account).strip(), total or 0, prompt or 0, completion or 0, now, now))
          except Exception:
              pass
+     client_id = (audit or {}).get('client_id')
      client_label = (audit or {}).get('client_label')
-     if client_label and str(client_label).strip():
+     accounting_identity = client_id
+     if not accounting_identity and client_label:
+         accounting_identity = _stable_id_for_unique_label(client_label)
+     if accounting_identity and str(accounting_identity).strip():
          try:
-             c_key = str(client_label).strip().lower()
+             c_key = str(accounting_identity).strip().lower()
+             legacy_key = str(client_label or '').strip().lower()
+             if client_id and legacy_key and legacy_key != c_key and _legacy_label_is_unique(client_id, client_label):
+                 _adopt_legacy_counter(conn, legacy_key, c_key)
              is_codex = 1 if str(provider).lower() in ('codex', 'openai') else 0
              is_gemini = 1 if not is_codex else 0
              conn.execute('''INSERT INTO client_usage_counters(client_id, total_tokens, prompt_tokens, completion_tokens, requests, codex_tokens, gemini_tokens, created_at, updated_at)
@@ -189,9 +333,16 @@ def _record(provider, model, usage=None, account=None, status='OK', request_id=N
      except (TypeError, ValueError):
          retention = 300
      if retention > 0:
-         old_rows = conn.execute("SELECT id, model, pool, prompt_tokens, completion_tokens, total_tokens, timestamp, wire_input_bytes, wire_provider_bytes, latency_ms, error_code, status, audit_json FROM request_events WHERE id NOT IN (SELECT id FROM request_events ORDER BY id DESC LIMIT ?)", (retention,)).fetchall()
+         window_starts = _current_refill_window_starts(conn, now)
+         if window_starts is None:
+             # A malformed/unreadable registry may hide active refill keys.
+             # Keep detailed rows until policy can be evaluated safely.
+             old_rows = []
+         else:
+             old_rows = conn.execute("SELECT id, model, pool, prompt_tokens, completion_tokens, total_tokens, timestamp, wire_input_bytes, wire_provider_bytes, latency_ms, error_code, status, audit_json FROM request_events WHERE id NOT IN (SELECT id FROM request_events ORDER BY id DESC LIMIT ?)", (retention,)).fetchall()
          if old_rows:
-             for row in old_rows:
+             rows_to_roll = [row for row in old_rows if not _is_quota_window_event(row, window_starts)]
+             for row in rows_to_roll:
                  day = time.strftime('%Y-%m-%d', time.localtime(row[6] or time.time()))
                  conn.execute("""INSERT INTO usage_rollups(day,pool,model,requests,prompt_tokens,completion_tokens,total_tokens,wire_input_bytes,wire_provider_bytes,latency_ms_sum,latency_count,classified_errors)
                      VALUES(?,?,?,?,?,?,?,?,?,?,?,?)
@@ -208,9 +359,12 @@ def _record(provider, model, usage=None, account=None, status='OK', request_id=N
                  if row[12]:
                      try:
                          aud = json.loads(row[12])
-                         cl = aud.get('client_label')
-                         if cl and str(cl).strip():
-                             c_k = str(cl).strip().lower()
+                         stable_event_id = str(aud.get('client_id') or '').strip().lower()
+                         if not stable_event_id:
+                             stable_event_id = _stable_id_for_unique_label(aud.get('client_label'))
+                         accounting_identity = stable_event_id
+                         if accounting_identity and str(accounting_identity).strip():
+                             c_k = str(accounting_identity).strip().lower()
                              c_toks = int(row[5] or 0)
                              c_p = int(row[3] or 0)
                              c_c = int(row[4] or 0)
@@ -222,7 +376,7 @@ def _record(provider, model, usage=None, account=None, status='OK', request_id=N
                                  (c_k, c_toks, c_p, c_c, 1, c_toks if is_cdx else 0, c_toks if not is_cdx else 0, row[6] or now, now))
                      except Exception:
                          pass
-             ids = [(row[0],) for row in old_rows]
+             ids = [(row[0],) for row in rows_to_roll]
              conn.executemany("DELETE FROM request_events WHERE id=?", ids)
      conn.commit()
 

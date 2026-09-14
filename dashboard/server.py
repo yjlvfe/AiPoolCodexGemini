@@ -20,7 +20,7 @@ if BRIDGES_DIR not in sys.path:
 SCRIPTS_DIR = str(Path(__file__).resolve().parents[1] / 'scripts')
 if SCRIPTS_DIR not in sys.path:
     sys.path.insert(0, SCRIPTS_DIR)
-from app import PoolManager, TokenAuthManager, normalize_client_ip
+from app import PoolManager, TokenAuthManager, is_link_preview_user_agent, normalize_client_ip
 
 PORT = int(os.environ.get('DASHBOARD_PORT', '8444'))
 auth_manager = TokenAuthManager()
@@ -127,6 +127,110 @@ def _safe_json_for_script(value):
             .replace('\u2028', '\\u2028')
             .replace('\u2029', '\\u2029'))
 
+
+def _validated_quota(value):
+    """Normalize a quota while preserving zero/None as unlimited."""
+    if value is None:
+        return None
+    if isinstance(value, bool):
+        raise ValueError("Quota values must be zero or positive integers")
+    try:
+        if isinstance(value, int):
+            parsed = value
+        elif isinstance(value, float):
+            if not value.is_integer():
+                raise ValueError
+            parsed = int(value)
+        elif isinstance(value, str) and value.strip().isdigit():
+            parsed = int(value.strip())
+        else:
+            raise ValueError
+    except (TypeError, ValueError, OverflowError):
+        raise ValueError("Quota values must be zero or positive integers") from None
+    if parsed < 0:
+        raise ValueError("Quota values must be zero or positive integers")
+    return parsed or None
+
+
+def _resolved_legacy_client_id(clients, label):
+    value = str(label or "").strip().lower()
+    if not value:
+        return None
+    candidates = {
+        str(client.get("id") or "").strip().lower()
+        for client in clients
+        if str(client.get("id") or "").strip().lower() == value
+        or str(client.get("name") or "").strip().lower() == value
+    }
+    candidates.discard("")
+    return next(iter(candidates)) if len(candidates) == 1 else None
+
+
+def _migrate_legacy_client_counter(db_path, legacy_label, client_id):
+    """Move a uniquely owned legacy label counter to its stable key ID."""
+    legacy_key = str(legacy_label or '').strip().lower()
+    stable_key = str(client_id or '').strip().lower()
+    if not legacy_key or not stable_key or legacy_key == stable_key or not os.path.isfile(db_path):
+        return
+    with sqlite3.connect(db_path, timeout=5) as conn:
+        conn.row_factory = sqlite3.Row
+        try:
+            legacy = conn.execute(
+                "SELECT * FROM client_usage_counters WHERE client_id=?", (legacy_key,)
+            ).fetchone()
+        except sqlite3.OperationalError as exc:
+            if "no such table" in str(exc).lower():
+                return
+            raise
+        if legacy:
+            current = conn.execute(
+                "SELECT * FROM client_usage_counters WHERE client_id=?", (stable_key,)
+            ).fetchone()
+            if current:
+                conn.execute(
+                    """UPDATE client_usage_counters SET
+                       total_tokens=?, prompt_tokens=?, completion_tokens=?, requests=?,
+                       codex_tokens=?, gemini_tokens=?, created_at=?, updated_at=?
+                       WHERE client_id=?""",
+                    (
+                        int(current['total_tokens'] or 0) + int(legacy['total_tokens'] or 0),
+                        int(current['prompt_tokens'] or 0) + int(legacy['prompt_tokens'] or 0),
+                        int(current['completion_tokens'] or 0) + int(legacy['completion_tokens'] or 0),
+                        int(current['requests'] or 0) + int(legacy['requests'] or 0),
+                        int(current['codex_tokens'] or 0) + int(legacy['codex_tokens'] or 0),
+                        int(current['gemini_tokens'] or 0) + int(legacy['gemini_tokens'] or 0),
+                        min(float(current['created_at']), float(legacy['created_at'])),
+                        max(float(current['updated_at']), float(legacy['updated_at'])),
+                        stable_key,
+                    ),
+                )
+                conn.execute("DELETE FROM client_usage_counters WHERE client_id=?", (legacy_key,))
+            else:
+                conn.execute(
+                    "UPDATE client_usage_counters SET client_id=? WHERE client_id=?",
+                    (stable_key, legacy_key),
+                )
+        try:
+            events = conn.execute(
+                "SELECT id,audit_json FROM request_events WHERE audit_json IS NOT NULL AND audit_json != ''"
+            ).fetchall()
+        except sqlite3.OperationalError:
+            events = []
+        for event in events:
+            try:
+                audit = json.loads(event['audit_json'])
+            except (TypeError, ValueError, json.JSONDecodeError):
+                continue
+            if audit.get('client_id') or str(audit.get('client_label') or '').strip().lower() != legacy_key:
+                continue
+            audit['client_id'] = stable_key
+            conn.execute(
+                "UPDATE request_events SET audit_json=? WHERE id=?",
+                (json.dumps(audit, ensure_ascii=False), event['id']),
+            )
+        conn.commit()
+
+
 GLOBAL_POOL_MANAGER = PoolManager()
 
 def get_settings_status():
@@ -223,16 +327,6 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path
         qs = urllib.parse.parse_qs(parsed.query)
-
-        sensitive_query_keys = {"session", "session_id", "token"}
-        if sensitive_query_keys.intersection(qs):
-            self.send_response(302)
-            self.send_header("Location", path or "/")
-            self.send_header("Cache-Control", "no-store")
-            self.send_header("Content-Length", "0")
-            self.end_headers()
-            return
-
         client_ip = self._client_ip()
 
         # Sessions are carried only by the shared HttpOnly cookie.
@@ -244,28 +338,74 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                 c.load(cookie_header)
                 if "yj_aipool_session" in c:
                     session_cookie = c["yj_aipool_session"].value
-            except Exception: pass
-
-        effective_session = session_cookie
+            except Exception:
+                pass
 
         auth_mgr = TokenAuthManager()
         is_auth = False
 
-
         # Allow localhost / loopback internally
         if self.client_address[0] in ('127.0.0.1','::1') and not self.headers.get('X-Forwarded-For') and not self.headers.get('X-Real-IP'):
             is_auth = True
+        elif session_cookie and auth_mgr.validate_device(session_cookie, client_ip):
+            is_auth = True
 
-        if not is_auth and effective_session:
-            if auth_mgr.validate_device(effective_session, client_ip):
-                is_auth = True
+        magic_token = qs.get("token", [""])[0] if path == "/auth" else ""
+        if magic_token:
+            # Existing sessions win and link previews must never consume the token.
+            if is_auth:
+                self.send_response(303)
+                self.send_header("Location", "/")
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+            if is_link_preview_user_agent(self.headers.get("User-Agent", "")):
+                self.send_response(204)
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+
+            new_session = auth_mgr.register_device(
+                magic_token, client_ip, self.headers.get("User-Agent", "")
+            )
+            if new_session:
+                session = cookies.SimpleCookie()
+                session["yj_aipool_session"] = new_session
+                morsel = session["yj_aipool_session"]
+                morsel["path"] = "/"
+                morsel["max-age"] = str(auth_mgr.session_expiry_seconds)
+                morsel["httponly"] = True
+                morsel["samesite"] = "Lax"
+                if self.headers.get("X-Forwarded-Proto", "").lower() == "https":
+                    morsel["secure"] = True
+                self.send_response(303)
+                self.send_header("Location", "/")
+                self.send_header("Set-Cookie", session.output(header="").strip())
+                self.send_header("Cache-Control", "no-store")
+                self.send_header("Content-Length", "0")
+                self.end_headers()
+                return
+
+        sensitive_query_keys = {"session", "session_id", "token"}
+        if sensitive_query_keys.intersection(qs) and path != "/auth":
+            self.send_response(302)
+            self.send_header("Location", path or "/")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return
 
         # Unauthenticated handling
         if not is_auth:
             self.send_response(401)
             self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            body = HTML_LOGIN_TEMPLATE.encode("utf-8")
+            self.send_header("Content-Length", str(len(body)))
             self.end_headers()
-            self.wfile.write(HTML_LOGIN_TEMPLATE.encode("utf-8"))
+            self.wfile.write(body)
             return
 
         pm = GLOBAL_POOL_MANAGER
@@ -362,10 +502,14 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                             for r in cur.fetchall():
                                 try:
                                     aud = json.loads(r["audit_json"])
-                                    cl = aud.get("client_label")
-                                    if cl:
+                                    identity_key = str(aud.get("client_id") or "").strip().lower()
+                                    if not identity_key:
+                                        identity_key = _resolved_legacy_client_id(
+                                            data.get("clients", []), aud.get("client_label")
+                                        ) or ""
+                                    if identity_key:
                                         toks = int(r["total_tokens"] or 0)
-                                        ev_counts[cl.lower()] = ev_counts.get(cl.lower(), 0) + toks
+                                        ev_counts[identity_key] = ev_counts.get(identity_key, 0) + toks
                                 except Exception:
                                     pass
                             for k, v in ev_counts.items():
@@ -379,7 +523,10 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                         continue
                     c_name = c.get("name", "")
                     c_id = c.get("id", "")
-                    used = usage_by_client.get(c_name.lower(), 0) or usage_by_client.get(c_id.lower(), 0)
+                    used = usage_by_client.get(c_id.lower())
+                    if used is None and _resolved_legacy_client_id(data.get("clients", []), c_name) == c_id.lower():
+                        used = usage_by_client.get(c_name.lower(), 0)
+                    used = used or 0
                     # Check expired status dynamically
                     expires_at = c.get("expires_at")
                     is_expired = False
@@ -717,19 +864,25 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
 
                 now = time.time()
                 first_used_ts = None
+                counter_created_at = None
                 key_recent_requests = []
                 if os.path.isfile(db_path):
                     try:
                         import sqlite3
                         with sqlite3.connect(db_path, timeout=5) as conn:
                             conn.row_factory = sqlite3.Row
-                            cur = conn.execute("SELECT id, model, pool, prompt_tokens, completion_tokens, total_tokens, time_formatted, status, timestamp, audit_json FROM request_events WHERE audit_json IS NOT NULL AND audit_json != '' ORDER BY id DESC LIMIT 500")
+                            cur = conn.execute("SELECT id, model, pool, prompt_tokens, completion_tokens, total_tokens, time_formatted, status, timestamp, audit_json FROM request_events WHERE audit_json IS NOT NULL AND audit_json != '' ORDER BY id DESC")
                             for r in cur.fetchall():
                                 try:
                                     aud = json.loads(r["audit_json"])
                                     cl = (aud.get("client_label") or "").lower()
                                     cid = (aud.get("client_id") or "").lower()
-                                    if cl and (cl == c_name or cl == c_id):
+                                    is_current_identity = bool(c_id and cid == c_id)
+                                    is_legacy_identity = bool(
+                                        not cid and cl
+                                        and _resolved_legacy_client_id(data.get("clients", []), cl) == c_id
+                                    )
+                                    if is_current_identity or is_legacy_identity:
                                         toks = int(r["total_tokens"] or 0)
                                         m = str(r["model"] or "unknown")
                                         prov = "codex" if str(r["pool"]).lower() in ("codex", "openai") else "gemini"
@@ -769,9 +922,19 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                         import sqlite3
                         with sqlite3.connect(db_path, timeout=5) as conn:
                             conn.row_factory = sqlite3.Row
-                            cur_c = conn.execute("SELECT total_tokens, requests, codex_tokens, gemini_tokens FROM client_usage_counters WHERE client_id IN (?, ?)", (c_name, c_id))
-                            row_c = cur_c.fetchone()
+                            row_c = conn.execute(
+                                "SELECT total_tokens, requests, codex_tokens, gemini_tokens, created_at FROM client_usage_counters "
+                                "WHERE client_id=?",
+                                (c_id,),
+                            ).fetchone()
+                            if not row_c and _resolved_legacy_client_id(data.get("clients", []), c_name) == c_id:
+                                row_c = conn.execute(
+                                    "SELECT total_tokens, requests, codex_tokens, gemini_tokens, created_at FROM client_usage_counters "
+                                    "WHERE client_id=?",
+                                    (c_name,),
+                                ).fetchone()
                             if row_c:
+                                counter_created_at = float(row_c["created_at"] or 0) or None
                                 p_total = int(row_c["total_tokens"] or 0)
                                 p_reqs = int(row_c["requests"] or 0)
                                 p_cdx = int(row_c["codex_tokens"] or 0)
@@ -798,7 +961,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                 refill_remaining_seconds = None
                 if refill_seconds:
                     ref_s = float(refill_seconds)
-                    base_ts = first_used_ts or created_at_ts
+                    base_ts = counter_created_at or first_used_ts or created_at_ts
                     if base_ts:
                         elapsed = max(0, now - base_ts)
                         cycle_num = int(elapsed // ref_s)
@@ -807,12 +970,20 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                         refill_remaining_seconds = max(0, int(next_refill_ts - now))
 
                 cycle_used = 0
+                cycle_provider_used = {"codex": 0, "gemini": 0}
                 if cycle_start_ts is not None and os.path.isfile(db_path):
                     for req_item in key_recent_requests:
                         if req_item["timestamp"] >= cycle_start_ts:
-                            cycle_used += int(req_item["tokens"] or 0)
+                            tokens = int(req_item["tokens"] or 0)
+                            cycle_used += tokens
+                            provider = req_item["provider"]
+                            cycle_provider_used[provider] = cycle_provider_used.get(provider, 0) + tokens
                 elif not refill_seconds:
                     cycle_used = total_tokens
+                    cycle_provider_used = {
+                        provider: int(values.get("tokens", 0))
+                        for provider, values in by_provider.items()
+                    }
 
                 expires_at = found_client.get("expires_at")
                 try:
@@ -823,8 +994,9 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                 remaining_tokens = max(0, int(details_max) - cycle_used) if details_max is not None and cycle_start_ts is not None else (max(0, int(details_max) - total_tokens) if details_max is not None else None)
                 provider_remaining = {}
                 for provider, limit in (found_client.get("token_limits") or {}).items():
-                    used = int((by_provider.get(str(provider).lower()) or {}).get("tokens", 0))
-                    provider_remaining[str(provider).lower()] = {
+                    provider_key = str(provider).lower()
+                    used = int(cycle_provider_used.get(provider_key, 0))
+                    provider_remaining[provider_key] = {
                         "limit": limit,
                         "used": used,
                         "remaining": max(0, int(limit) - used) if limit is not None else None
@@ -853,6 +1025,11 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                         "allowed_models_count": len(found_client.get("allowed_models") or []),
                         "total_tokens": total_tokens, "total_requests": total_requests,
                         "by_provider": by_provider, "top_models": top_models,
+                        "analytics_scope": {
+                            "total_tokens": "lifetime", "total_requests": "lifetime",
+                            "provider_tokens": "lifetime", "provider_requests": "retained",
+                            "top_models": "retained"
+                        },
                         "recent_requests": key_recent_requests[:100],
                         "timeline": found_client.get("change_history", [])[-20:]
                     }
@@ -886,6 +1063,22 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             refill_val = payload.get("refill_val")
             expires_at = payload.get("expires_at")
 
+            try:
+                normalized_token_limits = None
+                if token_limits is not None:
+                    if not isinstance(token_limits, dict):
+                        raise ValueError("token_limits must be an object")
+                    normalized_token_limits = {
+                        str(key).lower(): _validated_quota(value)
+                        for key, value in token_limits.items()
+                    }
+                normalized_max_tokens = (
+                    _validated_quota(max_tokens) if "max_tokens" in payload else None
+                )
+            except ValueError as exc:
+                self.send_json_response({"success": False, "message": str(exc)}, status_code=400)
+                return
+
             registry_file = get_registry_file()
             try:
                 data = json.loads(registry_file.read_text()) if registry_file.is_file() else {"mode": "enforce", "clients": []}
@@ -896,7 +1089,12 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                         before = {k: c.get(k) for k in ("name", "enabled", "allowed_providers", "allowed_models", "token_limits", "max_tokens", "refill_unit", "refill_val", "refill_period_seconds", "expiration_unit", "expiration_val", "expiration_duration", "expires_at")}
                         if new_name is not None:
                             clean_n = str(new_name).strip()
+                            old_name = str(c.get("name") or "").strip()
                             if clean_n:
+                                if clean_n != old_name:
+                                    if old_name and _resolved_legacy_client_id(data.get("clients", []), old_name) == target_id.lower():
+                                        db_path = os.environ.get("AUTH_DB_PATH") or "/var/lib/aipool/runtime/auth.db"
+                                        _migrate_legacy_client_counter(db_path, old_name, target_id)
                                 c["name"] = clean_n
                         if new_enabled is not None:
                             c["enabled"] = bool(new_enabled)
@@ -905,9 +1103,9 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                         if allowed_models is not None:
                             c["allowed_models"] = [str(m).strip() for m in allowed_models if str(m).strip()]
                         if token_limits is not None:
-                            c["token_limits"] = {str(k).lower(): (int(v) if v is not None else None) for k, v in token_limits.items()}
+                            c["token_limits"] = normalized_token_limits
                         if "max_tokens" in payload:
-                            c["max_tokens"] = int(max_tokens) if max_tokens is not None else None
+                            c["max_tokens"] = normalized_max_tokens
                         if "refill_period" in payload:
                             c["refill_period"] = str(refill_period).strip() if refill_period else None
                         if "refill_period_seconds" in payload:

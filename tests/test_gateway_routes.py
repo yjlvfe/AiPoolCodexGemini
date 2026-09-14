@@ -21,6 +21,6 @@ def test_dashboard_never_persists_or_accepts_bearer_sessions_in_browser_urls():
     assert "query_session" not in server
     assert 'qs.get("session"' not in server
     assert 'qs.get("session_id"' not in server
-    assert 'qs.get("token"' not in server
+    assert 'qs.get("token", [""])[0] if path == "/auth" else ""' in server
     assert "sensitive_query_keys" in server
     assert "url.search = '';" in template

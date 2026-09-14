@@ -57,7 +57,11 @@ def pool_report(provider):
             item.update(status=info.get('status', 'CHECK FAILED'), email=info.get('email') or item['email'])
         except Exception as exc:
             info = {}
-            item.update(status='CHECK FAILED', error=type(exc).__name__)
+            validation_url = getattr(exc, 'validation_url', None)
+            if validation_url:
+                item.update(status='VERIFY', error=str(exc), validation_url=validation_url)
+            else:
+                item.update(status='CHECK FAILED', error=type(exc).__name__)
         if manager.ag:
             groups = info.get('usage', {}).get('groups') or []
             for name in ('gemini', 'claude'):

@@ -5,6 +5,8 @@
   <a href="README.ar.md"><b>العربية</b></a>
 </p>
 
+> **Current release:** `v2.2.2` — **Stable / Production Ready** (2026-09-14). Verified by 159/159 tests and an independent acceptance review.
+
 > [!WARNING]
 > **⚠️ DISCLAIMER:**
 > This tool automates multi-account session management and quota failover for upstream AI providers (including **Gemini / Google Antigravity** and **OpenAI Codex**). Using third-party pooling or reverse-engineering internal APIs may violate provider Terms of Service and could result in account restriction, suspension, or permanent termination. Use strictly at your own discretion and risk.

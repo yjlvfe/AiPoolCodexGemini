@@ -1,6 +1,6 @@
 {
-  "version": "2.2.1",
+  "version": "2.2.2",
   "tier": "stable",
-  "updated_at": "2026-09-13T16:30:00+03:00",
-  "description": "Stable release: Hardened interactive UI buttons, persistent token counters, live reactive API key updates, and robust modal telemetry"
+  "updated_at": "2026-09-14T17:50:03+03:00",
+  "description": "Stable production-ready release: targeted authentication, API-key identity, refill accounting, analytics, MoA cleanup, and quota validation repairs"
 }
