@@ -1503,8 +1503,39 @@
             transition: var(--transition-smooth);
         }
         .modal-input:focus {
+            border-color: var(--accent-primary, #6366f1);
+            box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.25);
+        }
+        .modal-input.modal-input-danger {
+            border-color: rgba(239, 68, 68, 0.35);
+        }
+        .modal-input.modal-input-danger:focus {
             border-color: #ef4444;
-            box-shadow: 0 0 12px rgba(239, 68, 68, 0.3);
+            box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.25);
+        }
+        .modal-input:disabled, .modal-input[readonly] {
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        .settings-btn {
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+        }
+        .settings-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            filter: grayscale(0.5);
+            pointer-events: none;
+        }
+        .settings-btn:not(:disabled):hover {
+            opacity: 0.95;
+            transform: translateY(-1px);
         }
         .unit-btn {
             flex: 1;
@@ -2381,18 +2412,20 @@
                                     <label style="color: #e2e8f0; font-size: 11.5px; font-weight: 700;">🔄 Auto-Refill Quota:</label>
                                     <span id="modal-edit-refill-preview" style="font-size: 10.5px; font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #94a3b8; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); padding: 2px 7px; border-radius: 5px;">One-Time (No Refill)</span>
                                 </div>
-                                <div style="display: flex; gap: 8px; align-items: center; position: relative;">
+                                <div style="display: flex; gap: 8px; align-items: center;">
                                     <input type="number" id="modal-edit-refill-num" min="1" max="999" class="modal-input" style="width: 80px; padding: 8px 10px; font-size: 13px; text-align: center; display: none;" placeholder="5" oninput="updateRefillCustomPreview()" />
-                                    <div id="modal-edit-refill-trigger" class="modal-input" style="flex: 1; padding: 8px 12px; font-size: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="toggleDropdownMenu('refill')">
-                                        <span id="modal-edit-refill-selected-text">One-Time (No Refill)</span>
-                                        <span style="font-size: 10px; color: #94a3b8;">▼</span>
-                                    </div>
-                                    <div id="modal-edit-refill-dropdown" style="display: none; position: absolute; top: calc(100% + 4px); right: 0; left: 0; background: #0f172a; border: 1px solid rgba(56,189,248,0.3); border-radius: 8px; z-index: 1000; box-shadow: 0 8px 24px rgba(0,0,0,0.6); max-height: 140px; overflow-y: auto;">
-                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('refill', 'none', 'One-Time (No Refill)')">One-Time (No Refill)</div>
-                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('refill', 'hours', 'Hours')">Hours</div>
-                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('refill', 'days', 'Days')">Days</div>
-                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('refill', 'weeks', 'Weeks')">Weeks</div>
-                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('refill', 'months', 'Months')">Months</div>
+                                    <div style="position: relative; flex: 1;">
+                                        <div id="modal-edit-refill-trigger" class="modal-input" tabindex="0" role="combobox" aria-haspopup="listbox" aria-expanded="false" style="width: 100%; padding: 8px 12px; font-size: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="toggleDropdownMenu('refill')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleDropdownMenu('refill');}">
+                                            <span id="modal-edit-refill-selected-text">One-Time (No Refill)</span>
+                                            <span style="font-size: 10px; color: #94a3b8;">▼</span>
+                                        </div>
+                                        <div id="modal-edit-refill-dropdown" style="display: none; position: absolute; top: calc(100% + 4px); right: 0; left: 0; background: #0f172a; border: 1px solid rgba(56,189,248,0.3); border-radius: 8px; z-index: 1000; box-shadow: 0 8px 24px rgba(0,0,0,0.6); max-height: 140px; overflow-y: auto;">
+                                            <div class="custom-dropdown-opt" onclick="selectDropdownOption('refill', 'none', 'One-Time (No Refill)')">One-Time (No Refill)</div>
+                                            <div class="custom-dropdown-opt" onclick="selectDropdownOption('refill', 'hours', 'Hours')">Hours</div>
+                                            <div class="custom-dropdown-opt" onclick="selectDropdownOption('refill', 'days', 'Days')">Days</div>
+                                            <div class="custom-dropdown-opt" onclick="selectDropdownOption('refill', 'weeks', 'Weeks')">Weeks</div>
+                                            <div class="custom-dropdown-opt" onclick="selectDropdownOption('refill', 'months', 'Months')">Months</div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -2403,18 +2436,20 @@
                                     <label style="color: #e2e8f0; font-size: 11.5px; font-weight: 700;">⏳ Key Lifespan / Expiry:</label>
                                     <span id="modal-edit-expires-preview" style="font-size: 10.5px; font-family: 'JetBrains Mono', monospace; font-weight: 700; color: #34d399; background: rgba(16,185,129,0.1); border: 1px solid rgba(16,185,129,0.25); padding: 2px 7px; border-radius: 5px;">Never Expires</span>
                                 </div>
-                                <div style="display: flex; gap: 8px; align-items: center; position: relative;">
+                                <div style="display: flex; gap: 8px; align-items: center;">
                                     <input type="number" id="modal-edit-exp-num" min="1" max="999" class="modal-input" style="width: 80px; padding: 8px 10px; font-size: 13px; text-align: center; display: none;" placeholder="1" oninput="updateExpirationCustomPreview()" />
-                                    <div id="modal-edit-exp-trigger" class="modal-input" style="flex: 1; padding: 8px 12px; font-size: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="toggleDropdownMenu('exp')">
-                                        <span id="modal-edit-exp-selected-text">Never Expires</span>
-                                        <span style="font-size: 10px; color: #94a3b8;">▼</span>
-                                    </div>
-                                    <div id="modal-edit-exp-dropdown" style="display: none; position: absolute; top: calc(100% + 4px); right: 0; left: 0; background: #0f172a; border: 1px solid rgba(168,85,247,0.3); border-radius: 8px; z-index: 1000; box-shadow: 0 8px 24px rgba(0,0,0,0.6); max-height: 140px; overflow-y: auto;">
-                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('exp', 'none', 'Never Expires')">Never Expires</div>
-                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('exp', 'hours', 'Hours')">Hours</div>
-                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('exp', 'days', 'Days')">Days</div>
-                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('exp', 'weeks', 'Weeks')">Weeks</div>
-                                        <div class="custom-dropdown-opt" onclick="selectDropdownOption('exp', 'months', 'Months')">Months</div>
+                                    <div style="position: relative; flex: 1;">
+                                        <div id="modal-edit-exp-trigger" class="modal-input" tabindex="0" role="combobox" aria-haspopup="listbox" aria-expanded="false" style="width: 100%; padding: 8px 12px; font-size: 12px; cursor: pointer; display: flex; justify-content: space-between; align-items: center;" onclick="toggleDropdownMenu('exp')" onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();toggleDropdownMenu('exp');}">
+                                            <span id="modal-edit-exp-selected-text">Never Expires</span>
+                                            <span style="font-size: 10px; color: #94a3b8;">▼</span>
+                                        </div>
+                                        <div id="modal-edit-exp-dropdown" style="display: none; position: absolute; top: calc(100% + 4px); right: 0; left: 0; background: #0f172a; border: 1px solid rgba(168,85,247,0.3); border-radius: 8px; z-index: 1000; box-shadow: 0 8px 24px rgba(0,0,0,0.6); max-height: 140px; overflow-y: auto;">
+                                            <div class="custom-dropdown-opt" onclick="selectDropdownOption('exp', 'none', 'Never Expires')">Never Expires</div>
+                                            <div class="custom-dropdown-opt" onclick="selectDropdownOption('exp', 'hours', 'Hours')">Hours</div>
+                                            <div class="custom-dropdown-opt" onclick="selectDropdownOption('exp', 'days', 'Days')">Days</div>
+                                            <div class="custom-dropdown-opt" onclick="selectDropdownOption('exp', 'weeks', 'Weeks')">Weeks</div>
+                                            <div class="custom-dropdown-opt" onclick="selectDropdownOption('exp', 'months', 'Months')">Months</div>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
@@ -2447,7 +2482,7 @@
                     <div style="background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #fca5a5; margin-bottom: 14px;">
                         ⚠️ This will permanently delete and purge the account credentials completely. Type <strong style="color: #ef4444; font-family: monospace;">confirm</strong> below to proceed:
                     </div>
-                    <input type="text" id="modal-delete-confirm-input" class="modal-input" placeholder="Type confirm" autocomplete="off" oninput="validateDeleteInput()" />
+                    <input type="text" id="modal-delete-confirm-input" class="modal-input modal-input-danger" placeholder="Type confirm" autocomplete="off" oninput="validateDeleteInput()" />
                 </div>
                 <div class="modal-actions">
                     <button type="button" class="modal-btn-cancel" onclick="closeDeleteModal()">Cancel</button>
@@ -3147,17 +3182,25 @@
 
         function toggleDropdownMenu(kind) {
             const dropdown = document.getElementById('modal-edit-' + kind + '-dropdown');
+            const trigger = document.getElementById('modal-edit-' + kind + '-trigger');
             if (!dropdown) return;
             const isShown = dropdown.style.display === 'block';
             closeAllCustomDropdowns();
-            if (!isShown) dropdown.style.display = 'block';
+            if (!isShown) {
+                dropdown.style.display = 'block';
+                if (trigger) trigger.setAttribute('aria-expanded', 'true');
+            }
         }
 
         function closeAllCustomDropdowns() {
             const d1 = document.getElementById('modal-edit-refill-dropdown');
             const d2 = document.getElementById('modal-edit-exp-dropdown');
+            const t1 = document.getElementById('modal-edit-refill-trigger');
+            const t2 = document.getElementById('modal-edit-exp-trigger');
             if (d1) d1.style.display = 'none';
             if (d2) d2.style.display = 'none';
+            if (t1) t1.setAttribute('aria-expanded', 'false');
+            if (t2) t2.setAttribute('aria-expanded', 'false');
         }
 
         function selectDropdownOption(kind, unit, label) {
