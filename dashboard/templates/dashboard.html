@@ -325,6 +325,7 @@
         .pool-title {
             font-size: 15px;
             font-weight: 800;
+            white-space: nowrap;
         }
         .pool-badge {
             padding: 3px 8px;
@@ -1332,6 +1333,7 @@
             }
             .brand-section {
                 gap: 8px;
+                min-width: 0;
             }
             .settings-top-btn {
                 height: 28px;
@@ -1341,6 +1343,19 @@
             }
             .top-nav-actions {
                 gap: 4px;
+            }
+            @media (max-width: 480px) {
+                #settings-btn-text {
+                    display: none;
+                }
+                .settings-top-btn {
+                    padding: 4px 7px;
+                }
+            }
+            @media (max-width: 360px) {
+                #api-page-toggle-btn .btn-label {
+                    display: none;
+                }
             }
             .header-sub-row {
                 flex-direction: row !important;
@@ -1365,6 +1380,33 @@
             .provider-tab-btn {
                 font-size: 13.5px;
                 padding: 10px 12px;
+            }
+            .pool-title-group {
+                gap: 6px;
+            }
+            .pool-title {
+                font-size: 13.5px;
+            }
+            .quota-subgroup-toggle-wrap {
+                margin-left: 2px;
+                gap: 1px;
+                padding: 1.5px;
+            }
+            .quota-subgroup-btn {
+                padding: 2px 6px;
+                font-size: 10px;
+            }
+            .stat-tri-card {
+                padding: 8px 4px;
+            }
+            .stat-tri-label {
+                white-space: normal;
+                line-height: 1.15;
+                min-height: 24px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 10px;
             }
             .settings-card-title {
                 font-size: 14px;
@@ -2478,9 +2520,9 @@
                     <span id="pool-total-capacity-text" style="font-family:'JetBrains Mono',monospace; font-size:11px; font-weight:700; color:var(--accent-cyan);">--</span>
                 </div>
                 <!-- 5H & Weekly/Monthly Bar on the same row with 5-Hour longer and balanced -->
-                <div style="display:grid; grid-template-columns: 1.4fr 1fr; gap: 16px; align-items: center;">
+                <div style="display:grid; grid-template-columns: 1.4fr 1fr; gap: 16px; align-items: start;">
                     <div>
-                        <div style="display:flex; justify-content:space-between; font-size:10.5px; color:var(--text-tertiary); margin-bottom:4px;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; min-height:32px; font-size:10.5px; color:var(--text-tertiary); margin-bottom:4px;">
                             <span id="pool-5h-label" style="font-weight:600;">5-Hour Quota</span>
                             <span id="pool-5h-summary-val" style="font-family:'JetBrains Mono'; font-weight:700; color:#38bdf8;">--%</span>
                         </div>
@@ -2489,7 +2531,7 @@
                         </div>
                     </div>
                     <div>
-                        <div style="display:flex; justify-content:space-between; font-size:10.5px; color:var(--text-tertiary); margin-bottom:4px;">
+                        <div style="display:flex; justify-content:space-between; align-items:flex-start; min-height:32px; font-size:10.5px; color:var(--text-tertiary); margin-bottom:4px;">
                             <span id="pool-wk-label" style="font-weight:600;">Weekly / Monthly</span>
                             <span id="pool-wk-summary-val" style="font-family:'JetBrains Mono'; font-weight:700; color:#a855f7;">--%</span>
                         </div>
@@ -2523,7 +2565,7 @@
                     <button id="accounts-toggle-btn" class="accounts-toggle-btn" onclick="toggleAccountsList()">
                         <span id="accounts-toggle-icon">👁️</span>
                         <span id="accounts-toggle-text">View Accounts</span>
-                        <span id="accounts-toggle-chevron" style="transition: transform 0.3s ease; display: inline-block; font-size: 10px; transform: rotate(180deg);">▾</span>
+                        <span id="accounts-toggle-chevron" style="transition: transform 0.3s ease; display: inline-block; font-size: 10px; transform: rotate(0deg);">▾</span>
                     </button>
                 </div>
                 <div class="accounts-strip collapsed" id="pool-accounts-container">
@@ -4597,13 +4639,13 @@
                 container.classList.remove('collapsed');
                 if (textEl) textEl.innerText = 'Hide Accounts';
                 if (iconEl) iconEl.innerText = '🔒';
-                if (chevronEl) chevronEl.style.transform = 'rotate(0deg)';
+                if (chevronEl) chevronEl.style.transform = 'rotate(180deg)';
                 renderAccountsList();
             } else {
                 container.classList.add('collapsed');
                 if (textEl) textEl.innerText = 'View Accounts';
                 if (iconEl) iconEl.innerText = '👁️';
-                if (chevronEl) chevronEl.style.transform = 'rotate(180deg)';
+                if (chevronEl) chevronEl.style.transform = 'rotate(0deg)';
                 container.innerHTML = '';
             }
         }
