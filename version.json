@@ -1,6 +1,6 @@
 {
-  "version": "2.2.2",
+  "version": "2.2.3",
   "tier": "stable",
-  "updated_at": "2026-09-14T17:50:03+03:00",
-  "description": "Stable production-ready release: targeted authentication, API-key identity, refill accounting, analytics, MoA cleanup, and quota validation repairs"
+  "updated_at": "2026-09-15T00:48:27+03:00",
+  "description": "Final stable production-ready release after targeted backend repairs and UI/UX consistency completion"
 }

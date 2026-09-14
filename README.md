@@ -5,7 +5,7 @@
   <a href="README.ar.md"><b>العربية</b></a>
 </p>
 
-> **Current release:** `v2.2.2` — **Stable / Production Ready** (2026-09-14). Verified by 159/159 tests and an independent acceptance review.
+> **Current release:** `v2.2.3` — **Stable / Production Ready** (2026-09-15). Backend repair and UI/UX consistency are complete; verified by 163/163 tests and manager visual QA.
 
 > [!WARNING]
 > **⚠️ DISCLAIMER:**
