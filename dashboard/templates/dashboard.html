@@ -1471,6 +1471,18 @@
             box-sizing: border-box;
             overscroll-behavior: contain;
         }
+        .models-list-grid {
+            display: none;
+            padding: 10px;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 6px;
+            background: rgba(0, 0, 0, 0.25);
+        }
+        @media (max-width: 480px) {
+            .models-list-grid {
+                grid-template-columns: 1fr;
+            }
+        }
         #delete-modal-overlay .modal-dialog {
             border-color: rgba(239, 68, 68, 0.35);
             box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6), 0 0 24px rgba(239, 68, 68, 0.15);
@@ -2366,7 +2378,7 @@
                                     <span style="font-size: 12px; font-weight: 700; color: #c084fc;">🟣 OpenAI / Codex Models</span>
                                     <span id="codex-models-arrow" style="font-size: 11px; font-weight: 700; color: #c084fc;">▼ Show</span>
                                 </button>
-                                <div id="codex-models-list" style="display: none; padding: 10px; grid-template-columns: 1fr 1fr; gap: 6px; background: rgba(0,0,0,0.25);">
+                                <div id="codex-models-list" class="models-list-grid">
                                     <!-- Populated dynamically -->
                                 </div>
                             </div>
@@ -2374,10 +2386,10 @@
                             <!-- Provider Accordion: Gemini -->
                             <div style="border: 1px solid rgba(56,189,248,0.25); border-radius: 8px; overflow: hidden; background: rgba(56,189,248,0.04);">
                                 <button type="button" onclick="toggleProviderModelsList('gemini')" style="width: 100%; border: none; outline: none; display: flex; justify-content: space-between; align-items: center; padding: 9px 12px; cursor: pointer; background: rgba(56,189,248,0.12); text-align: left;">
-                                    <span style="font-size: 12px; font-weight: 700; color: #38bdf8;">🔵 Google Gemini Models</span>
+                                    <span style="font-size: 12px; font-weight: 700; color: #38bdf8;">🟢 Google / Gemini Models</span>
                                     <span id="gemini-models-arrow" style="font-size: 11px; font-weight: 700; color: #38bdf8;">▼ Show</span>
                                 </button>
-                                <div id="gemini-models-list" style="display: none; padding: 10px; grid-template-columns: 1fr 1fr; gap: 6px; background: rgba(0,0,0,0.25);">
+                                <div id="gemini-models-list" class="models-list-grid">
                                     <!-- Populated dynamically -->
                                 </div>
                             </div>
