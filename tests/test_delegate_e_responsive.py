@@ -1,4 +1,3 @@
-import pytest
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -20,3 +19,12 @@ def test_allowed_models_grid_responsive_integrity():
     # 3. Model lists use the CSS class instead of brittle inline 1fr 1fr
     assert 'id="codex-models-list" class="models-list-grid"' in html
     assert 'id="gemini-models-list" class="models-list-grid"' in html
+
+
+def test_mobile_settings_header_wraps_before_badge_overlap():
+    html = (ROOT / "dashboard" / "templates" / "dashboard.html").read_text(encoding="utf-8")
+
+    assert ".settings-card-top-row {\n                    flex-wrap: wrap;" in html
+    assert ".settings-card-title-group {\n                    flex-shrink: 0;" in html
+    assert ".settings-card-top-row > .badge {" in html
+    assert "margin-left: auto;" in html
