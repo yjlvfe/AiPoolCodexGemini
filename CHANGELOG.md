@@ -1,5 +1,11 @@
 # Changelog
 
+## v2.2.5 — 2026-09-15
+
+### Stable
+- **Dashboard Quota Subgroup Switching**: Account quota metrics (5h and weekly percentages + countdown timers) and account sorting now dynamically update based on the selected Gemini subgroup (`Gemini` vs `Claude / GPT`).
+- **UI Stability**: Removed layout shift and jitter when toggling quota subgroup buttons.
+
 ## v2.2.4 — 2026-09-15
 
 ### Stable

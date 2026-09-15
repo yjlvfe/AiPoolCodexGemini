@@ -5,7 +5,7 @@
   <a href="README.ar.md"><b>العربية</b></a>
 </p>
 
-> **Current release:** `v2.2.4` — **Stable / Production Ready** (2026-09-15). Claude tool schema repair and multi-account gateway stability; verified by 164/164 tests.
+> **Current release:** `v2.2.5` — **Stable / Production Ready** (2026-09-15). Dynamic quota subgroup switching (Gemini vs Claude/GPT), zero-jitter UI buttons, and pooled multi-account stability.
 
 > [!WARNING]
 > **⚠️ DISCLAIMER:**

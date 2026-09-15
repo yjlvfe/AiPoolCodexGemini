@@ -331,6 +331,7 @@
             align-items: center;
             gap: 8px;
             min-height: 28px;
+            flex-wrap: nowrap;
         }
         .pool-title {
             font-size: 15px;
@@ -352,20 +353,31 @@
             padding: 2px;
             gap: 2px;
             margin-left: 6px;
+            flex-shrink: 0;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
         }
         .quota-subgroup-btn {
             background: transparent;
-            border: none;
+            border: 1px solid transparent;
             color: var(--text-secondary);
             font-size: 10.5px;
             font-weight: 700;
             padding: 2px 8px;
             border-radius: 16px;
             cursor: pointer;
-            transition: var(--transition-smooth);
+            transition: background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
             font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
             line-height: 1.2;
             white-space: nowrap;
+            box-sizing: border-box;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-tap-highlight-color: transparent;
+            outline: none;
+            transform: none !important;
         }
         .quota-subgroup-btn:hover {
             color: #fff;
@@ -373,8 +385,11 @@
         .quota-subgroup-btn.active {
             background: rgba(56, 189, 248, 0.2);
             color: #38bdf8;
-            border: 1px solid rgba(56, 189, 248, 0.35);
+            border-color: rgba(56, 189, 248, 0.35);
             box-shadow: 0 0 8px rgba(56, 189, 248, 0.2);
+        }
+        .quota-subgroup-btn:active {
+            transform: none !important;
         }
 
         /* CUSTOM LUXURY ANIMATED DROPDOWN */
@@ -1408,6 +1423,8 @@
             .quota-subgroup-btn {
                 padding: 2px 6px;
                 font-size: 10px;
+                outline: none;
+                transform: none !important;
             }
             .stat-tri-card {
                 padding: 8px 4px;
@@ -2557,7 +2574,7 @@
             </div>
             <div class="header-sub-row">
                 <div class="brand-subtitle">Autonomous Failover Architecture</div>
-                <span class="version-badge" id="system-version-pill" title="Active Release Version">v2.2.4 (stable)</span>
+                <span class="version-badge" id="system-version-pill" title="Active Release Version">v2.2.5 (stable)</span>
             </div>
         </header>
 
@@ -4468,10 +4485,10 @@
                         h5 = acc['mo_pct'];
                     }
                 } else {
-                    const gem = acc.gemini || {};
-                    const has5h = typeof gem['5h_pct'] === 'number';
-                    h5 = has5h ? gem['5h_pct'] : (typeof gem['wk_pct'] === 'number' ? gem['wk_pct'] : 100);
-                    wk = typeof gem['wk_pct'] === 'number' ? gem['wk_pct'] : 100;
+                    const quotaGroup = (currentGeminiSubgroup === 'claude') ? (acc.claude || {}) : (acc.gemini || {});
+                    const has5h = typeof quotaGroup['5h_pct'] === 'number';
+                    h5 = has5h ? quotaGroup['5h_pct'] : (typeof quotaGroup['wk_pct'] === 'number' ? quotaGroup['wk_pct'] : 100);
+                    wk = typeof quotaGroup['wk_pct'] === 'number' ? quotaGroup['wk_pct'] : 100;
                 }
 
                 if (!isFree) {
@@ -4561,16 +4578,16 @@
                         `;
                     }
                 } else {
-                    const gem = acc.gemini || {};
-                    const gem_5h = formatQuotaPct(gem['5h_pct']);
-                    const gem_res = escapeHtml(gem['5h_reset'] || 'N/A');
-                    const wk = formatQuotaPct(gem['wk_pct']);
-                    const wk_res = escapeHtml(gem['wk_reset'] || 'N/A');
+                    const quotaGroup = (currentGeminiSubgroup === 'claude') ? (acc.claude || {}) : (acc.gemini || {});
+                    const q_5h = formatQuotaPct(quotaGroup['5h_pct']);
+                    const q_res = escapeHtml(quotaGroup['5h_reset'] || 'N/A');
+                    const wk = formatQuotaPct(quotaGroup['wk_pct']);
+                    const wk_res = escapeHtml(quotaGroup['wk_reset'] || 'N/A');
 
-                    const has5h = gem['5h_pct'] !== null && gem['5h_pct'] !== undefined;
+                    const has5h = quotaGroup['5h_pct'] !== null && quotaGroup['5h_pct'] !== undefined;
                     metricsHtml = `
                         <div style="text-align:right; font-family:'JetBrains Mono',monospace; font-size:10px; line-height:1.4;">
-                            ${has5h ? `<div style="color:#67e8f9; font-weight:700;">5h: ${escapeHtml(gem_5h)} <span style="color:var(--text-tertiary); font-weight:400;">(${gem_res})</span></div>` : ''}
+                            ${has5h ? `<div style="color:#67e8f9; font-weight:700;">5h: ${escapeHtml(q_5h)} <span style="color:var(--text-tertiary); font-weight:400;">(${q_res})</span></div>` : ''}
                             <div style="color:#c084fc; font-weight:700;">Wk: ${escapeHtml(wk)} <span style="color:var(--text-tertiary); font-weight:400;">(${wk_res})</span></div>
                         </div>
                     `;

@@ -498,9 +498,9 @@ class PoolManager:
                     acc = str(row[1])
                     tok = int(row[2]) if row[2] else 0
                     if 'anti' in p or 'gem' in p:
-                        tokens['gemini'][acc] = tok
+                        tokens['gemini'][acc] = tokens['gemini'].get(acc, 0) + tok
                     else:
-                        tokens['codex'][acc] = tok
+                        tokens['codex'][acc] = tokens['codex'].get(acc, 0) + tok
         except Exception:
             pass
         return tokens
