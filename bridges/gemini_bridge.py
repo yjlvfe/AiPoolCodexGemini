@@ -277,8 +277,24 @@ def list_available_models(force_refresh=True):
 # ---------------------------------------------------------------------------
 # Schema & Tool Transformation Helpers
 # ---------------------------------------------------------------------------
-def _build_tools(tools):
+def _sanitize_tool_schema(obj):
+    if isinstance(obj, dict):
+        new_obj = {}
+        for k, v in obj.items():
+            if k == "anyOf" and isinstance(v, list):
+                new_obj["oneOf"] = [_sanitize_tool_schema(item) for item in v]
+            else:
+                new_obj[k] = _sanitize_tool_schema(v)
+        return new_obj
+    elif isinstance(obj, list):
+        return [_sanitize_tool_schema(x) for x in obj]
+    return obj
+
+
+def _build_tools(tools, wire_model=""):
     declarations = []
+    is_claude = isinstance(wire_model, str) and wire_model.startswith("claude-")
+    param_key = "parameters" if is_claude else "parametersJsonSchema"
     for tool in tools or []:
         if not isinstance(tool, dict) or tool.get("type") != "function":
             raise ValueError("Only function tools are supported by this endpoint")
@@ -293,7 +309,10 @@ def _build_tools(tools):
         if "parameters" in fn:
             if not isinstance(fn["parameters"], dict):
                 raise ValueError("Function parameters must be a JSON schema object")
-            declaration["parametersJsonSchema"] = deepcopy(fn["parameters"])
+            params = deepcopy(fn["parameters"])
+            if is_claude:
+                params = _sanitize_tool_schema(params)
+            declaration[param_key] = params
         declarations.append(declaration)
     return [{"functionDeclarations": declarations}] if declarations else None
 
@@ -360,6 +379,8 @@ def to_antigravity_body(payload):
             tool_calls = m.get("tool_calls") or []
             if not isinstance(tool_calls, list) or (tool_calls and role != "assistant"):
                 raise PoolError("tool_calls must be an assistant array", 400)
+            if tool_calls:
+                parts = [p for p in parts if p.get("text") != ""]
             for tc in tool_calls:
                 fn = tc.get("function") if isinstance(tc, dict) else None
                 if not isinstance(fn, dict) or not isinstance(fn.get("name"), str) or not fn["name"]:
@@ -449,7 +470,7 @@ def to_antigravity_body(payload):
         ag_body["request"]["systemInstruction"] = {"role": "system", "parts": system_parts}
 
     try:
-        converted_tools = _build_tools(payload.get("tools"))
+        converted_tools = _build_tools(payload.get("tools"), wire_model=wire_model)
     except ValueError as exc:
         raise PoolError(str(exc), 400) from None
     if converted_tools:

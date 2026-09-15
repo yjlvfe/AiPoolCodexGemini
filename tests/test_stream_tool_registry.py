@@ -28,5 +28,26 @@ class StreamToolTests(unittest.TestCase):
         self.assertEqual(r.deduplicate([t, t]), [t])
         self.assertEqual(r.resolve('search'), t)
 
+    def test_claude_model_tool_schema_sanitization(self):
+        from gemini_bridge import _build_tools
+        tools = [{
+            'type': 'function',
+            'function': {
+                'name': 'test_fn',
+                'parameters': {
+                    'type': 'object',
+                    'properties': {
+                        'query': {'anyOf': [{'type': 'string'}, {'type': 'null'}]}
+                    }
+                }
+            }
+        }]
+        res = _build_tools(tools, wire_model='claude-sonnet-4-6')
+        decl = res[0]['functionDeclarations'][0]
+        self.assertIn('parameters', decl)
+        self.assertNotIn('parametersJsonSchema', decl)
+        self.assertIn('oneOf', decl['parameters']['properties']['query'])
+        self.assertNotIn('anyOf', decl['parameters']['properties']['query'])
+
 if __name__ == '__main__':
     unittest.main()

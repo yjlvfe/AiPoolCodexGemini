@@ -1,6 +1,6 @@
 {
-  "version": "2.2.3",
+  "version": "2.2.4",
   "tier": "stable",
-  "updated_at": "2026-09-15T00:48:27+03:00",
-  "description": "Final stable production-ready release after targeted backend repairs and UI/UX consistency completion"
+  "updated_at": "2026-09-15T05:30:00+03:00",
+  "description": "Stable production-ready release: Claude tool schema sanitization and parameters format repair on Antigravity bridge"
 }

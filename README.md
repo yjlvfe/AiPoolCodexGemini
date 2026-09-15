@@ -5,7 +5,7 @@
   <a href="README.ar.md"><b>العربية</b></a>
 </p>
 
-> **Current release:** `v2.2.3` — **Stable / Production Ready** (2026-09-15). Backend repair and UI/UX consistency are complete; verified by 163/163 tests and manager visual QA.
+> **Current release:** `v2.2.4` — **Stable / Production Ready** (2026-09-15). Claude tool schema repair and multi-account gateway stability; verified by 164/164 tests.
 
 > [!WARNING]
 > **⚠️ DISCLAIMER:**

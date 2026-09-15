@@ -1,6 +1,14 @@
 # Changelog
 
-## v2.2.3 — 2026-09-15
+## v2.2.4 — 2026-09-15
+
+### Stable
+- Stable release with Claude tool schema format repair on Antigravity gateway bridge.
+
+### Fixed
+- Antigravity tool transformation for Claude models (`claude-*`): format `parameters` instead of `parametersJsonSchema`.
+- Schema normalization: sanitize `anyOf` to `oneOf` for Anthropic tool calling compliance.
+- Filter empty text parts in assistant tool calls.
 
 ### Stable
 - Final stable release after backend repair and UI/UX consistency completion.
