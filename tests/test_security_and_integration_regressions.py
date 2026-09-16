@@ -166,6 +166,13 @@ class SecurityAndIntegrationRegressionTests(unittest.TestCase):
         stronger = integrations.merged('hermes', {'providers': {}, 'agent': {'api_max_retries': 40}})
         self.assertEqual(stronger['agent']['api_max_retries'], 40)
 
+    def test_integration_provider_urls_preserve_configured_bridge_ports(self):
+        with patch.dict('os.environ', {'AG_BRIDGE_PORT': '9123', 'CODEX_BRIDGE_PORT': '9124'}):
+            providers = integrations.providers('hermes', {'gemini': ['gemini-model'], 'codex': ['codex-model']})
+
+        self.assertEqual(providers['gemini']['api'], 'http://127.0.0.1:9123/v1')
+        self.assertEqual(providers['codex']['api'], 'http://127.0.0.1:9124/v1')
+
     def test_codex_bridge_retries_provider_outage_before_output(self):
         class Upstream(BaseHTTPRequestHandler):
             calls = 0
@@ -211,7 +218,10 @@ class SecurityAndIntegrationRegressionTests(unittest.TestCase):
                     recorded.set()
 
             with tempfile.TemporaryDirectory() as directory, patch.dict(
-                'os.environ', {'AUTH_DB_PATH': str(Path(directory) / 'audit.db')}
+                'os.environ', {
+                    'AUTH_DB_PATH': str(Path(directory) / 'audit.db'),
+                    'AIPOOL_PROVIDER_MAX_ATTEMPTS': '20',
+                }
             ), patch.object(codex_bridge, 'UPSTREAM_URL', f'http://127.0.0.1:{server.server_port}/v1/responses'), \
                     patch.object(codex_bridge.POOL, 'candidates', return_value=[1]), \
                     patch.object(codex_bridge.POOL, 'credentials', return_value={'tokens': {'access_token': 'test'}}), \

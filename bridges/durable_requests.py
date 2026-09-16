@@ -13,6 +13,7 @@ import json
 import os
 from pathlib import Path
 import sqlite3
+import threading
 import time
 import uuid
 from typing import Any
@@ -20,6 +21,7 @@ from typing import Any
 
 DEFAULT_TTL_SECONDS = 15 * 60
 MAX_RESPONSE_BYTES = 8 * 1024 * 1024
+_WAL_MODE_LOCK = threading.Lock()
 
 
 def _path() -> Path:
@@ -64,6 +66,11 @@ class DurableRequestStore:
             pass
         conn.row_factory = sqlite3.Row
         conn.execute("PRAGMA busy_timeout=10000")
+        # Switching journal mode takes an exclusive lock.  Serialize this
+        # one-time-per-connection transition within a process so concurrent
+        # store construction cannot race before SQLite's busy timeout applies.
+        with _WAL_MODE_LOCK:
+            conn.execute("PRAGMA journal_mode=WAL")
         return conn
 
     def initialize(self) -> None:
@@ -195,13 +202,17 @@ class DurableRequestStore:
         """
         self.initialize()
         now = time.time()
+        # Bounded lease expiry (5 minutes) protects against PID reuse on the host.
+        lease_cutoff = now - float(os.environ.get("AIPOOL_DURABLE_LEASE_EXPIRY", "300"))
         with self._connect() as conn:
             rows = conn.execute(
-                "SELECT request_key, owner_pid FROM durable_requests WHERE status='in_progress'"
+                "SELECT request_key, owner_pid, updated_at FROM durable_requests WHERE status='in_progress'"
             ).fetchall()
             reclaimed = 0
             for row in rows:
-                if self._owner_alive(row["owner_pid"]):
+                updated_at = float(row["updated_at"] or 0)
+                is_expired = updated_at < lease_cutoff
+                if self._owner_alive(row["owner_pid"]) and not is_expired:
                     continue
                 cur = conn.execute(
                     """UPDATE durable_requests

@@ -111,6 +111,8 @@ class TokenAuthManager:
         except OSError:
             pass
         conn.row_factory = sqlite3.Row
+        conn.execute("PRAGMA busy_timeout=10000")
+        conn.execute("PRAGMA journal_mode=WAL")
         return conn
 
     def _init_db(self):
@@ -337,8 +339,8 @@ class PoolManager:
                 ag_future = executor.submit(pool_report, 'gemini')
                 cdx_future = executor.submit(pool_report, 'codex')
                 try:
-                    ag_data = ag_future.result()
-                    cdx_data = cdx_future.result()
+                    ag_data = ag_future.result(timeout=30.0)
+                    cdx_data = cdx_future.result(timeout=30.0)
                 except Exception as exc:
                     print(f"[pool-worker] account refresh failed: {type(exc).__name__}: {str(exc)[:240]}", flush=True)
                     raise
@@ -470,6 +472,8 @@ class PoolManager:
         try:
             pool_name = 'Gemini' if system == 'gemini' else 'Codex'
             with sqlite3.connect(self.auth_db, timeout=5) as conn:
+                conn.execute('PRAGMA busy_timeout=10000')
+                conn.execute('PRAGMA journal_mode=WAL')
                 conn.execute('DELETE FROM account_usage_counters WHERE pool = ? AND account = ?', (pool_name, str(account_num)))
                 conn.commit()
         except Exception as exc:
@@ -493,6 +497,8 @@ class PoolManager:
         tokens = {'gemini': {}, 'codex': {}}
         try:
             with sqlite3.connect(self.auth_db, timeout=5) as conn:
+                conn.execute('PRAGMA busy_timeout=10000')
+                conn.execute('PRAGMA journal_mode=WAL')
                 for row in conn.execute('SELECT pool, account, total_tokens FROM account_usage_counters').fetchall():
                     p = str(row[0]).lower()
                     acc = str(row[1])

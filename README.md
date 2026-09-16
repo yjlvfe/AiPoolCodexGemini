@@ -5,7 +5,7 @@
   <a href="README.ar.md"><b>العربية</b></a>
 </p>
 
-> **Current release:** `v2.2.5` — **Stable / Production Ready** (2026-09-15). Dynamic quota subgroup switching (Gemini vs Claude/GPT), zero-jitter UI buttons, and pooled multi-account stability.
+> **Current release:** `v2.2.6` — **Stable / Production Ready** (2026-09-16). Reliability hardening is complete, sticky account rotation is closed, and the full suite passed **211/211**.
 
 > [!WARNING]
 > **⚠️ DISCLAIMER:**

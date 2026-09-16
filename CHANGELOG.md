@@ -1,5 +1,24 @@
 # Changelog
 
+## v2.2.6 — 2026-09-16
+
+### Stable
+- Production-ready stable release with reliability hardening and sticky account rotation closure.
+
+### Reliability
+- Bounded account-lock acquisition, inbound body reads, upstream retries, request lifecycles, streaming, dashboard probes, and durable request leases.
+- Added SQLite WAL mode with busy timeouts, clean client-disconnect handling, bounded Codex stream idle timeouts, standardized stream interruption events, and safe integration port handling.
+
+### Account Rotation
+- Kept the active account sticky across successful requests, transient 5xx/network failures, and temporary 429 rate limits.
+- Restricted persistent rotation to confirmed hard quota exhaustion, permanent invalid credentials, or an explicit manual switch.
+- Added durable hard-exhaustion exclusion, invalid-credential retirement, background read-only guarantees, and generation-checked atomic promotion to prevent bounce-back and stale overwrites.
+
+### Verification
+- Full test suite: **211/211 PASS**.
+- Sticky rotation closure and reliability regression suites passed.
+- Production services and runtime health verified after deployment and restart.
+
 ## v2.2.5 — 2026-09-15
 
 ### Stable

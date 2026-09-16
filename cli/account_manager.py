@@ -181,16 +181,21 @@ class Manager:
                     if time.time() - start >= timeout:
                         break
                     time.sleep(0.05)
+            if not locked_ok:
+                try:
+                    os.close(fd)
+                except OSError:
+                    pass
+                raise TimeoutError('Failed to acquire store lock within timeout')
             held.add(key)
             try:
                 yield
             finally:
                 held.discard(key)
-                if locked_ok:
-                    try:
-                        fcntl.flock(fd, fcntl.LOCK_UN)
-                    except OSError:
-                        pass
+                try:
+                    fcntl.flock(fd, fcntl.LOCK_UN)
+                except OSError:
+                    pass
                 try:
                     os.close(fd)
                 except OSError:

@@ -7,6 +7,7 @@ import urllib.parse
 import json
 import time
 import os
+import socket
 from http import cookies
 import subprocess
 import sys
@@ -173,6 +174,8 @@ def _migrate_legacy_client_counter(db_path, legacy_label, client_id):
     if not legacy_key or not stable_key or legacy_key == stable_key or not os.path.isfile(db_path):
         return
     with sqlite3.connect(db_path, timeout=5) as conn:
+        conn.execute("PRAGMA busy_timeout=10000")
+        conn.execute("PRAGMA journal_mode=WAL")
         conn.row_factory = sqlite3.Row
         try:
             legacy = conn.execute(
@@ -287,6 +290,10 @@ def get_system_version():
         result['last_update'] = None
     return result
 
+class RequestBodyTimeout(ValueError):
+    pass
+
+
 class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
     MAX_BODY_BYTES = 1 * 1024 * 1024
 
@@ -296,12 +303,15 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
 
     def send_json_response(self, data, status_code=200):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
-        self.send_response(status_code)
-        self.send_header("Content-Type", "application/json; charset=utf-8")
-        self.send_header("Content-Length", str(len(body)))
-        self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
-        self.end_headers()
-        self.wfile.write(body)
+        try:
+            self.send_response(status_code)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+            self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-cache, no-store, must-revalidate")
+            self.end_headers()
+            self.wfile.write(body)
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
 
     def _read_json_body(self):
         try:
@@ -312,8 +322,22 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             raise ValueError('Request body is too large')
         if not length:
             return {}
+        connection = getattr(self, 'connection', None)
         try:
-            value = json.loads(self.rfile.read(length).decode('utf-8'))
+            if connection is not None:
+                connection.settimeout(30.0)
+            raw = self.rfile.read(length)
+        except (socket.timeout, TimeoutError):
+            self.close_connection = True
+            raise RequestBodyTimeout('Request body read timed out') from None
+        finally:
+            try:
+                if connection is not None:
+                    connection.settimeout(None)
+            except OSError:
+                pass
+        try:
+            value = json.loads(raw.decode('utf-8'))
         except (UnicodeDecodeError, json.JSONDecodeError):
             raise ValueError('Request body must be valid JSON') from None
         if not isinstance(value, dict):
@@ -487,6 +511,8 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                     try:
                         import sqlite3
                         with sqlite3.connect(db_path, timeout=5) as conn:
+                            conn.execute("PRAGMA busy_timeout=10000")
+                            conn.execute("PRAGMA journal_mode=WAL")
                             conn.row_factory = sqlite3.Row
                             # First load historical persistent counters
                             try:
@@ -575,7 +601,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             try:
                 payload = self._read_json_body()
             except ValueError as exc:
-                self.send_json_response({"success": False, "message": str(exc)}, status_code=400)
+                self.send_json_response({"success": False, "message": str(exc)}, status_code=408 if isinstance(exc, RequestBodyTimeout) else 400)
                 return
             target_id = str(payload.get("id", "")).strip()
             if target_id in ("hermes", "openclaw", "localtooling"):
@@ -690,7 +716,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             try:
                 payload = self._read_json_body()
             except ValueError as exc:
-                self.send_json_response({"success": False, "message": str(exc)}, status_code=400)
+                self.send_json_response({"success": False, "message": str(exc)}, status_code=408 if isinstance(exc, RequestBodyTimeout) else 400)
                 return
             system = payload.get("system", "")
             try:
@@ -711,7 +737,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             try:
                 payload = self._read_json_body()
             except ValueError as exc:
-                self.send_json_response({"success": False, "message": str(exc)}, status_code=400)
+                self.send_json_response({"success": False, "message": str(exc)}, status_code=408 if isinstance(exc, RequestBodyTimeout) else 400)
                 return
             system = payload.get("system", "")
             try:
@@ -740,7 +766,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             try:
                 payload = self._read_json_body()
             except ValueError as exc:
-                self.send_json_response({"success": False, "message": str(exc)}, status_code=400)
+                self.send_json_response({"success": False, "message": str(exc)}, status_code=408 if isinstance(exc, RequestBodyTimeout) else 400)
                 return
             tool = payload.get("tool", "")
             if tool not in ("codex", "gemini"):
@@ -778,7 +804,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             try:
                 payload = self._read_json_body()
             except ValueError as exc:
-                self.send_json_response({"success": False, "message": str(exc)}, status_code=400)
+                self.send_json_response({"success": False, "message": str(exc)}, status_code=408 if isinstance(exc, RequestBodyTimeout) else 400)
                 return
             name = str(payload.get("name", "")).strip() or "Unnamed Key"
             new_id = "key_" + secrets.token_hex(4)
@@ -816,7 +842,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             try:
                 payload = self._read_json_body()
             except ValueError as exc:
-                self.send_json_response({"success": False, "message": str(exc)}, status_code=400)
+                self.send_json_response({"success": False, "message": str(exc)}, status_code=408 if isinstance(exc, RequestBodyTimeout) else 400)
                 return
             target_id = str(payload.get("id", "")).strip()
             if target_id in ("hermes", "openclaw", "localtooling"):
@@ -837,7 +863,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             try:
                 payload = self._read_json_body()
             except ValueError as exc:
-                self.send_json_response({"success": False, "message": str(exc)}, status_code=400)
+                self.send_json_response({"success": False, "message": str(exc)}, status_code=408 if isinstance(exc, RequestBodyTimeout) else 400)
                 return
             target_id = str(payload.get("id", "")).strip()
             registry_file = get_registry_file()
@@ -870,6 +896,8 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                     try:
                         import sqlite3
                         with sqlite3.connect(db_path, timeout=5) as conn:
+                            conn.execute("PRAGMA busy_timeout=10000")
+                            conn.execute("PRAGMA journal_mode=WAL")
                             conn.row_factory = sqlite3.Row
                             cur = conn.execute("SELECT id, model, pool, prompt_tokens, completion_tokens, total_tokens, time_formatted, status, timestamp, audit_json FROM request_events WHERE audit_json IS NOT NULL AND audit_json != '' ORDER BY id DESC")
                             for r in cur.fetchall():
@@ -921,6 +949,8 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                     try:
                         import sqlite3
                         with sqlite3.connect(db_path, timeout=5) as conn:
+                            conn.execute("PRAGMA busy_timeout=10000")
+                            conn.execute("PRAGMA journal_mode=WAL")
                             conn.row_factory = sqlite3.Row
                             row_c = conn.execute(
                                 "SELECT total_tokens, requests, codex_tokens, gemini_tokens, created_at FROM client_usage_counters "
@@ -1042,7 +1072,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             try:
                 payload = self._read_json_body()
             except ValueError as exc:
-                self.send_json_response({"success": False, "message": str(exc)}, status_code=400)
+                self.send_json_response({"success": False, "message": str(exc)}, status_code=408 if isinstance(exc, RequestBodyTimeout) else 400)
                 return
             target_id = str(payload.get("id", "")).strip()
             if target_id in ("hermes", "openclaw", "localtooling"):
@@ -1076,7 +1106,7 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                     _validated_quota(max_tokens) if "max_tokens" in payload else None
                 )
             except ValueError as exc:
-                self.send_json_response({"success": False, "message": str(exc)}, status_code=400)
+                self.send_json_response({"success": False, "message": str(exc)}, status_code=408 if isinstance(exc, RequestBodyTimeout) else 400)
                 return
 
             registry_file = get_registry_file()

@@ -167,6 +167,8 @@ def authorize(handler, provider):
                         import sqlite3
                         with sqlite3.connect(db_path, timeout=3) as conn:
                             conn.row_factory = sqlite3.Row
+                            conn.execute('PRAGMA busy_timeout=10000')
+                            conn.execute('PRAGMA journal_mode=WAL')
                             cur = conn.execute("SELECT audit_json, total_tokens, pool, timestamp FROM request_events WHERE audit_json IS NOT NULL AND audit_json != ''")
                             c_name = (client_obj.get('name') or '').lower()
                             c_id = (client_obj.get('id') or '').lower()

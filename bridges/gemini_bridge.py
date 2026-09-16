@@ -19,6 +19,7 @@ import urllib.parse
 import urllib.error
 import threading
 import http.server
+import socket
 import socketserver
 import secrets
 import sqlite3
@@ -54,6 +55,8 @@ SKIP_THOUGHT_SIGNATURE = "skip_thought_signature_validator"
 
 DEFAULT_PROJECT = "aicode-consumers"
 MAX_REQUEST_BYTES = 32 * 1024 * 1024
+GEMINI_STREAM_DEADLINE = float(os.environ.get('AIPOOL_GEMINI_STREAM_DEADLINE', '120'))
+UPSTREAM_REQUEST_TIMEOUT = 120.0
 
 # ---------------------------------------------------------------------------
 # Token management (refresh)
@@ -563,22 +566,37 @@ def _antigravity_headers(access):
     }
 
 
-from pool_runtime import AccountPool, PoolError, record, retry_seconds, clean_model_name
+from pool_runtime import AccountPool, PoolError, record, retry_seconds, clean_model_name, hard_account_failure
+from account_manager import Manager
 from durable_requests import DurableRequestStore, request_key
 from retry_policy import provider_attempts, retry_delay
 AG_POOL = AccountPool('gemini')
+REQUEST_BODY_TIMEOUT = 30.0
+DEFAULT_REQUEST_TOTAL_DEADLINE = 180.0
+
+
+def request_total_deadline():
+    try:
+        value = float(os.environ.get('AIPOOL_REQUEST_TOTAL_DEADLINE', DEFAULT_REQUEST_TOTAL_DEADLINE))
+    except (TypeError, ValueError):
+        value = DEFAULT_REQUEST_TOTAL_DEADLINE
+    return max(0.1, value)
+
 
 # A provider outage is a transient infrastructure event, not a reason to
 # abandon a live Hermes turn after one account cycle.  The default is 20
 # upstream attempts; deployments may raise it but cannot lower it below 20.
-def call_antigravity(ag_body, access=None):
+def call_antigravity(ag_body, access=None, deadline=None):
     access = access or get_access_token()
     endpoints = [os.environ['AG_UPSTREAM_URL']] if os.environ.get('AG_UPSTREAM_URL') else [e + ANTIGRAVITY_PATH for e in ANTIGRAVITY_ENDPOINTS]
     last_status = 503
     for url in endpoints:
+        if deadline is not None and time.monotonic() >= deadline:
+            raise PoolError('Request deadline exceeded', 504)
         req = urllib.request.Request(url, data=json.dumps(ag_body).encode(), headers=_antigravity_headers(access))
         try:
-            with urllib.request.urlopen(req, timeout=120) as resp:
+            timeout = 120 if deadline is None else max(0.1, min(120, deadline - time.monotonic()))
+            with urllib.request.urlopen(req, timeout=timeout) as resp:
                 result = json.loads(resp.read().decode())
                 if not isinstance(result, dict):
                     raise PoolError('Antigravity returned a non-object response', 502)
@@ -599,7 +617,7 @@ def call_antigravity(ag_body, access=None):
     raise PoolError('Antigravity endpoints are unavailable',last_status)
 
 
-def call_with_retry(ag_body, attempts=None, on_success=None, sleep=None):
+def call_with_retry(ag_body, attempts=None, on_success=None, sleep=None, deadline=None, client_connected=None):
     """Call Antigravity with a real transient-outage retry budget.
 
     Account quota/auth failures rotate away from that account.  Provider 5xx
@@ -618,28 +636,44 @@ def call_with_retry(ag_body, attempts=None, on_success=None, sleep=None):
                       os.environ.get('AIPOOL_PROVIDER_MAX_ATTEMPTS'))
     total = provider_attempts(configured)
     sleeper = sleep or time.sleep
+    deadline = deadline if deadline is not None else time.monotonic() + request_total_deadline()
     last_status = 503
     quota_exhausted = set()
     outage_failures = 0
+    try:
+        active_at_start = Manager('gemini').active()
+    except (ValueError, OSError):
+        active_at_start = ''
+    rotated_after_hard_failure = False
+    current_index = 0
 
     for attempt in range(total):
+        if client_connected is not None and not client_connected():
+            raise PoolError('Client disconnected', 499)
+        if time.monotonic() >= deadline:
+            raise PoolError('Request deadline exceeded', 504)
         usable = [n for n in candidates if n not in quota_exhausted] or candidates
-        number = usable[attempt % len(usable)]
+        if current_index >= len(usable):
+            current_index = 0
+        number = usable[current_index]
         try:
             credentials = AG_POOL.credentials(number)
             body = deepcopy(ag_body)
             body['project'] = credentials.get('project_id') or body.get('project')
-            result = call_antigravity(body, credentials['token']['access_token'])
+            result = call_antigravity(body, credentials['token']['access_token'], deadline=deadline)
             if on_success:
-                on_success(number)
+                on_success(number, bool(rotated_after_hard_failure or active_at_start not in candidates))
             return result
         except (PoolError, ValueError, OSError, RuntimeError) as exc:
             last_status = int(getattr(exc, 'status', 503) or 503)
             if last_status not in (401, 403, 429) and last_status < 500:
                 raise
-            if last_status in (401, 403, 429):
+            if last_status in (401, 403) or (last_status == 429 and hard_account_failure(last_status, str(exc))):
                 quota_exhausted.add(number)
-                AG_POOL.exhausted(number, model, getattr(exc, 'retry_after', 60), reason='account_failure')
+                AG_POOL.exhausted(number, model, getattr(exc, 'retry_after', 60), reason='invalid_credentials' if last_status in (401, 403) else 'quota_exhausted')
+                rotated_after_hard_failure = True
+                # The exhausted account is now in quota_exhausted and removed from usable;
+                # keeping current_index unchanged points directly to the next account in sequence.
                 if len(quota_exhausted) >= len(candidates):
                     break
             else:
@@ -647,7 +681,13 @@ def call_with_retry(ag_body, attempts=None, on_success=None, sleep=None):
                 AG_POOL.exhausted(number, model, min(5, max(1, outage_failures)), reason='provider_outage')
             if attempt + 1 < total:
                 retry_after = getattr(exc, 'retry_after', None) if last_status in (401, 403, 429) else None
-                sleeper(retry_delay(attempt, retry_after))
+                delay = retry_delay(attempt, retry_after)
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    raise PoolError('Request deadline exceeded', 504) from None
+                if client_connected is not None and not client_connected():
+                    raise PoolError('Client disconnected', 499) from None
+                sleeper(min(delay, remaining))
     raise PoolError(
         f'Antigravity provider did not recover after {total} attempts', last_status
     )
@@ -658,6 +698,26 @@ def call_with_retry(ag_body, attempts=None, on_success=None, sleep=None):
 # ---------------------------------------------------------------------------
 class Handler(http.server.BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
+
+    def _client_connected(self):
+        """Probe disconnect without blocking the provider request."""
+        connection = getattr(self, 'connection', None)
+        if connection is None:
+            return True
+        try:
+            connection.setblocking(False)
+            if connection.recv(1, socket.MSG_PEEK) == b'':
+                return False
+        except BlockingIOError:
+            return True
+        except OSError:
+            return False
+        finally:
+            try:
+                connection.setblocking(True)
+            except OSError:
+                pass
+        return True
 
     def log_message(self, fmt, *args):
         pass
@@ -670,7 +730,18 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if length <= 0 or length > MAX_REQUEST_BYTES:
             raise PoolError("Invalid request size", 400)
         try:
-            value = json.loads(self.rfile.read(length).decode("utf-8"))
+            self.connection.settimeout(REQUEST_BODY_TIMEOUT)
+            raw = self.rfile.read(length)
+        except (socket.timeout, TimeoutError):
+            self.close_connection = True
+            raise PoolError("Request body read timed out", 408) from None
+        finally:
+            try:
+                self.connection.settimeout(None)
+            except OSError:
+                pass
+        try:
+            value = json.loads(raw.decode("utf-8"))
         except (UnicodeDecodeError, json.JSONDecodeError):
             raise PoolError("Request body must be valid JSON", 400) from None
         if not isinstance(value, dict):
@@ -680,12 +751,16 @@ class Handler(http.server.BaseHTTPRequestHandler):
     def _send_json(self, obj, status=200):
         self.close_connection = True
         data = json.dumps(obj).encode("utf-8")
-        self.send_response(status)
-        self.send_header("Content-Type", "application/json")
-        self.send_header("Content-Length", str(len(data)))
-        self.send_header("Connection", "close")
-        self.end_headers()
-        self.wfile.write(data)
+        try:
+            self.send_response(status)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(data)))
+            self.send_header("Connection", "close")
+            self.end_headers()
+            self.wfile.write(data)
+        except (BrokenPipeError, ConnectionResetError):
+            self.close_connection = True
+            print("[gemini-bridge] client disconnected before/during response", file=sys.stderr)
 
     def _send_error(self, message, status=500):
         from error_taxonomy import classify, public_error
@@ -776,9 +851,11 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self._durable_key = None
         self._durable_claimed = False
         started_at = time.perf_counter()
+        self._request_deadline = started_at + request_total_deadline()
         self._request_started_at = started_at
         try:
             started_at = self._request_started_at = time.perf_counter()
+            self._request_deadline = started_at + request_total_deadline()
             raw_payload = self._read_body()
             payload = raw_payload
             self._audit = capture(self, raw_payload)
@@ -860,7 +937,10 @@ class Handler(http.server.BaseHTTPRequestHandler):
                                     durable_store=self._durable_store, durable_key=self._durable_key)
                 return
 
-            ag_resp = self._call_with_retry(ag_body)
+            ag_resp = self._call_with_retry(
+                ag_body, deadline=self._request_deadline,
+                client_connected=self._client_connected,
+            )
             if self._durable_store and self._durable_key:
                 self._durable_store.complete(self._durable_key, ag_resp, 200)
             out = to_openai_response(ag_resp, request_model=m)
@@ -887,21 +967,43 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.close_connection = True
 
     def _handle_stream(self, ag_body, requested_model=None, durable_store=None, durable_key=None):
-        ag_resp = self._call_with_retry(ag_body)
+        # Antigravity's authenticated endpoint is generateContent and returns
+        # one JSON document; it does not expose streamGenerateContent/SSE here.
+        # Keep the compatibility SSE conversion, but bound the buffered wait and
+        # stop retrying when the downstream client has gone away.
+        deadline = getattr(self, '_request_deadline', None)
+        stream_deadline = time.monotonic() + max(0.1, GEMINI_STREAM_DEADLINE)
+        if deadline is None:
+            deadline = stream_deadline
+        else:
+            deadline = min(deadline, stream_deadline)
+        ag_resp = self._call_with_retry(
+            ag_body, deadline=deadline, client_connected=self._client_connected
+        )
         out = to_openai_response(ag_resp, request_model=requested_model)
         if durable_store and durable_key:
             durable_store.complete(durable_key, ag_resp, 200)
         self._record_bridge_request(out, requested_model or out['model'], "Gemini")
         self._send_cached_stream(out, requested_model=requested_model)
 
-    def _call_with_retry(self, ag_body, attempts=None):
-        def succeeded(number):
+    def _call_with_retry(self, ag_body, attempts=None, deadline=None, client_connected=None):
+        try:
+            expected_current = Manager('gemini').active()
+        except (ValueError, OSError):
+            expected_current = ''
+
+        def succeeded(number, should_promote=False):
             self._account_used = number
+            if not should_promote:
+                return
             try:
-                AG_POOL.promote(number)
+                AG_POOL.promote(number, expected_current=expected_current)
             except Exception:
                 print('[gemini-bridge] Active-account synchronization failed after upstream success',file=sys.stderr)
-        return call_with_retry(ag_body, attempts=attempts, on_success=succeeded)
+        return call_with_retry(
+            ag_body, attempts=attempts, on_success=succeeded,
+            deadline=deadline, client_connected=client_connected,
+        )
 
 
 class ThreadingHTTPServer(socketserver.ThreadingMixIn, http.server.HTTPServer):

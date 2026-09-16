@@ -1,6 +1,12 @@
 """SQLite request history and backward-compatible schema migration."""
+import logging
 import os, sqlite3, time, uuid, json
 from pathlib import Path
+import threading
+
+logger = logging.getLogger(__name__)
+_INITIALIZED_PATHS = set()
+_INITIALIZATION_LOCK = threading.Lock()
 
 _POOL_ALIASES = {
     'codex': 'Codex',
@@ -21,7 +27,14 @@ def db_path():
     return Path(os.environ.get('AUTH_DB_PATH','/var/lib/aipool/runtime/auth.db'))
 
 
-def initialize(path=None):
+def _connect(path):
+    conn = sqlite3.connect(path, timeout=10)
+    conn.execute('PRAGMA busy_timeout=10000')
+    conn.execute('PRAGMA journal_mode=WAL')
+    return conn
+
+
+def _initialize(path=None):
     path = Path(path or db_path())
     if path.is_symlink():
         raise ValueError('Request database must not be a symlink')
@@ -31,7 +44,7 @@ def initialize(path=None):
             raise ValueError('Request database parent must not be a symlink')
         ancestor = ancestor.parent
     path.parent.mkdir(parents=True,exist_ok=True)
-    with sqlite3.connect(path,timeout=10) as conn:
+    with _connect(path) as conn:
         try:
             os.chmod(path, 0o600)
         except OSError:
@@ -100,6 +113,17 @@ def initialize(path=None):
         conn.execute("UPDATE request_events SET model = 'gemini-3.6-flash' WHERE model = 'gemini-3.6-flash-tiered'")
         conn.execute("UPDATE request_events SET model = 'gemini-3.1-pro' WHERE model = 'gemini-3.1-pro-low'")
     return path
+
+
+def initialize(path=None):
+    target = Path(path or db_path())
+    key = str(target.absolute())
+    with _INITIALIZATION_LOCK:
+        if key not in _INITIALIZED_PATHS:
+            result = _initialize(target)
+            _INITIALIZED_PATHS.add(key)
+            return result
+    return target
 
 
 def clean_model_name(model):
@@ -277,7 +301,7 @@ def _record(provider, model, usage=None, account=None, status='OK', request_id=N
         if total is None:
             total = prompt + completion
     now = time.time()
-    with sqlite3.connect(path, timeout=10) as conn:
+    with _connect(path) as conn:
      conn.execute('''INSERT OR IGNORE INTO request_events
       (model,pool,prompt_tokens,completion_tokens,total_tokens,timestamp,time_formatted,request_id,account,status,usage_known,audit_json,wire_input_bytes,wire_provider_bytes,latency_ms,error_code)
       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
@@ -299,8 +323,8 @@ def _record(provider, model, usage=None, account=None, status='OK', request_id=N
                  completion_tokens = completion_tokens + excluded.completion_tokens,
                  updated_at = excluded.updated_at''',
                  (provider, str(account).strip(), total or 0, prompt or 0, completion or 0, now, now))
-         except Exception:
-             pass
+         except Exception as exc:
+             logger.warning('Account usage counter update failed: %s', type(exc).__name__)
      client_id = (audit or {}).get('client_id')
      client_label = (audit or {}).get('client_label')
      accounting_identity = client_id
@@ -325,8 +349,8 @@ def _record(provider, model, usage=None, account=None, status='OK', request_id=N
                  gemini_tokens = gemini_tokens + excluded.gemini_tokens,
                  updated_at = excluded.updated_at''',
                  (c_key, total or 0, prompt or 0, completion or 0, 1, (total or 0) if is_codex else 0, (total or 0) if is_gemini else 0, now, now))
-         except Exception:
-             pass
+         except Exception as exc:
+             logger.warning('Client usage counter update failed: %s', type(exc).__name__)
      # Roll old detailed rows into compact daily aggregates; never discard usage.
      try:
          retention = max(0, int(os.environ.get('AIPOOL_REQUEST_RETENTION', '300') or 300))
@@ -374,8 +398,8 @@ def _record(provider, model, usage=None, account=None, status='OK', request_id=N
                                  ON CONFLICT(client_id) DO UPDATE SET
                                  updated_at=excluded.updated_at""",
                                  (c_k, c_toks, c_p, c_c, 1, c_toks if is_cdx else 0, c_toks if not is_cdx else 0, row[6] or now, now))
-                     except Exception:
-                         pass
+                     except Exception as exc:
+                         logger.warning('Retained client counter update failed: %s', type(exc).__name__)
              ids = [(row[0],) for row in rows_to_roll]
              conn.executemany("DELETE FROM request_events WHERE id=?", ids)
      conn.commit()
@@ -385,7 +409,7 @@ def report(path):
     initialize(path)
     providers = {name:{'total_tokens':0,'requests':0,'models':{}} for name in ('Gemini','Codex','Mixture')}
     recent = []
-    with sqlite3.connect(path,timeout=10) as conn:
+    with _connect(path) as conn:
         conn.row_factory = sqlite3.Row
         for r in conn.execute("SELECT pool,model,count(*) calls,sum(prompt_tokens) p,sum(completion_tokens) c,sum(total_tokens) t,max(timestamp) ts FROM request_events WHERE lower(pool) IN ('codex','gemini','antigravity','mixture') GROUP BY pool,model"):
             pool_name = canonical_pool_name(r['pool'])
@@ -459,7 +483,7 @@ def report(path):
                 'audit': audit_parsed,
             })
     models = [v for p in providers.values() for v in p['models'].values()]
-    with sqlite3.connect(path, timeout=10) as conn:
+    with _connect(path) as conn:
         detailed = conn.execute("SELECT COALESCE(SUM(wire_input_bytes),0), COALESCE(SUM(wire_provider_bytes),0), COALESCE(SUM(latency_ms),0), COUNT(latency_ms), COUNT(CASE WHEN error_code IS NOT NULL OR status NOT IN ('OK','') THEN 1 END) FROM request_events").fetchone()
         rolled = conn.execute("SELECT COALESCE(SUM(wire_input_bytes),0), COALESCE(SUM(wire_provider_bytes),0), COALESCE(SUM(latency_ms_sum),0), COALESCE(SUM(latency_count),0), COALESCE(SUM(classified_errors),0) FROM usage_rollups").fetchone()
     latency_count = (detailed[3] or 0) + (rolled[3] or 0)
@@ -469,7 +493,7 @@ def report(path):
 
 def get_request_prompt(path, request_id):
     initialize(path)
-    with sqlite3.connect(path, timeout=10) as conn:
+    with _connect(path) as conn:
         conn.row_factory = sqlite3.Row
         cur = conn.execute("SELECT audit_json FROM request_events WHERE request_id = ? OR id = ? LIMIT 1", (str(request_id), str(request_id)))
         row = cur.fetchone()

@@ -650,7 +650,8 @@
             align-items: center;
             justify-content: space-between;
             width: 100%;
-            gap: 12px;
+            gap: 10px;
+            min-width: 0;
         }
         .account-actions-bar {
             display: none !important;
@@ -722,12 +723,15 @@
             display: flex;
             align-items: center;
             gap: 8px;
+            min-width: 0;
+            flex: 1 1 auto;
         }
         .acc-dot {
             width: 8px;
             height: 8px;
             border-radius: 50%;
             background: var(--text-tertiary);
+            flex-shrink: 0;
         }
         .acc-dot.active {
             background: var(--accent-emerald);
@@ -737,6 +741,15 @@
             font-family: 'JetBrains Mono', monospace;
             font-size: 11px;
             color: #e5e7eb;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 100%;
+        }
+        .account-metrics-view {
+            flex-shrink: 0;
+            margin-left: auto;
+            text-align: right;
         }
         .acc-metrics {
             font-family: 'JetBrains Mono', monospace;
@@ -4595,18 +4608,18 @@
 
                 div.innerHTML = `
                     <div class="account-normal-content">
-                        <div class="acc-info-left" style="display:flex; align-items:center; gap:8px;">
+                        <div class="acc-info-left" style="display:flex; align-items:center; gap:8px; min-width:0; flex:1 1 auto; overflow:hidden;">
                             <div class="acc-dot ${isActive ? 'active' : ''}"></div>
-                            <div style="text-align:left;">
-                                <div class="acc-email">${escapeHtml(acc.email || ('Account ' + acc.account))}</div>
-                                <div style="display:flex; align-items:center; gap:5px; margin-top:3px;">
+                            <div style="text-align:left; min-width:0; flex:1 1 auto; overflow:hidden;">
+                                <div class="acc-email" title="${escapeHtml(acc.email || ('Account ' + acc.account))}">${escapeHtml(acc.email || ('Account ' + acc.account))}</div>
+                                <div style="display:flex; align-items:center; gap:5px; margin-top:3px; flex-wrap:wrap;">
                                     ${stateBadgeHtml}
                                     ${tokenBadgeHtml}
                                     ${statusBadge}
                                 </div>
                             </div>
                         </div>
-                        <div class="account-metrics-view">
+                        <div class="account-metrics-view" style="flex-shrink:0; margin-left:auto; text-align:right;">
                             ${metricsHtml}
                         </div>
                     </div>

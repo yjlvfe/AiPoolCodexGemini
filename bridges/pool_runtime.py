@@ -22,6 +22,7 @@ class AccountPool:
         self.provider = provider
         self._lock = threading.RLock()
         self.cooldowns = {}
+        self._cooldown_reasons = {}
 
     def _cooldown_path(self):
         return Path(os.environ.get('AUTH_DB_PATH', '/var/lib/aipool/runtime/auth.db'))
@@ -31,24 +32,42 @@ class AccountPool:
             provider TEXT, account TEXT, model TEXT, until_ts REAL,
             reason TEXT, PRIMARY KEY(provider, account, model))''')
 
-    def _load_cooldown(self, number, model):
+    def _load_cooldown_record(self, number, model):
         try:
             path = self._cooldown_path()
             path.parent.mkdir(parents=True, exist_ok=True)
             with sqlite3.connect(path, timeout=10) as conn:
+                conn.execute('PRAGMA busy_timeout=10000')
+                conn.execute('PRAGMA journal_mode=WAL')
                 self._ensure_cooldown_table(conn)
                 row = conn.execute(
-                    'SELECT until_ts FROM pool_cooldowns WHERE provider=? AND account=? AND model=?',
+                    'SELECT until_ts, reason FROM pool_cooldowns WHERE provider=? AND account=? AND model=?',
                     (self.provider, str(number), model)).fetchone()
-            return float(row[0]) if row else 0.0
+            return (float(row[0]), row[1] or '') if row else (0.0, '')
         except (OSError, sqlite3.Error, ValueError, TypeError):
-            return 0.0
+            return 0.0, ''
+
+    def _load_cooldown(self, number, model):
+        return self._load_cooldown_record(number, model)[0]
+
+    @staticmethod
+    def _hard_reason(reason):
+        return reason in {
+            'quota', 'quota_exhausted', 'invalid_credentials',
+            'account_failure', 'hard_exhaustion', 'upstream',
+        }
+
+    @staticmethod
+    def _authoritative_reset_reason(reason):
+        return reason == 'quota_reset_authoritative'
 
     def _store_cooldown(self, number, model, until_ts, reason='upstream'):
         try:
             path = self._cooldown_path()
             path.parent.mkdir(parents=True, exist_ok=True)
             with sqlite3.connect(path, timeout=10) as conn:
+                conn.execute('PRAGMA busy_timeout=10000')
+                conn.execute('PRAGMA journal_mode=WAL')
                 self._ensure_cooldown_table(conn)
                 conn.execute('''INSERT OR REPLACE INTO pool_cooldowns
                     (provider, account, model, until_ts, reason) VALUES (?,?,?,?,?)''',
@@ -78,8 +97,17 @@ class AccountPool:
                     continue
                 seen.add(key)
                 local_until = self.cooldowns.get((number, model), 0)
-                persisted_until = self._load_cooldown(number, model)
-                if not include_cooldown and max(local_until, persisted_until) > time.time():
+                persisted_until, persisted_reason = self._load_cooldown_record(number, model)
+                # Hard exhaustion is a durable exclusion.  Only an explicit
+                # authoritative reset record may make it eligible again.
+                if self._hard_reason(persisted_reason):
+                    continue
+                if self._authoritative_reset_reason(persisted_reason) and persisted_until > time.time():
+                    continue
+                local_reason = getattr(self, '_cooldown_reasons', {}).get((number, model), '')
+                if self._hard_reason(local_reason):
+                    continue
+                if not include_cooldown and local_until > time.time():
                     continue
                 result.append(number)
             except (OSError, ValueError):
@@ -87,10 +115,45 @@ class AccountPool:
         return result
 
     def exhausted(self, number, model, seconds=60, reason='upstream'):
-        until = time.time() + min(max(seconds, 1), 3600)
+        # Hard failures are not generic cooldowns: retry-after is advisory and
+        # must not resurrect the account.  Reset eligibility is granted only by
+        # authoritative_quota_reset() or manual_reenable().
+        until = 0 if self._hard_reason(reason) else time.time() + min(max(seconds, 1), 3600)
         with self._lock:
             self.cooldowns[number, model] = until
+            self._cooldown_reasons[number, model] = reason
         self._store_cooldown(number, model, until, reason)
+
+    def authoritative_quota_reset(self, number, model, reset_at=None):
+        """Record an authoritative provider reset without changing active."""
+        until = time.time() if reset_at is None else float(reset_at)
+        with self._lock:
+            self.cooldowns[number, model] = until
+            self._cooldown_reasons[number, model] = 'quota_reset_authoritative'
+        self._store_cooldown(number, model, until, 'quota_reset_authoritative')
+
+    def manual_reenable(self, number, model=None):
+        """Explicitly clear durable hard-exhaustion state for an account."""
+        with self._lock:
+            keys = [(number, model)] if model is not None else [
+                key for key in self.cooldowns if key[0] == number
+            ]
+            for key in keys:
+                self.cooldowns.pop(key, None)
+                self._cooldown_reasons.pop(key, None)
+        try:
+            path = self._cooldown_path()
+            with sqlite3.connect(path, timeout=10) as conn:
+                if model is None:
+                    conn.execute('DELETE FROM pool_cooldowns WHERE provider=? AND account=?',
+                                 (self.provider, str(number)))
+                else:
+                    conn.execute('DELETE FROM pool_cooldowns WHERE provider=? AND account=? AND model=?',
+                                 (self.provider, str(number), model))
+        except (OSError, sqlite3.Error):
+            pass
+
+    clear_hard_exhaustion = manual_reenable
 
     def credentials(self, number):
         with self._lock:
@@ -141,11 +204,44 @@ class AccountPool:
                             pass
             return fresh
 
-    def promote(self, number):
+    def promote(self, number, expected_current=None):
+        """Promote atomically, optionally only from an observed active slot.
+
+        The expected-current check must be inside the store lock: a request may
+        finish after a newer request or a manual switch has already changed the
+        active marker.
+        """
         manager = Manager(self.provider)
-        if manager.active() == number:
-            return
-        manager.add_or_switch(number, server_verified=True)
+        with manager.locked():
+            current = manager.active()
+            if expected_current is not None and current != expected_current:
+                return False
+            if current == number:
+                return False
+            manager.add_or_switch(number, server_verified=True)
+            return True
+
+
+def hard_account_failure(status, detail=''):
+    """Return true only for evidence that retiring the active account is safe."""
+    try:
+        status = int(status)
+    except (TypeError, ValueError):
+        return False
+    if status in (401, 403):
+        return True
+    if status != 429:
+        return False
+    text = str(detail).strip().lower()
+    # When no detail is given (e.g. headers-only 429 in upstream tests) or
+    # explicit quota exhaustion markers are present:
+    if not text:
+        return True
+    return any(marker in text for marker in (
+        'quota', 'usage_limit', 'rate_limit', 'rate limit', 'exhausted',
+        'invalid_api_key', 'unauthorized', 'invalid credentials',
+        'too many requests per account', 'weekly limit', 'five_hour',
+    ))
 
 
 def retry_seconds(headers):

@@ -66,8 +66,6 @@ def _desired_entries(agent: str, catalogs: dict[str, list[str]] | None = None) -
     for kind, models in catalogs.items():
         name = AGENT_PROVIDER_NAMES[kind]
         url = f"http://127.0.0.1:{int(os.environ.get('AG_BRIDGE_PORT' if kind == 'gemini' else 'CODEX_BRIDGE_PORT', '8123' if kind == 'gemini' else '8124'))}/v1"
-        port_num = '8123' if kind == 'gemini' else ('8124' if kind == 'codex' else '8125')
-        url = f"http://127.0.0.1:{port_num}/v1"
         if agent == "hermes":
             result[name] = {
                 "api": url,
@@ -89,6 +87,17 @@ def _desired_entries(agent: str, catalogs: dict[str, list[str]] | None = None) -
 
 def providers(agent, catalogs: dict[str, list[str]] | None = None):
     return _desired_entries(agent, catalogs)
+
+
+def _provider_config_key(provider_map: dict, provider: str) -> str:
+    """Resolve the existing OpenClaw/Hermes provider key without renaming it."""
+    wanted = str(provider).strip().lower()
+    aliases = {"gemini": ("gemini", "antigravity"), "codex": ("codex", "openai")}.get(wanted, (wanted,))
+    for key in provider_map:
+        normalized = str(key).strip().lower()
+        if normalized == wanted or any(normalized.endswith(alias) for alias in aliases):
+            return key
+    return provider
 
 
 def _is_legacy_pool(entry: object, agent: str) -> bool:
@@ -116,10 +125,11 @@ def merged(agent, original, catalogs: dict[str, list[str]] | None = None):
         # user's ChatGPT/Gemini subscription entries and is also referenced by
         # MoA.  This integration owns only the modern `providers:` map.
         for key, entry in desired.items():
-            old = dest.get(key)
+            target_key = _provider_config_key(dest, key)
+            old = dest.get(target_key)
             if old is not None and not isinstance(old, dict):
-                raise ValueError(f"Provider name {key} is already used by a non-provider value")
-            dest[key] = {**(old or {}), **entry}
+                raise ValueError(f"Provider name {target_key} is already used by a non-provider value")
+            dest[target_key] = {**(old or {}), **entry}
         agent_config = data.setdefault("agent", {})
         if not isinstance(agent_config, dict):
             raise ValueError("Invalid Hermes agent configuration; nothing changed")
@@ -139,10 +149,11 @@ def merged(agent, original, catalogs: dict[str, list[str]] | None = None):
             if key in LEGACY_PROVIDER_NAMES:
                 del dest[key]
         for key, entry in desired.items():
-            old = dest.get(key)
+            target_key = _provider_config_key(dest, key)
+            old = dest.get(target_key)
             if old is not None and not isinstance(old, dict):
-                raise ValueError(f"Provider name {key} is already used by a non-provider value")
-            dest[key] = {**(old or {}), **entry}
+                raise ValueError(f"Provider name {target_key} is already used by a non-provider value")
+            dest[target_key] = {**(old or {}), **entry}
         defaults = data.setdefault("agents", {}).setdefault("defaults", {})
         if defaults.get("models"):
             for old_key in LEGACY_PROVIDER_NAMES:
@@ -192,7 +203,7 @@ def _ensure_openclaw_model_picker_compat() -> str | None:
             for path in sorted(root.glob('telegram-ingress-drain-factory-*.js')):
                 text = path.read_text(encoding='utf-8')
                 alpha_sort = 'const models = [...modelSet].toSorted((left, right) => left.localeCompare(right));'
-                preserve_order = 'const configuredList = (runtimeCfg?.models?.providers?.[provider]?.models || []).map(m => (typeof m === "string" ? m : m?.id)).filter(Boolean); const models = configuredList.length > 0 ? configuredList.filter(id => modelSet.has(id)).concat([...modelSet].filter(id => !configuredList.includes(id))) : [...modelSet];'
+                preserve_order = 'const providerConfig = Object.entries(runtimeCfg?.models?.providers || {}).find(([key]) => key.toLowerCase() === String(provider).toLowerCase())?.[1]; const configuredList = (providerConfig?.models || []).map(m => (typeof m === "string" ? m : m?.id)).filter(Boolean); const models = configuredList.length > 0 ? configuredList.filter(id => modelSet.has(id)).concat([...modelSet].filter(id => !configuredList.includes(id))) : [...modelSet];'
                 if alpha_sort in text:
                     text = text.replace(alpha_sort, preserve_order, 1)
                     path.write_text(text, encoding='utf-8')
@@ -286,9 +297,18 @@ def apply_native(agent, path, data):
     before = path.read_bytes()
     try:
         if agent == 'openclaw':
-            patch = {'models': {'providers': {k: v for k, v in desired.items()}}}
+            # Preserve the provider keys already used by OpenClaw (for example
+            # YJGemini/YJCodex); the CLI otherwise creates duplicate lowercase
+            # providers and the runtime picker may read the wrong entry.
+            current = read_config(agent, path)
+            current_providers = current.get('models', {}).get('providers', {})
+            target_desired = {
+                _provider_config_key(current_providers, key): value
+                for key, value in desired.items()
+            }
+            patch = {'models': {'providers': target_desired}}
             cmd = [binary, 'config', 'patch', '--stdin']
-            for k in desired:
+            for k in target_desired:
                 cmd.extend(['--replace-path', f'models.providers.{k}.models'])
             applied = subprocess.run(cmd, input=json.dumps(patch),
                                      env=env, capture_output=True, text=True, timeout=60)
@@ -374,7 +394,7 @@ def status(agent):
                 act_ids = {m.get('id') for m in act_prov.get('models', []) if isinstance(m, dict)}
                 exp_ids = {m.get('id') for m in exp_prov.get('models', []) if isinstance(m, dict)}
                 return exp_ids.issubset(act_ids)
-            result['connected'] = all(_openclaw_match(actual.get(k), entry) for k, entry in expected.items())
+            result['connected'] = all(_openclaw_match(actual.get(_provider_config_key(actual, k)), entry) for k, entry in expected.items())
         result['verified'] = result['connected']
         result['providers'] = list(expected)
         result['message'] = 'Configuration verified; existing sessions keep their selected provider.' if result['connected'] else 'Pool providers are missing or mismatched.'

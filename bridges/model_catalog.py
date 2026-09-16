@@ -271,21 +271,25 @@ class DynamicCatalog:
         with self._lock:
             if not force and not self._expired():
                 return list(self._models)
-            try:
-                fetched = self.fetcher()
-                metadata: dict[str, Any] = {}
-                if isinstance(fetched, tuple) and len(fetched) == 2:
-                    fetched, raw_metadata = fetched
-                    if isinstance(raw_metadata, dict):
-                        metadata = raw_metadata
-                models = normalize_models(fetched)
-                if not models:
-                    raise CatalogError(f"{self.provider} live catalog is empty")
-            except Exception as exc:
+        # Fetch outside the lock so other threads are not blocked on remote I/O
+        try:
+            fetched = self.fetcher()
+            metadata: dict[str, Any] = {}
+            if isinstance(fetched, tuple) and len(fetched) == 2:
+                fetched, raw_metadata = fetched
+                if isinstance(raw_metadata, dict):
+                    metadata = raw_metadata
+            models = normalize_models(fetched)
+            if not models:
+                raise CatalogError(f"{self.provider} live catalog is empty")
+        except Exception as exc:
+            with self._lock:
                 self._last_error = f"{type(exc).__name__}: {exc}"
                 if self._models:
                     return list(self._models)
-                raise CatalogError(f"{self.provider} catalog unavailable") from None
+            raise CatalogError(f"{self.provider} catalog unavailable") from None
+
+        with self._lock:
             self._models = models
             self._fetched_at = time.time()
             self._last_error = None

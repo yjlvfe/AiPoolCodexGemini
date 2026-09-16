@@ -253,9 +253,11 @@ class CodexPersistenceRestartTests(unittest.TestCase):
                     # reload the module that owns the HTTP handler/global pool.
                     importlib.reload(codex_bridge)
                     restarted_pool = AccountPool("codex")
+                    # Hard quota exhaustion remains excluded across restart;
+                    # include_cooldown only includes transient outage records.
                     self.assertEqual(
                         restarted_pool.candidates(MODEL, include_cooldown=True)[:2],
-                        ["2", "1"],
+                        ["2"],
                     )
                     self.assertEqual(restarted_pool.candidates(MODEL)[0], "2")
 

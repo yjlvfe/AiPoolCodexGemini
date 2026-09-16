@@ -7,8 +7,11 @@ from typing import Any
 import urllib.error
 
 
-MIN_PROVIDER_ATTEMPTS = 20
-DEFAULT_PROVIDER_ATTEMPTS = 20
+# Retry budgets must be finite and configurable; a high floor can turn a
+# transient outage into a prolonged request hang (especially across accounts).
+MIN_PROVIDER_ATTEMPTS = 1
+DEFAULT_PROVIDER_ATTEMPTS = 3
+MAX_PROVIDER_ATTEMPTS = 100
 
 
 def provider_attempts(value: Any = None) -> int:
@@ -19,9 +22,9 @@ def provider_attempts(value: Any = None) -> int:
         parsed = int(raw)
     except (TypeError, ValueError):
         parsed = DEFAULT_PROVIDER_ATTEMPTS
-    # Keep the policy bounded against a bad environment value while never
-    # silently weakening the required twenty-attempt recovery floor.
-    return min(100, max(MIN_PROVIDER_ATTEMPTS, parsed))
+    # The default is intentionally small; callers can opt into a larger,
+    # bounded budget through the argument or AIPOOL_PROVIDER_MAX_ATTEMPTS.
+    return max(MIN_PROVIDER_ATTEMPTS, min(MAX_PROVIDER_ATTEMPTS, parsed))
 
 
 def transient_status(status: Any) -> bool:
