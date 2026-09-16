@@ -416,6 +416,14 @@ class PoolManager:
         # remains asynchronous, but cached logs hide events recorded meanwhile.
         return self._build_logs_report()
 
+    def get_api_requests(self, limit: int = 200) -> list:
+        import sys
+        bridge_dir = os.path.join(os.path.dirname(_CURRENT_DIR), 'bridges')
+        if bridge_dir not in sys.path:
+            sys.path.insert(0, bridge_dir)
+        import request_log
+        return request_log.get_api_requests(self.auth_db, limit=limit)
+
     def get_request_prompt(self, request_id: str) -> Dict[str, Any]:
         import sys
         bridge_dir = os.path.join(os.path.dirname(_CURRENT_DIR), 'bridges')

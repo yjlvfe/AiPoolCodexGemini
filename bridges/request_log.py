@@ -53,6 +53,13 @@ def _initialize(path=None):
             id INTEGER PRIMARY KEY AUTOINCREMENT, model TEXT, pool TEXT,
             prompt_tokens INTEGER, completion_tokens INTEGER, total_tokens INTEGER,
             timestamp REAL, time_formatted TEXT)''')
+        conn.execute('''CREATE TABLE IF NOT EXISTS api_request_events (
+            id INTEGER PRIMARY KEY AUTOINCREMENT, model TEXT, pool TEXT,
+            prompt_tokens INTEGER, completion_tokens INTEGER, total_tokens INTEGER,
+            timestamp REAL, time_formatted TEXT, request_id TEXT, account TEXT,
+            status TEXT, usage_known INTEGER, audit_json TEXT, wire_input_bytes INTEGER,
+            wire_provider_bytes INTEGER, latency_ms REAL, error_code TEXT)''')
+        conn.execute('CREATE UNIQUE INDEX IF NOT EXISTS aipool_api_request_id ON api_request_events(request_id)')
         columns = {r[1] for r in conn.execute('PRAGMA table_info(request_events)')}
         for name,kind in [('request_id','TEXT'),('account','TEXT'),('status','TEXT'),('usage_known','INTEGER'),('audit_json','TEXT'),('wire_input_bytes','INTEGER'),('wire_provider_bytes','INTEGER'),('latency_ms','REAL'),('error_code','TEXT')]:
             if name not in columns:
@@ -301,6 +308,18 @@ def _record(provider, model, usage=None, account=None, status='OK', request_id=N
         if total is None:
             total = prompt + completion
     now = time.time()
+    client_id = (audit or {}).get('client_id')
+    client_label = (audit or {}).get('client_label')
+    # Determine if this request originated from a remote / external API key client.
+    # System clients (Hermes, OpenClaw, LocalTooling, Direct API) are part of the local/general flow.
+    is_external_api_client = False
+    if client_id and str(client_id).lower().strip() not in ('hermes', 'openclaw', 'localtooling'):
+        is_external_api_client = True
+    elif (audit or {}).get('authenticated_client'):
+        is_external_api_client = True
+    elif client_label and str(client_label).lower().strip() not in ('hermes', 'hermes agent', 'openclaw', 'localtooling', 'direct api'):
+        is_external_api_client = True
+
     with _connect(path) as conn:
      conn.execute('''INSERT OR IGNORE INTO request_events
       (model,pool,prompt_tokens,completion_tokens,total_tokens,timestamp,time_formatted,request_id,account,status,usage_known,audit_json,wire_input_bytes,wire_provider_bytes,latency_ms,error_code)
@@ -313,6 +332,26 @@ def _record(provider, model, usage=None, account=None, status='OK', request_id=N
        int((audit or {}).get('wire_input_bytes') or 0),
        int((audit or {}).get('wire_provider_bytes') or 0),
        float((audit or {}).get('latency_ms') or 0), error_code or (audit or {}).get('error_code')))
+
+     # Persist into isolated api_request_events table for remote API clients
+     if is_external_api_client:
+         try:
+             conn.execute('''INSERT OR IGNORE INTO api_request_events
+              (model,pool,prompt_tokens,completion_tokens,total_tokens,timestamp,time_formatted,request_id,account,status,usage_known,audit_json,wire_input_bytes,wire_provider_bytes,latency_ms,error_code)
+              VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)''',
+              (model, provider, prompt, completion, total, now,
+               time.strftime('%m/%d %H:%M', time.localtime(now)),
+               request_id or (audit or {}).get('request_id') or str(uuid.uuid4()),
+               account, status, int(known),
+               json.dumps(audit or {}, ensure_ascii=False),
+               int((audit or {}).get('wire_input_bytes') or 0),
+               int((audit or {}).get('wire_provider_bytes') or 0),
+               float((audit or {}).get('latency_ms') or 0), error_code or (audit or {}).get('error_code')))
+             # Retain last 1000 dedicated API requests (never rolled over by local 300 retention)
+             api_retention = max(100, int(os.environ.get('AIPOOL_API_REQUEST_RETENTION', '1000') or 1000))
+             conn.execute("DELETE FROM api_request_events WHERE id NOT IN (SELECT id FROM api_request_events ORDER BY id DESC LIMIT ?)", (api_retention,))
+         except Exception as exc:
+             logger.warning('Failed to persist to api_request_events: %s', type(exc).__name__)
      if account is not None and str(account).strip() and total:
          try:
              conn.execute('''INSERT INTO account_usage_counters(pool, account, total_tokens, prompt_tokens, completion_tokens, created_at, updated_at)
@@ -491,8 +530,54 @@ def report(path):
     return {'providers':providers,'total_pool_tokens':sum(p['total_tokens'] for p in providers.values()),'top_model':max(models,key=lambda x:x['total_tokens'])['model'] if models else 'None','recent_requests':recent,'metrics':{'wire_input_bytes':detailed[0] + rolled[0],'wire_provider_bytes':detailed[1] + rolled[1],'avg_latency_ms':round(avg_latency,2),'classified_errors':detailed[4] + rolled[4]}}
 
 
-def get_request_prompt(path, request_id):
+def get_api_requests(path, limit=200):
+    """Return isolated recent requests for external API clients without 300-event local rollup eviction."""
     initialize(path)
+    api_requests = []
+    with _connect(path) as conn:
+        conn.row_factory = sqlite3.Row
+        for r in conn.execute(
+                "SELECT id, model, pool, prompt_tokens, completion_tokens, total_tokens, "
+                "time_formatted, status, account, usage_known, request_id, audit_json, timestamp, "
+                "(audit_json IS NOT NULL AND audit_json != '') AS audit_available "
+                "FROM api_request_events ORDER BY id DESC LIMIT ?", (limit,)):
+            pool_name = canonical_pool_name(r['pool']) or r['pool']
+            audit_parsed = {'prompt_capture_status': 'on_demand' if r['audit_available'] else 'not_available'}
+            if r['audit_json']:
+                try:
+                    aud = json.loads(r['audit_json'])
+                    if isinstance(aud, dict):
+                        audit_parsed['client_label'] = aud.get('client_label')
+                        audit_parsed['client_id'] = aud.get('client_id')
+                        audit_parsed['authenticated_client'] = aud.get('authenticated_client')
+                        audit_parsed['peer_ip'] = aud.get('peer_ip')
+                        audit_parsed['forwarded_ip'] = aud.get('forwarded_ip')
+                        audit_parsed['user_agent'] = aud.get('user_agent')
+                        audit_parsed['endpoint'] = aud.get('endpoint')
+                        audit_parsed['payload_sha256'] = aud.get('payload_sha256')
+                except Exception:
+                    pass
+            api_requests.append({
+                'id': r['id'],
+                'call_num': r['id'],
+                'model': clean_model_name(r['model']),
+                'provider': pool_name,
+                'pool': pool_name,
+                'prompt': r['prompt_tokens'],
+                'completion': r['completion_tokens'],
+                'tokens': r['total_tokens'],
+                'time_formatted': r['time_formatted'],
+                'timestamp': r['timestamp'],
+                'status': r['status'] or 'LEGACY',
+                'account': r['account'],
+                'usage_known': r['usage_known'],
+                'request_id': r['request_id'],
+                'audit': audit_parsed,
+            })
+    return api_requests
+
+
+def get_request_prompt(path, request_id):
     with _connect(path) as conn:
         conn.row_factory = sqlite3.Row
         cur = conn.execute("SELECT audit_json FROM request_events WHERE request_id = ? OR id = ? LIMIT 1", (str(request_id), str(request_id)))

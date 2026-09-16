@@ -449,6 +449,15 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
         if path in ("/aipool/api/logs_data", "/api/logs_data", "/aipool/api/report", "/api/report"):
             self.send_json_response(pm.get_usage_logs_report())
             return
+        if path in ("/aipool/api/api_logs_data", "/api/api_logs_data"):
+            limit_val = 200
+            try:
+                if qs.get("limit"):
+                    limit_val = max(10, min(500, int(qs["limit"][0])))
+            except (TypeError, ValueError):
+                pass
+            self.send_json_response({"success": True, "api_requests": pm.get_api_requests(limit=limit_val)})
+            return
         if path in ("/metrics", "/aipool/api/metrics", "/api/metrics"):
             report = pm.get_usage_logs_report()
             metrics = report.get('metrics', {})

@@ -4794,7 +4794,7 @@
             span.textContent = String(value ?? '');
             return span.innerHTML;
         }
-        function renderGeneralActivityStream(recentRequests) {
+        function renderGeneralActivityStream(recentRequests, apiRequestsList = null) {
             const listContainer = document.getElementById('activity-stream-list');
             const apiListContainer = document.getElementById('api-activity-stream-list');
             if (listContainer) listContainer.innerHTML = '';
@@ -4806,11 +4806,7 @@
             if (requests.length === 0) {
                 const emptyHtml = '<div style="text-align:center; padding: 20px; color: var(--text-tertiary);">No activity records yet</div>';
                 if (listContainer) listContainer.innerHTML = emptyHtml;
-                if (apiListContainer) apiListContainer.innerHTML = emptyHtml;
-                return;
             }
-
-            let apiCount = 0;
 
             requests.forEach(req => {
                 const item = document.createElement('div');
@@ -4884,24 +4880,86 @@
 
                 setupTrigger(item);
                 if (listContainer) listContainer.appendChild(item);
+            });
 
-                // Only include in API view if it came with an explicit authorized API key identity
-                if (apiListContainer) {
+            // Dedicated API activity stream from isolated api_requests feed
+            if (apiListContainer) {
+                const apiItemsToRender = apiRequestsList !== null ? apiRequestsList : requests.filter(req => {
                     const client = req.audit?.client_label;
                     const hasApiKey = !!(req.audit?.client_id || req.audit?.authenticated_client);
                     const isSystemClient = !hasApiKey && (!client || ['hermes', 'openclaw', 'localtooling', 'direct api'].includes(String(client).toLowerCase().trim()));
-                    // Only show authorized API key usage in API tab
-                    if (hasApiKey || !isSystemClient) {
-                        apiCount++;
-                        const apiItem = item.cloneNode(true);
-                        setupTrigger(apiItem);
-                        apiListContainer.appendChild(apiItem);
-                    }
-                }
-            });
+                    return hasApiKey || !isSystemClient;
+                });
 
-            if (apiListContainer && apiCount === 0) {
-                apiListContainer.innerHTML = '<div style="text-align:center; padding: 20px; color: var(--text-tertiary); font-size:12px;">No remote API requests recorded yet. External requests will appear here live.</div>';
+                if (apiItemsToRender.length === 0) {
+                    apiListContainer.innerHTML = '<div style="text-align:center; padding: 24px 16px; color: var(--text-tertiary); font-size:12px;"><span style="font-size: 24px; display:block; margin-bottom: 6px; opacity:0.6;">📭</span>No remote API requests recorded yet.<br><span style="font-size: 11px; color: #64748b;">When external apps use your API Keys, requests will appear here live.</span></div>';
+                } else {
+                    apiItemsToRender.forEach(req => {
+                        const item = document.createElement('div');
+                        item.className = 'stream-card-item';
+                        const p = (req.provider || req.pool || '').toLowerCase();
+                        const isCodex = p === 'codex' || p === 'chatgpt';
+                        const badgeClass = isCodex ? 'codex' : 'gemini';
+                        const provIcon = isCodex ? '🟣' : '🟢';
+
+                        let timeStr = req.time_formatted || '--';
+                        if (req.timestamp) {
+                            const d = new Date(req.timestamp * 1000);
+                            const mo = String(d.getMonth() + 1).padStart(2, '0');
+                            const da = String(d.getDate()).padStart(2, '0');
+                            const ho = String(d.getHours()).padStart(2, '0');
+                            const mi = String(d.getMinutes()).padStart(2, '0');
+                            timeStr = `${mo}/${da} ${ho}:${mi}`;
+                        }
+
+                        item.innerHTML = `
+                            <div class="stream-normal-content">
+                                <div class="stream-card-top">
+                                    <div class="stream-model-name">
+                                        <span style="flex-shrink:0;">${provIcon}</span>
+                                        <span class="stream-model-title" title="${escapeHtml(req.model)}">${escapeHtml(req.model)}</span>
+                                        <span style="font-size:10.5px; color:#38bdf8; font-weight:700; font-family:'JetBrains Mono',monospace; flex-shrink:0;">#${escapeHtml(req.call_num || req.id)}</span>
+                                    </div>
+                                    <div class="stream-time-text" style="font-size:11px; color:#94a3b8; font-weight:600;">
+                                        ${escapeHtml(timeStr)}
+                                    </div>
+                                </div>
+                                <div style="font-size:10px;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${isCodex ? 'Codex' : 'Gemini'} · ${escapeHtml(req.status || 'Recorded')} ${req.account ? '· Account ' + escapeHtml(req.account) : ''} · ${escapeHtml(req.audit?.client_label || (req.audit?.client_id ? 'API Key' : 'Direct API'))}">${isCodex ? 'Codex' : 'Gemini'} · ${escapeHtml(req.status || 'Recorded')} ${req.account ? '· Account ' + escapeHtml(req.account) : ''} · <span style="color:${req.audit?.client_id || req.audit?.authenticated_client ? '#34d399' : '#7dd3fc'}; font-weight:600;">${escapeHtml(req.audit?.client_label || (req.audit?.client_id ? 'API Key' : 'Direct API'))}</span></div>
+                                <div class="stream-card-bottom">
+                                    <div style="display:flex; align-items:center; gap:5px; flex-shrink:1; min-width:0; overflow:hidden; font-size:10px;">
+                                        <span style="color:#38bdf8; font-weight:700; white-space:nowrap;">📥 ${req.prompt == null ? "—" : formatPoolNumber(req.prompt)}</span>
+                                        <span style="color:rgba(255,255,255,0.15);">|</span>
+                                        <span style="color:#c084fc; font-weight:700; white-space:nowrap;">📤 ${req.completion == null ? "—" : formatPoolNumber(req.completion)}</span>
+                                    </div>
+                                    <div class="stream-tok-badge ${badgeClass}">
+                                        <span>⚡</span>
+                                        <span>+${req.tokens == null ? "unknown" : formatPoolNumber(req.tokens)} tok</span>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="stream-actions-bar">
+                                <button type="button" class="request-detail-trigger" style="margin-top:0; min-height:38px;">Inspect request ↗</button>
+                            </div>
+                        `;
+
+                        const btn = item.querySelector('.request-detail-trigger');
+                        if (btn) btn.onclick = (e) => {
+                            e.stopPropagation();
+                            openRequestInspector(req);
+                        };
+                        item.onclick = function(e) {
+                            if (e.target && e.target.closest && e.target.closest('.request-detail-trigger')) return;
+                            const isAlreadySelected = this.classList.contains('selected');
+                            document.querySelectorAll('#api-activity-stream-list .stream-card-item.selected').forEach(card => {
+                                card.classList.remove('selected');
+                            });
+                            if (!isAlreadySelected) {
+                                this.classList.add('selected');
+                            }
+                        };
+                        apiListContainer.appendChild(item);
+                    });
+                }
             }
         }
 
@@ -4950,6 +5008,9 @@
 
         let syncResetTimer = null;
 
+        let cachedReportData = null;
+        let cachedApiLogsData = null;
+
         async function fetchLiveLogs(force = false) {
             const btn = document.getElementById('main-refresh-btn') || document.querySelector('.refresh-btn');
             const progress = document.getElementById('main-refresh-progress');
@@ -4977,17 +5038,35 @@
             }
             try {
                 const path = force ? '/api/refresh' : '/api/logs_data';
-                const res = await fetch(resolveApiUrl(path), {
-                    headers: apiHeaders(),
-                    credentials: 'same-origin'
-                });
+                const [res, apiRes] = await Promise.all([
+                    fetch(resolveApiUrl(path), {
+                        headers: apiHeaders(),
+                        credentials: 'same-origin'
+                    }),
+                    fetch(resolveApiUrl('/api/api_logs_data?limit=200'), {
+                        headers: apiHeaders(),
+                        credentials: 'same-origin'
+                    }).catch(() => null)
+                ]);
+
                 if (!res.ok) throw new Error('HTTP ' + res.status);
                 const data = await res.json();
                 cachedReportData = data;
+
+                let apiRequestsList = null;
+                if (apiRes && apiRes.ok) {
+                    try {
+                        const apiData = await apiRes.json();
+                        if (apiData && apiData.success && Array.isArray(apiData.api_requests)) {
+                            cachedApiLogsData = apiData.api_requests;
+                            apiRequestsList = apiData.api_requests;
+                        }
+                    } catch (e) {}
+                }
                 
                 updateProviderStatsAndModels();
                 renderAccountsList();
-                renderGeneralActivityStream(data.recent_requests || []);
+                renderGeneralActivityStream(data.recent_requests || [], apiRequestsList);
                 // Reactively refresh API tokens whenever new requests arrive or when on API view
                 if (isApiViewOpen || (data.recent_requests && data.recent_requests.length > 0)) {
                     loadApiTokens();
@@ -5030,7 +5109,7 @@
             cachedReportData = window.__INITIAL_DATA__;
             try {
                 switchProvider(currentProvider, true);
-                renderGeneralActivityStream(cachedReportData.recent_requests || []);
+                renderGeneralActivityStream(cachedReportData.recent_requests || [], cachedApiLogsData);
             } catch(e) { console.error(e); }
         }
 
@@ -5038,7 +5117,7 @@
             if (window.__INITIAL_DATA__) {
                 cachedReportData = window.__INITIAL_DATA__;
                 switchProvider(currentProvider, true);
-                renderGeneralActivityStream(cachedReportData.recent_requests || []);
+                renderGeneralActivityStream(cachedReportData.recent_requests || [], cachedApiLogsData);
             }
             // Always fetch live data immediately to guarantee no stale or empty state
             fetchLiveLogs(false);
