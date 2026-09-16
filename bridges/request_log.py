@@ -547,7 +547,8 @@ def get_api_requests(path, limit=200):
                 try:
                     aud = json.loads(r['audit_json'])
                     if isinstance(aud, dict):
-                        audit_parsed['client_label'] = aud.get('client_label')
+                        client_lbl = aud.get('client_label') or aud.get('authenticated_client') or aud.get('client_id') or 'External API'
+                        audit_parsed['client_label'] = str(client_lbl)
                         audit_parsed['client_id'] = aud.get('client_id')
                         audit_parsed['authenticated_client'] = aud.get('authenticated_client')
                         audit_parsed['peer_ip'] = aud.get('peer_ip')

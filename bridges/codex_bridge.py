@@ -47,6 +47,20 @@ _codex_catalog = DynamicCatalog(
 )
 
 
+# Map common aliases and OpenAI client standard names to current supported Codex models
+CODEX_MODEL_ALIASES = {
+    "gpt-5": "gpt-5.6-luna",
+    "gpt-5-turbo": "gpt-5.6-luna",
+    "gpt-4": "gpt-5.5",
+    "gpt-4o": "gpt-5.6-luna",
+    "gpt-4o-mini": "gpt-5.5",
+    "gpt-4-turbo": "gpt-5.6-luna",
+    "gpt-3.5-turbo": "gpt-5.5",
+    "o1": "gpt-6-astra",
+    "o3-mini": "gpt-5.6-luna",
+}
+
+
 def list_available_models(force_refresh=True):
     models = _codex_catalog.get(force=force_refresh)
     # Order models newest to oldest
@@ -79,7 +93,10 @@ def response_request(payload, chat=False):
     model = payload.get('model')
     if not isinstance(model,str) or not model or model != model.strip():
         raise PoolError('An exact model ID is required',400)
+    # Automatically map common model names / aliases (e.g. gpt-5, gpt-4o) to valid upstream Codex models
+    model = CODEX_MODEL_ALIASES.get(model, model)
     out = dict(payload)
+    out['model'] = model
     if isinstance(out.get('instructions'), list):
         out['instructions'] = '\n\n'.join(str(item) for item in out['instructions'])
     # Codex supports the full native range low..ultra.
