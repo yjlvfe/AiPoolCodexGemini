@@ -1,5 +1,5 @@
 {
-  "version": "2.2.6",
+  "version": "2.2.7",
   "tier": "stable",
   "updated_at": "2026-09-15T06:35:00+03:00",
   "description": "Stable release: dynamic quota subgroup switching (Gemini vs Claude/GPT) and zero-jitter toggle buttons"

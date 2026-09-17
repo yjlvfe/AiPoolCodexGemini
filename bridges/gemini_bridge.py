@@ -617,45 +617,39 @@ def call_antigravity(ag_body, access=None, deadline=None):
     raise PoolError('Antigravity endpoints are unavailable',last_status)
 
 
-def call_with_retry(ag_body, attempts=None, on_success=None, sleep=None, deadline=None, client_connected=None):
-    """Call Antigravity with a real transient-outage retry budget.
+def call_with_retry(ag_body, attempts=None, on_success=None, sleep=None, deadline=None, client_connected=None, request_id=None):
+    """Fast Account Failover for Antigravity/Gemini bridge in Zero-Retry Architecture.
 
-    Account quota/auth failures rotate away from that account.  Provider 5xx
-    and network failures keep retrying the same logical request across the
-    available account set, including accounts temporarily marked by the
-    circuit breaker.  This distinction prevents an outage from emptying the
-    candidate list after the first pass.
+    - Provider is called at most ONCE per account per request.
+    - Transient errors (5xx, transient 429, timeouts, network) terminate immediately; NO retry, NO account failover.
+    - Hard failures (401/403 invalid credentials, confirmed quota exhaustion 429) failover immediately to next healthy candidate.
+    - All accounts exhausted -> terminal structured ALL_ACCOUNTS_EXHAUSTED.
     """
     model = ag_body['model']
-    candidates = AG_POOL.candidates(model, include_cooldown=True)
+    candidates = AG_POOL.candidates(model, include_cooldown=False) or AG_POOL.candidates(model, include_cooldown=True)
     if not candidates:
-        raise PoolError('No usable Antigravity account for this exact model; pool is empty', 503)
-    configured = attempts
-    if configured is None:
-        configured = (os.environ.get('AIPOOL_GEMINI_MAX_ATTEMPTS') or
-                      os.environ.get('AIPOOL_PROVIDER_MAX_ATTEMPTS'))
-    total = provider_attempts(configured)
-    sleeper = sleep or time.sleep
+        raise PoolError('All accounts are exhausted or invalid', 503)
+
     deadline = deadline if deadline is not None else time.monotonic() + request_total_deadline()
     last_status = 503
-    quota_exhausted = set()
-    outage_failures = 0
+    attempted_accounts = []
     try:
         active_at_start = Manager('gemini').active()
     except (ValueError, OSError):
         active_at_start = ''
     rotated_after_hard_failure = False
-    current_index = 0
 
-    for attempt in range(total):
+    for candidate in list(candidates):
+        if candidate in attempted_accounts:
+            continue
         if client_connected is not None and not client_connected():
             raise PoolError('Client disconnected', 499)
         if time.monotonic() >= deadline:
             raise PoolError('Request deadline exceeded', 504)
-        usable = [n for n in candidates if n not in quota_exhausted] or candidates
-        if current_index >= len(usable):
-            current_index = 0
-        number = usable[current_index]
+
+        number = candidate
+        attempted_accounts.append(number)
+
         try:
             credentials = AG_POOL.credentials(number)
             body = deepcopy(ag_body)
@@ -666,31 +660,24 @@ def call_with_retry(ag_body, attempts=None, on_success=None, sleep=None, deadlin
             return result
         except (PoolError, ValueError, OSError, RuntimeError) as exc:
             last_status = int(getattr(exc, 'status', 503) or 503)
-            if last_status not in (401, 403, 429) and last_status < 500:
-                raise
-            if last_status in (401, 403) or (last_status == 429 and hard_account_failure(last_status, str(exc))):
-                quota_exhausted.add(number)
-                AG_POOL.exhausted(number, model, getattr(exc, 'retry_after', 60), reason='invalid_credentials' if last_status in (401, 403) else 'quota_exhausted')
+            # Classify hard failure vs transient error
+            is_hard_auth = last_status in (401, 403)
+            is_hard_quota = (last_status == 429 and hard_account_failure(last_status, str(exc)))
+
+            if is_hard_auth or is_hard_quota:
+                reason = 'invalid_credentials' if is_hard_auth else 'quota_exhausted'
+                retry_sec = getattr(exc, 'retry_after', 60)
+                AG_POOL.exhausted(number, model, retry_sec, reason=reason)
                 rotated_after_hard_failure = True
-                # The exhausted account is now in quota_exhausted and removed from usable;
-                # keeping current_index unchanged points directly to the next account in sequence.
-                if len(quota_exhausted) >= len(candidates):
-                    break
+                continue
             else:
-                outage_failures += 1
-                AG_POOL.exhausted(number, model, min(5, max(1, outage_failures)), reason='provider_outage')
-            if attempt + 1 < total:
-                retry_after = getattr(exc, 'retry_after', None) if last_status in (401, 403, 429) else None
-                delay = retry_delay(attempt, retry_after)
-                remaining = deadline - time.monotonic()
-                if remaining <= 0:
-                    raise PoolError('Request deadline exceeded', 504) from None
-                if client_connected is not None and not client_connected():
-                    raise PoolError('Client disconnected', 499) from None
-                sleeper(min(delay, remaining))
-    raise PoolError(
-        f'Antigravity provider did not recover after {total} attempts', last_status
-    )
+                # Transient error -> stop failover chain immediately, active stays sticky
+                raise exc
+        finally:
+            if request_id:
+                print(f"REQUEST_PROVIDER_CALLS request_id={request_id} accounts={attempted_accounts} total_calls={len(attempted_accounts)}", flush=True)
+
+    raise PoolError('All accounts are exhausted or invalid', last_status)
 
 
 # ---------------------------------------------------------------------------
@@ -748,7 +735,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
             raise PoolError("Request body must be a JSON object", 400)
         return value
 
-    def _send_json(self, obj, status=200):
+    def _send_json(self, obj, status=200, headers=None):
         self.close_connection = True
         data = json.dumps(obj).encode("utf-8")
         try:
@@ -756,16 +743,25 @@ class Handler(http.server.BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.send_header("Content-Length", str(len(data)))
             self.send_header("Connection", "close")
+            if headers:
+                for k, v in headers.items():
+                    if v is not None:
+                        self.send_header(k, str(v))
             self.end_headers()
             self.wfile.write(data)
         except (BrokenPipeError, ConnectionResetError):
             self.close_connection = True
             print("[gemini-bridge] client disconnected before/during response", file=sys.stderr)
 
-    def _send_error(self, message, status=500):
+    def _send_error(self, message, status=500, request_id=None, retry_after=None):
         from error_taxonomy import classify, public_error
-        classified = classify(message, status=status, stream_started=False)
-        self._send_json({"error": public_error(classified)}, status)
+        classified = classify(message, status=status, stream_started=False, retry_after=retry_after, request_id=request_id)
+        resp_headers = {}
+        if request_id:
+            resp_headers["X-Request-ID"] = request_id
+        if classified.retry_after is not None and classified.retry_after > 0:
+            resp_headers["Retry-After"] = str(classified.retry_after)
+        self._send_json({"error": public_error(classified)}, classified.status, headers=resp_headers)
 
     def _record_bridge_request(self, out_resp, req_model, pool_name='Gemini'):
         audit = getattr(self, '_audit', None)
@@ -940,29 +936,32 @@ class Handler(http.server.BaseHTTPRequestHandler):
             ag_resp = self._call_with_retry(
                 ag_body, deadline=self._request_deadline,
                 client_connected=self._client_connected,
+                request_id=self._audit.get('request_id'),
             )
             if self._durable_store and self._durable_key:
                 self._durable_store.complete(self._durable_key, ag_resp, 200)
             out = to_openai_response(ag_resp, request_model=m)
             self._audit['latency_ms'] = round((time.perf_counter() - started_at) * 1000, 2)
             self._record_bridge_request(out, m, "Gemini")
-            self._send_json(out, 200)
+            self._send_json(out, 200, headers={'X-Request-ID': self._audit.get('request_id')})
         except Exception as e:
             print(f"[bridge] POST ERROR: {e}", file=sys.stderr)
             from error_taxonomy import classify
             status = getattr(e, 'status', 500)
-            classified = classify(e, status=status, stream_started=False)
+            req_id = (self._audit or {}).get('request_id')
+            retry_after_val = getattr(e, 'retry_after', None)
+            classified = classify(e, status=status, stream_started=False, retry_after=retry_after_val, request_id=req_id)
             if self._audit is not None:
                 self._audit['error_code'] = classified.code.value
                 self._audit['latency_ms'] = round((time.perf_counter() - started_at) * 1000, 2)
             if self._durable_store and self._durable_key and self._durable_claimed:
                 self._durable_store.fail(
                     self._durable_key, classified.code.value,
-                    retryable=(status >= 500 or isinstance(e, (OSError, TimeoutError))),
+                    retryable=False,
                 )
-            record('Gemini',payload.get('model'),None,getattr(self,'_account_used',None),'FAILED',audit=getattr(self,'_audit',None),error_code=classified.code.value)
+            record('Gemini',payload.get('model'),None,getattr(self,'_account_used',None),'FAILED',audit=getattr(self,'_audit',None),error_code=classified.code.value,request_id=req_id)
             if not self._stream_started:
-                self._send_error(e,status)
+                self._send_error(e, status=status, request_id=req_id, retry_after=retry_after_val)
             else:
                 self.close_connection = True
 
@@ -986,7 +985,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         self._record_bridge_request(out, requested_model or out['model'], "Gemini")
         self._send_cached_stream(out, requested_model=requested_model)
 
-    def _call_with_retry(self, ag_body, attempts=None, deadline=None, client_connected=None):
+    def _call_with_retry(self, ag_body, attempts=None, deadline=None, client_connected=None, request_id=None):
         try:
             expected_current = Manager('gemini').active()
         except (ValueError, OSError):
@@ -1003,6 +1002,7 @@ class Handler(http.server.BaseHTTPRequestHandler):
         return call_with_retry(
             ag_body, attempts=attempts, on_success=succeeded,
             deadline=deadline, client_connected=client_connected,
+            request_id=request_id,
         )
 
 

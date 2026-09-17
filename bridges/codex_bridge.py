@@ -47,18 +47,9 @@ _codex_catalog = DynamicCatalog(
 )
 
 
-# Map common aliases and OpenAI client standard names to current supported Codex models
-CODEX_MODEL_ALIASES = {
-    "gpt-5": "gpt-5.6-luna",
-    "gpt-5-turbo": "gpt-5.6-luna",
-    "gpt-4": "gpt-5.5",
-    "gpt-4o": "gpt-5.6-luna",
-    "gpt-4o-mini": "gpt-5.5",
-    "gpt-4-turbo": "gpt-5.6-luna",
-    "gpt-3.5-turbo": "gpt-5.5",
-    "o1": "gpt-6-astra",
-    "o3-mini": "gpt-5.6-luna",
-}
+# Model IDs are caller-owned.  Keep this name as a compatibility surface,
+# but do not translate one requested model into another model implicitly.
+CODEX_MODEL_ALIASES = {}
 
 
 def list_available_models(force_refresh=True):
@@ -303,6 +294,8 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
         request_started_at = time.perf_counter()
         deadline = request_started_at + request_total_deadline()
         completed = None
+        request_id = str(uuid.uuid4())
+        attempted_accounts = []
         try:
             request_started_at = time.perf_counter()
             path=urllib.parse.urlsplit(self.path).path
@@ -358,31 +351,16 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
                 active_at_start = ''
             rotated_after_hard_failure = False
             total_attempts=provider_attempts(os.environ.get('AIPOOL_CODEX_MAX_ATTEMPTS'))
-            def wait_retry(delay):
-                remaining = deadline - time.perf_counter()
-                if remaining <= 0:
-                    raise PoolError('Request deadline exceeded', 504) from None
-                time.sleep(min(delay, remaining))
+            attempted_accounts = []
 
-            for attempt in range(total_attempts):
+            for candidate in list(attempts):
+                if candidate in attempted_accounts:
+                    continue
                 if time.perf_counter() >= deadline:
                     raise PoolError('Request deadline exceeded', 504)
-                if not attempts or len(quota_exhausted) >= len(attempts):
-                    break
-                # Keep the cursor in the original candidate list while
-                # skipping removed accounts.  Indexing the shrinking list can
-                # skip B after A is removed (A -> 429 must select B, not C).
-                number=None
-                for offset in range(len(attempts)):
-                    candidate=attempts[(next_index + offset) % len(attempts)]
-                    if candidate not in quota_exhausted:
-                        number=candidate
-                        break
-                if number is None:
-                    break
-                # Keep retries sticky: the cursor advances only after a
-                # confirmed account-specific hard failure.
-                # next_index points at the current account until then.
+
+                number = candidate
+                attempted_accounts.append(number)
                 try:
                     credentials=POOL.credentials(number)['tokens']
                     headers={'Authorization':'Bearer '+credentials['access_token'],'ChatGPT-Account-Id':credentials.get('account_id',''),'Content-Type':'application/json','Accept':'text/event-stream','User-Agent':'codex_cli_rs/0.1.0'}
@@ -390,39 +368,24 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
                     print(f"[codex-bridge] attempt account={number} model={model}", flush=True)
                     upstream=urllib.request.urlopen(req,timeout=max(0.1, min(120, deadline - time.perf_counter())))
                 except urllib.error.HTTPError as exc:
-                    # Authentication/quota errors may belong to one account; invalid payloads do not.
                     last_status=exc.code
-                    if exc.code in (401,403) or (exc.code == 429 and hard_account_failure(exc.code, exc.read().decode(errors='replace') if hasattr(exc, 'read') else '')):
-                        print(f"[codex-bridge] account {number} exhausted: HTTP {exc.code}", flush=True)
-                        POOL.exhausted(number,model,retry_seconds(exc.headers), reason='invalid_credentials' if exc.code in (401,403) else 'quota_exhausted')
-                        quota_exhausted.add(number)
-                        rotated_after_hard_failure=True
-                        next_index=(attempts.index(number) + 1) % len(attempts)
-                        exc.close()
-                        if len(quota_exhausted) >= len(attempts):
-                            break
-                        if attempt + 1 < total_attempts:
-                            wait_retry(retry_delay(attempt, retry_seconds(exc.headers)))
-                        continue
-                    if exc.code == 429 or transient_status(exc.code):
-                        last_status=exc.code
-                        POOL.exhausted(number, model, min(5, attempt + 1), reason='provider_outage')
-                        exc.close()
-                        if attempt + 1 < total_attempts:
-                            wait_retry(retry_delay(attempt))
-                        continue
+                    raw_err = exc.read().decode(errors='replace') if hasattr(exc, 'read') else ''
+                    retry_sec = retry_seconds(exc.headers)
                     exc.close()
-                    raise PoolError(f'Codex upstream HTTP {last_status}',last_status) from None
+                    # Hard account failure vs transient error
+                    if exc.code in (401, 403) or (exc.code == 429 and hard_account_failure(exc.code, raw_err)):
+                        print(f"[codex-bridge] account {number} exhausted: HTTP {exc.code}", flush=True)
+                        POOL.exhausted(number, model, retry_sec, reason='invalid_credentials' if exc.code in (401, 403) else 'quota_exhausted')
+                        quota_exhausted.add(number)
+                        rotated_after_hard_failure = True
+                        continue
+                    # Transient error (5xx, temporary 429) -> immediate return
+                    err_obj = PoolError(f'Codex upstream HTTP {last_status}', last_status)
+                    err_obj.retry_after = retry_sec
+                    raise err_obj from None
                 except (PoolError, ValueError, OSError, TypeError, RuntimeError) as exc:
-                    last_status=int(getattr(exc,'status',503) or 503)
-                    if not transient_exception(exc) and not (
-                        isinstance(exc, PoolError) and last_status >= 500
-                    ):
-                        raise
-                    POOL.exhausted(number,model,min(5, attempt + 1), reason='provider_outage')
-                    if attempt + 1 < total_attempts:
-                        wait_retry(retry_delay(attempt))
-                    continue
+                    # Network / Timeout -> immediate return
+                    raise exc
                 with upstream:
                     iterator=events(upstream)
                     # Lifecycle events are not generated content. Buffer them until a
@@ -435,93 +398,71 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
                         if first_event.get('type') not in (None,'response.created','response.in_progress','ping'):
                             break
                         prelude.append(raw)
-                        if len(prelude)>64 or sum(map(len,prelude))>262144:
-                            last_status=502
-                            POOL.exhausted(number,model,min(5, attempt + 1), reason='provider_outage')
+                        if len(prelude) > 64 or sum(map(len, prelude)) > 262144:
+                            last_status = 502
                             prelude = []
                             first = b''
                             break
                     else:
-                        first=b''
-                    first_event=event_data(first)
+                        first = b''
+                    first_event = event_data(first)
                     if rotate_event(first_event):
                         print(f"[codex-bridge] account {number} exhausted: stream {first_event.get('type')}", flush=True)
-                        POOL.exhausted(number,model)
+                        POOL.exhausted(number, model, reason='quota_exhausted')
                         quota_exhausted.add(number)
-                        rotated_after_hard_failure=True
-                        next_index=(attempts.index(number) + 1) % len(attempts)
-                        last_status=429
+                        rotated_after_hard_failure = True
+                        last_status = 429
                         continue
                     if not first or failed(first_event):
-                        if not first or transient_event(first_event):
-                            last_status=502
-                            POOL.exhausted(number,model,min(5, attempt + 1), reason='provider_outage')
-                            if attempt + 1 < total_attempts:
-                                wait_retry(retry_delay(attempt))
-                            continue
-                        raise PoolError('Codex upstream rejected the request',502)
+                        raise PoolError('Codex upstream rejected the request', 502)
                     if wants_stream:
                         lifecycle.begin()
                         self._stream_started = True
                         self.send_response(200)
-                        self.send_header('Content-Type','text/event-stream')
-                        self.send_header('Cache-Control','no-cache')
-                        self.send_header('Connection','close')
+                        self.send_header('Content-Type', 'text/event-stream')
+                        self.send_header('Cache-Control', 'no-cache')
+                        self.send_header('Connection', 'close')
+                        self.send_header('X-Request-ID', request_id)
                         self.end_headers()
-                        started=True
+                        started = True
                     import itertools
-                    completed=None
-                    retry_before_output=False
-                    observed_items={}
-                    tool_indexes={}
-                    for raw in itertools.chain(prelude,[first],iterator):
-                        event=event_data(raw)
+                    completed = None
+                    observed_items = {}
+                    tool_indexes = {}
+                    for raw in itertools.chain(prelude, [first], iterator):
+                        event = event_data(raw)
                         if wants_stream and lifecycle.state.value == 'started':
                             lifecycle.observe()
                         if failed(event):
-                            if not wants_stream and transient_event(event):
-                                last_status=502
-                                retry_before_output=True
-                                break
-                            raise PoolError('Codex stream failed after it started; request was not replayed',502)
-                        if event.get('type')=='response.output_item.done' and isinstance(event.get('item'),dict):
-                            observed_items[event.get('output_index',len(observed_items))]=event['item']
-                        if event.get('type')=='response.completed':
-                            completed=event.get('response') or {}
+                            raise PoolError('Codex stream failed after it started; request was not replayed', 502)
+                        if event.get('type') == 'response.output_item.done' and isinstance(event.get('item'), dict):
+                            observed_items[event.get('output_index', len(observed_items))] = event['item']
+                        if event.get('type') == 'response.completed':
+                            completed = event.get('response') or {}
                             if not completed.get('output') and observed_items:
-                                completed=dict(completed,output=[observed_items[k] for k in sorted(observed_items)])
-                            usage=completed.get('usage')
+                                completed = dict(completed, output=[observed_items[k] for k in sorted(observed_items)])
+                            usage = completed.get('usage')
                         if wants_stream:
                             if not chat:
                                 self.wfile.write(raw)
                             else:
-                                delta=None
-                                typ=event.get('type')
-                                if typ=='response.output_text.delta':
-                                    delta={'content':event.get('delta','')}
-                                elif typ=='response.output_item.added' and event.get('item',{}).get('type')=='function_call':
-                                    item=event['item']; index=len(tool_indexes); tool_indexes[event.get('output_index')]=index
-                                    delta={'tool_calls':[{'index':index,'id':item.get('call_id',item.get('id')),'type':'function','function':{'name':item.get('name'),'arguments':''}}]}
-                                elif typ=='response.function_call_arguments.delta':
-                                    delta={'tool_calls':[{'index':tool_indexes.get(event.get('output_index'),0),'function':{'arguments':event.get('delta','')}}]}
+                                delta = None
+                                typ = event.get('type')
+                                if typ == 'response.output_text.delta':
+                                    delta = {'content': event.get('delta', '')}
+                                elif typ == 'response.output_item.added' and event.get('item', {}).get('type') == 'function_call':
+                                    item = event['item']; index = len(tool_indexes); tool_indexes[event.get('output_index')] = index
+                                    delta = {'tool_calls': [{'index': index, 'id': item.get('call_id', item.get('id')), 'type': 'function', 'function': {'name': item.get('name'), 'arguments': ''}}]}
+                                elif typ == 'response.function_call_arguments.delta':
+                                    delta = {'tool_calls': [{'index': tool_indexes.get(event.get('output_index'), 0), 'function': {'arguments': event.get('delta', '')}}]}
                                 if delta is not None:
-                                    chunk={'id':'chatcmpl-stream','object':'chat.completion.chunk','created':int(time.time()),'model':model,'choices':[{'index':0,'delta':delta,'finish_reason':None}]}
-                                    self.wfile.write(('data: '+json.dumps(chunk)+'\n\n').encode())
+                                    chunk = {'id': 'chatcmpl-stream', 'object': 'chat.completion.chunk', 'created': int(time.time()), 'model': model, 'choices': [{'index': 0, 'delta': delta, 'finish_reason': None}]}
+                                    self.wfile.write(('data: ' + json.dumps(chunk) + '\n\n').encode())
                             self.wfile.flush()
-                    if retry_before_output:
-                        POOL.exhausted(number,model,min(5, attempt + 1), reason='provider_outage')
-                        if attempt + 1 < total_attempts:
-                            wait_retry(retry_delay(attempt))
-                        continue
                     if completed is None:
                         if wants_stream and lifecycle.state.value == 'started':
                             lifecycle.interrupt()
-                        if not wants_stream:
-                            POOL.exhausted(number,model,min(5, attempt + 1), reason='provider_outage')
-                            if attempt + 1 < total_attempts:
-                                wait_retry(retry_delay(attempt))
-                            continue
-                        raise PoolError('Codex stream ended without response.completed',502)
+                        raise PoolError('Codex stream ended without response.completed', 502)
                     if wants_stream:
                         lifecycle.complete()
                     outcome='OK'
@@ -562,6 +503,7 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
                     audit['error_code'] = classified.code.value
                 self.send_json({'error':public_error(classified)},getattr(exc,'status',400 if isinstance(exc,(ValueError,KeyError)) else 502))
         finally:
+            print(f"REQUEST_PROVIDER_CALLS request_id={request_id} accounts={attempted_accounts} total_calls={len(attempted_accounts)}", flush=True)
             if audit is not None:
                 # OUT means the assistant response returned to the client.
                 # Keep the transformed provider request in provider_prompt_text

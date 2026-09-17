@@ -6,6 +6,7 @@ import sqlite3
 import threading
 import time
 import unittest
+import urllib.error
 from pathlib import Path
 from unittest.mock import patch
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -173,7 +174,7 @@ class SecurityAndIntegrationRegressionTests(unittest.TestCase):
         self.assertEqual(providers['gemini']['api'], 'http://127.0.0.1:9123/v1')
         self.assertEqual(providers['codex']['api'], 'http://127.0.0.1:9124/v1')
 
-    def test_codex_bridge_retries_provider_outage_before_output(self):
+    def test_codex_bridge_returns_immediately_on_provider_outage(self):
         class Upstream(BaseHTTPRequestHandler):
             calls = 0
 
@@ -182,23 +183,8 @@ class SecurityAndIntegrationRegressionTests(unittest.TestCase):
 
             def do_POST(self):
                 type(self).calls += 1
-                if type(self).calls < 20:
-                    self.send_response(503)
-                    self.end_headers()
-                    return
-                events = [
-                    {'type': 'response.created'},
-                    {'type': 'response.output_text.delta', 'delta': 'ok'},
-                    {'type': 'response.completed', 'response': {
-                        'id': 'resp-test', 'output': [{'type': 'message', 'content': [{'type': 'output_text', 'text': 'ok'}]}],
-                    }},
-                ]
-                body = ''.join('data: ' + json.dumps(event) + '\n\n' for event in events).encode()
-                self.send_response(200)
-                self.send_header('Content-Type', 'text/event-stream')
-                self.send_header('Content-Length', str(len(body)))
+                self.send_response(503)
                 self.end_headers()
-                self.wfile.write(body)
 
         server = ThreadingHTTPServer(('127.0.0.1', 0), Upstream)
         thread = threading.Thread(target=server.serve_forever, daemon=True)
@@ -208,16 +194,7 @@ class SecurityAndIntegrationRegressionTests(unittest.TestCase):
         bridge_thread.start()
         try:
             payload = {'model': 'gpt-5.6-luna', 'input': 'hello', 'stream': False}
-            recorded = threading.Event()
-            real_record = codex_bridge.record
-
-            def record_and_signal(*args, **kwargs):
-                try:
-                    return real_record(*args, **kwargs)
-                finally:
-                    recorded.set()
-
-            with tempfile.TemporaryDirectory() as directory, patch.dict(
+            with tempfile.TemporaryDirectory(ignore_cleanup_errors=True) as directory, patch.dict(
                 'os.environ', {
                     'AUTH_DB_PATH': str(Path(directory) / 'audit.db'),
                     'AIPOOL_PROVIDER_MAX_ATTEMPTS': '20',
@@ -228,19 +205,19 @@ class SecurityAndIntegrationRegressionTests(unittest.TestCase):
                     patch.object(codex_bridge.POOL, 'exhausted'), \
                     patch.object(codex_bridge.POOL, 'promote'), \
                     patch.object(client_identity, 'authorize', return_value=True), \
-                    patch.object(codex_bridge, 'record', side_effect=record_and_signal), \
                     patch.object(codex_bridge.time, 'sleep') as sleeper:
                 request = Request(
                     f'http://127.0.0.1:{bridge.server_port}/v1/responses',
                     data=json.dumps(payload).encode(),
                     headers={'Content-Type': 'application/json'},
                 )
-                with urlopen(request, timeout=5) as response:
-                    result = json.load(response)
-                self.assertTrue(recorded.wait(2))
-            self.assertEqual(Upstream.calls, 20)
-            self.assertEqual(result['id'], 'resp-test')
-            self.assertEqual(sleeper.call_count, 19)
+                try:
+                    with urlopen(request, timeout=5) as response:
+                        self.assertEqual(response.status, 503)
+                except urllib.error.HTTPError as err:
+                    self.assertEqual(err.code, 503)
+            self.assertEqual(Upstream.calls, 1)
+            self.assertEqual(sleeper.call_count, 0)
         finally:
             bridge.shutdown()
             bridge.server_close()

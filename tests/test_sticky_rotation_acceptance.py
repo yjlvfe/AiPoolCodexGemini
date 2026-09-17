@@ -32,50 +32,56 @@ def test_sticky_success_never_changes_active():
 
 
 def test_transient_5xx_retries_same_account_no_promote():
-    """Test 2: Transient 5xx retries on the same account and does not promote."""
+    """Test 2: Transient 5xx returns immediately, no retry, no promote."""
     body = {'model': 'gemini-3.8-flash'}
-    failures = [PoolError('upstream 500', 500), PoolError('upstream 503', 503), {'ok': True}]
+    failures = PoolError('upstream 500', 500)
     with patch.object(gemini_bridge.AG_POOL, 'candidates', return_value=['2', '3', '4', '1']), \
          patch.object(gemini_bridge.AG_POOL, 'credentials', return_value={'token': {'access_token': 'x'}}), \
          patch.object(gemini_bridge, 'call_antigravity', side_effect=failures) as call, \
          patch.object(gemini_bridge, 'Manager') as manager, \
          patch.object(gemini_bridge.AG_POOL, 'promote') as promote:
         manager.return_value.active.return_value = '2'
-        res = gemini_bridge.call_with_retry(body, attempts=3, sleep=lambda _: None)
-        assert res == {'ok': True}
-        assert call.call_count == 3
+        try:
+            gemini_bridge.call_with_retry(body, attempts=3, sleep=lambda _: None)
+        except PoolError as err:
+            assert err.status == 500
+        assert call.call_count == 1
         promote.assert_not_called()
 
 
 def test_network_reset_retries_same_account_no_promote():
-    """Test 3: Connection reset stays on same active account."""
+    """Test 3: Connection reset returns immediately, no retry, no promote."""
     body = {'model': 'gemini-3.8-flash'}
-    failures = [ConnectionResetError('connection reset by peer'), {'ok': True}]
+    failures = ConnectionResetError('connection reset by peer')
     with patch.object(gemini_bridge.AG_POOL, 'candidates', return_value=['2', '3', '4', '1']), \
          patch.object(gemini_bridge.AG_POOL, 'credentials', return_value={'token': {'access_token': 'x'}}), \
          patch.object(gemini_bridge, 'call_antigravity', side_effect=failures) as call, \
          patch.object(gemini_bridge, 'Manager') as manager, \
          patch.object(gemini_bridge.AG_POOL, 'promote') as promote:
         manager.return_value.active.return_value = '2'
-        res = gemini_bridge.call_with_retry(body, attempts=3, sleep=lambda _: None)
-        assert res == {'ok': True}
-        assert call.call_count == 2
+        try:
+            gemini_bridge.call_with_retry(body, attempts=3, sleep=lambda _: None)
+        except ConnectionResetError:
+            pass
+        assert call.call_count == 1
         promote.assert_not_called()
 
 
 def test_temporary_429_retries_same_account_no_promote():
-    """Test 4: Transient 429 retries same account and does not promote."""
+    """Test 4: Transient 429 returns immediately, no retry, no promote."""
     body = {'model': 'gemini-3.8-flash'}
-    failures = [PoolError('rate limit spike - please slow down', 429), {'ok': True}]
+    failures = PoolError('rate limit spike - please slow down', 429)
     with patch.object(gemini_bridge.AG_POOL, 'candidates', return_value=['2', '3', '4', '1']), \
          patch.object(gemini_bridge.AG_POOL, 'credentials', return_value={'token': {'access_token': 'x'}}), \
          patch.object(gemini_bridge, 'call_antigravity', side_effect=failures) as call, \
          patch.object(gemini_bridge, 'Manager') as manager, \
          patch.object(gemini_bridge.AG_POOL, 'promote') as promote:
         manager.return_value.active.return_value = '2'
-        res = gemini_bridge.call_with_retry(body, attempts=3, sleep=lambda _: None)
-        assert res == {'ok': True}
-        assert call.call_count == 2
+        try:
+            gemini_bridge.call_with_retry(body, attempts=3, sleep=lambda _: None)
+        except PoolError as err:
+            assert err.status == 429
+        assert call.call_count == 1
         promote.assert_not_called()
 
 

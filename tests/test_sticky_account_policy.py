@@ -10,7 +10,7 @@ from pool_runtime import PoolError
 
 def test_gemini_transient_retries_stay_on_active_account():
     body = {'model': 'gemini-3.8-flash'}
-    failures = [PoolError('temporary outage', 503), PoolError('temporary 429', 429), {'ok': True}]
+    failures = PoolError('temporary outage', 503)
     used = []
     with patch.object(gemini_bridge.AG_POOL, 'candidates', return_value=['1', '2']), \
          patch.object(gemini_bridge.AG_POOL, 'credentials', return_value={'token': {'access_token': 'x'}}), \
@@ -19,11 +19,12 @@ def test_gemini_transient_retries_stay_on_active_account():
          patch.object(gemini_bridge.time, 'sleep'), \
          patch.object(gemini_bridge.AG_POOL, 'promote') as promote:
         manager.return_value.active.return_value = '1'
-        result = gemini_bridge.call_with_retry(body, attempts=3, sleep=lambda _: None,
-                                               on_success=lambda number, should_promote: used.append((number, should_promote)))
-    assert result == {'ok': True}
-    assert call.call_count == 3
-    assert used == [('1', False)]
+        try:
+            gemini_bridge.call_with_retry(body, attempts=3, sleep=lambda _: None,
+                                          on_success=lambda number, should_promote: used.append((number, should_promote)))
+        except PoolError as exc:
+            assert exc.status == 503
+    assert call.call_count == 1
     promote.assert_not_called()
 
 

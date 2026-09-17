@@ -37,7 +37,8 @@ class E2EProviderStubTests(unittest.TestCase):
             Stub.mode = '429'
             with self.assertRaises(Exception) as ctx:
                 urlopen(Request(url, data=b'{}', method='POST'), timeout=2)
-            self.assertEqual(classify(status=getattr(ctx.exception, 'code', 0)).code, ErrorCode.ACCOUNT_QUOTA_EXHAUSTED)
+            # In Zero-Retry architecture, generic 429 without hard quota evidence is TEMP_RATE_LIMIT
+            self.assertEqual(classify(status=getattr(ctx.exception, 'code', 0)).code, ErrorCode.TEMP_RATE_LIMIT)
             Stub.mode = 'drop'
             with self.assertRaises(Exception):
                 urlopen(Request(url, data=b'{}', method='POST'), timeout=2)

@@ -1,5 +1,41 @@
 # Changelog
 
+## v2.2.7 — 2026-09-17
+
+### Stable
+- Production-ready stable release introducing Zero-Retry, Model-Aware Smart Failover, and provider/model circuit breaking.
+
+### Zero-Retry
+- Enforced exactly one provider attempt per account for each logical request.
+- Removed internal same-account retries, retry sleeps, and backoff loops; a failed attempt is classified and handled immediately.
+- Prevented replay after streamed output begins, preserving request integrity and avoiding duplicate side effects.
+
+### Smart Account Failover
+- Account rotation is permitted only for independently proven hard account failures: hard quota exhaustion or invalid/revoked credentials.
+- A hard account failure can advance to at most one eligible next account; transient, model, provider, and unknown failures keep the active account sticky.
+- Prevented temporary 429 responses, generic 5xx/network failures, and model outages from incorrectly exhausting or rotating accounts.
+- Preserved strict Codex/Gemini pool separation and generation-safe active-account promotion.
+
+### Model-Aware Classification
+- Added deterministic failure-scope classification across `MODEL`, `PROVIDER`, `ACCOUNT`, `TRANSIENT_REQUEST`, and `UNKNOWN`.
+- Model-scoped failures take precedence over provider, account, and transport signals and never trigger account failover.
+- Added stable error codes including `MODEL_UNAVAILABLE` and `PROVIDER_UNAVAILABLE`, with safe model context and actionable `suggested_action` values.
+
+### Model Circuit Breaker
+- Added per-provider, per-model circuit-breaker isolation with a 45-second default TTL and provider `Retry-After` support.
+- Added fast local rejection for known unavailable models without contacting the provider or consuming account quota.
+- Added single-flight recovery probes to prevent probe stampedes; successful probes close the breaker and failed probes reopen it.
+- Kept failures isolated so an unavailable model does not affect other models or the other provider pool.
+
+### Agent Contract
+- Standardized Codex and Gemini error envelopes, `X-Request-ID`, optional `Retry-After`, model context, and `suggested_action` fields.
+- Added redacted request/provider-call summaries and stable `FAILURE_CLASSIFIED` and `MODEL_BREAKER_*` observability events.
+- Documented the provider-neutral contract for Hermes and other API clients in `docs/AGENT_ERROR_CONTRACT.md`.
+
+### Verification
+- Full test suite: **233/233 PASS**.
+- Zero-Retry, Smart Account Failover, model-aware classification, circuit-breaker isolation/recovery, and Agent Contract acceptance coverage passed.
+
 ## v2.2.6 — 2026-09-16
 
 ### Stable

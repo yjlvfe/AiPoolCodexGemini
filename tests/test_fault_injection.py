@@ -1,16 +1,18 @@
 import sys
 import unittest
 from pathlib import Path
+
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / 'bridges'))
 from error_taxonomy import ErrorCode, classify
 from stream_state import StreamLifecycle, StreamState
+
 
 class FaultInjectionTests(unittest.TestCase):
     def test_provider_faults_classify_without_failover_after_stream(self):
         cases = [
             (401, ErrorCode.ACCOUNT_AUTH_FAILURE, True),
-            (429, ErrorCode.ACCOUNT_QUOTA_EXHAUSTED, True),
-            (503, ErrorCode.PROVIDER_OUTAGE, True),
+            (429, ErrorCode.TEMP_RATE_LIMIT, False),
+            (503, ErrorCode.TRANSIENT_PROVIDER_ERROR, False),
             (400, ErrorCode.INVALID_REQUEST, False),
         ]
         for status, code, failover in cases:
@@ -31,6 +33,7 @@ class FaultInjectionTests(unittest.TestCase):
         self.assertFalse(lifecycle.can_failover)
         with self.assertRaises(RuntimeError):
             lifecycle.observe()
+
 
 if __name__ == '__main__':
     unittest.main()

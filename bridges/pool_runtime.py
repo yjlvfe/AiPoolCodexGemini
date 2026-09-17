@@ -233,14 +233,16 @@ def hard_account_failure(status, detail=''):
     if status != 429:
         return False
     text = str(detail).strip().lower()
-    # When no detail is given (e.g. headers-only 429 in upstream tests) or
-    # explicit quota exhaustion markers are present:
+    # Explicit hard quota markers only. Generic/empty 429 evidence is
+    # transient: account rotation is permitted only for the canonical
+    # ACCOUNT_QUOTA_EXHAUSTED condition.
     if not text:
-        return True
+        return False
     return any(marker in text for marker in (
-        'quota', 'usage_limit', 'rate_limit', 'rate limit', 'exhausted',
+        'quota', 'quota_exceeded', 'usage_limit', 'exhausted',
+        'monthly_cap', 'monthly limit', 'weekly limit', 'five_hour',
         'invalid_api_key', 'unauthorized', 'invalid credentials',
-        'too many requests per account', 'weekly limit', 'five_hour',
+        'too many requests per account'
     ))
 
 

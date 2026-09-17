@@ -19,19 +19,20 @@ from pool_runtime import PoolError
 
 
 class RecoveryTests(unittest.TestCase):
-    def test_provider_outage_reaches_twentieth_attempt(self):
+    def test_provider_outage_does_not_retry_in_zero_retry(self):
+        """In Zero-Retry architecture, provider outage fails immediately on first attempt."""
         body = {'model': 'gemini-3.8-flash', 'request': {'contents': []}}
-        failures = [PoolError('provider unavailable', 503) for _ in range(19)]
-        failures.append({'response': {'candidates': []}})
+        failures = PoolError('provider unavailable', 503)
         with patch.object(gemini_bridge.AG_POOL, 'candidates', return_value=[1]), \
              patch.object(gemini_bridge.AG_POOL, 'credentials', return_value={'token': {'access_token': 'test'}}), \
              patch.object(gemini_bridge.AG_POOL, 'exhausted'), \
              patch.object(gemini_bridge, 'call_antigravity', side_effect=failures) as call, \
              patch.object(gemini_bridge.time, 'sleep') as sleeper:
-            result = gemini_bridge.call_with_retry(body, attempts=20)
-        self.assertEqual(call.call_count, 20)
-        self.assertEqual(sleeper.call_count, 19)
-        self.assertEqual(result, {'response': {'candidates': []}})
+            with self.assertRaises(PoolError) as ctx:
+                gemini_bridge.call_with_retry(body, attempts=20)
+        self.assertEqual(ctx.exception.status, 503)
+        self.assertEqual(call.call_count, 1)
+        self.assertEqual(sleeper.call_count, 0)
 
     def test_invalid_request_is_not_replayed(self):
         body = {'model': 'gemini-3.8-flash', 'request': {'contents': []}}

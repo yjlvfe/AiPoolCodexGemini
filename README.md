@@ -5,7 +5,7 @@
   <a href="README.ar.md"><b>العربية</b></a>
 </p>
 
-> **Current release:** `v2.2.6` — **Stable / Production Ready** (2026-09-16). Reliability hardening is complete, sticky account rotation is closed, and the full suite passed **211/211**.
+> **Current release:** `v2.2.7` — **Stable / Production Ready** (2026-09-17). Zero-Retry and Model-Aware Smart Failover are now production-ready, with model circuit breakers and the full suite passing **233/233**.
 
 > [!WARNING]
 > **⚠️ DISCLAIMER:**

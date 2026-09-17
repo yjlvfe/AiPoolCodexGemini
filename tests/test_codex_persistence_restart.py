@@ -83,10 +83,15 @@ class _FakeCodexUpstream:
                     action = outer.actions.get(account, deque()).popleft() if outer.actions.get(account) else "success"
 
                 if action == 429:
+                    # Rotation requires explicit ACCOUNT_QUOTA_EXHAUSTED
+                    # evidence; a bare 429 is intentionally transient.
+                    body = b'{"error":"quota exhausted"}'
                     self.send_response(429)
                     self.send_header("Retry-After", "0")
-                    self.send_header("Content-Length", "0")
+                    self.send_header("Content-Type", "application/json")
+                    self.send_header("Content-Length", str(len(body)))
                     self.end_headers()
+                    self.wfile.write(body)
                     return
 
                 if isinstance(action, int) and action != 200:

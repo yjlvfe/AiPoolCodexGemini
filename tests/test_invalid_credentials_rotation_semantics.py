@@ -35,11 +35,14 @@ def test_b2_temporary_provider_failure_does_not_rotate_account():
     body = {"model": "gemini-3.8-flash"}
     with patch.object(gemini_bridge.AG_POOL, "candidates", return_value=["1", "2"]), \
          patch.object(gemini_bridge.AG_POOL, "credentials", return_value={"token": {"access_token": "x"}}), \
-         patch.object(gemini_bridge, "call_antigravity", side_effect=[PoolError("temporary outage", 503), {"ok": True}]) as call, \
+         patch.object(gemini_bridge, "call_antigravity", side_effect=PoolError("temporary outage", 503)) as call, \
          patch.object(gemini_bridge, "Manager") as manager:
         manager.return_value.active.return_value = "1"
-        assert gemini_bridge.call_with_retry(body, attempts=2, sleep=lambda _: None) == {"ok": True}
-    assert call.call_count == 2
+        with pytest.raises(PoolError) as ctx:
+            gemini_bridge.call_with_retry(body, attempts=2, sleep=lambda _: None)
+        assert ctx.value.status == 503
+    # In Zero-Retry architecture, transient 503 calls provider exactly once and does not rotate
+    assert call.call_count == 1
 
 
 class _FakeManager:
