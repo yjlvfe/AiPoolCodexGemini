@@ -606,6 +606,17 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             self.send_json_response(get_cli_tools_status())
             return
 
+        if path in ("/aipool/api/accounts/relogin_status", "/api/accounts/relogin_status"):
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            system = query.get("system", ["codex"])[0]
+            try:
+                account = int(query.get("account", [0])[0])
+            except (TypeError, ValueError):
+                account = 0
+            res = pm.get_relogin_status(system, account)
+            self.send_json_response(res)
+            return
+
         if path in ("/aipool/api/tokens/revoke", "/api/tokens/revoke"):
             try:
                 payload = self._read_json_body()
@@ -765,6 +776,39 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                 self.send_json_response({"success": False, "message": detail or "Delete failed."}, status_code=400)
                 return
             self.send_json_response({"success": True, "message": detail, "system": system, "account": account})
+            return
+
+        if path in ("/aipool/api/accounts/relogin", "/api/accounts/relogin"):
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self.send_json_response({"success": False, "message": str(exc)}, status_code=408 if isinstance(exc, RequestBodyTimeout) else 400)
+                return
+            system = payload.get("system", "codex")
+            try:
+                account = int(payload.get("account", 0))
+            except (TypeError, ValueError):
+                account = 0
+            if system != "codex" or account < 1:
+                self.send_json_response({"success": False, "message": "Invalid system or account number."}, status_code=400)
+                return
+            res = pm.initiate_relogin(system, account)
+            self.send_json_response(res, status_code=200 if res.get("success") else 400)
+            return
+
+        if path in ("/aipool/api/accounts/relogin_cancel", "/api/accounts/relogin_cancel"):
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self.send_json_response({"success": False, "message": str(exc)}, status_code=408 if isinstance(exc, RequestBodyTimeout) else 400)
+                return
+            system = payload.get("system", "codex")
+            try:
+                account = int(payload.get("account", 0))
+            except (TypeError, ValueError):
+                account = 0
+            res = pm.cancel_relogin(system, account)
+            self.send_json_response(res, status_code=200 if res.get("success") else 400)
             return
 
         if path in ("/aipool/api/settings/update", "/api/settings/update"):

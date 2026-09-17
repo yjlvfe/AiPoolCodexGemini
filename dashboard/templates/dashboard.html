@@ -2538,6 +2538,57 @@
             </div>
         </div>
 
+        <!-- Relogin Account Modal -->
+        <div id="relogin-modal-overlay" class="modal-overlay" style="display: none;" onclick="closeReloginModal(event)">
+            <div class="modal-dialog glass-card" onclick="event.stopPropagation()" style="max-width: 440px; border-color: rgba(59, 130, 246, 0.4);">
+                <div class="modal-header">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 20px;">🔄</span>
+                        <span style="font-weight: 700; color: #fff; font-size: 15px;">Codex Device Re-login</span>
+                    </div>
+                    <button class="modal-close-btn" onclick="closeReloginModal()">&times;</button>
+                </div>
+                <div class="modal-body" style="text-align: center;">
+                    <div style="font-size: 13px; color: #cbd5e1; margin-bottom: 14px;">
+                        Re-authenticating <strong id="modal-relogin-account-label" style="color: #60a5fa;">Account</strong> with OpenAI
+                    </div>
+
+                    <!-- Step 1 & Code Box -->
+                    <div id="relogin-loading-box" style="padding: 24px 12px;">
+                        <div class="spinner" style="margin: 0 auto 12px; width: 28px; height: 28px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+                        <div style="font-size: 12px; color: #94a3b8;">Requesting device code from OpenAI...</div>
+                    </div>
+
+                    <div id="relogin-code-box" style="display: none;">
+                        <div style="background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
+                            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; margin-bottom: 6px;">One-Time Device Code</div>
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+                                <span id="relogin-device-code" style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #38bdf8; letter-spacing: 2px;">----</span>
+                                <button type="button" class="btn-copy-sm" onclick="copyReloginCode(this)" style="padding: 5px 9px; border-radius: 8px; font-size: 11px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); cursor: pointer;">📋 Copy</button>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 16px;">
+                            <a id="relogin-verify-link" href="https://auth.openai.com/codex/device" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 10px 14px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; font-weight: 700; font-size: 13px; border-radius: 8px; text-decoration: none; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);">
+                                <span>🔗 Open auth.openai.com/codex/device</span>
+                            </a>
+                        </div>
+
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: #38bdf8;">
+                            <span class="spinner" style="width: 14px; height: 14px; border: 2px solid rgba(56,189,248,0.2); border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.8s linear infinite;"></span>
+                            <span id="relogin-status-text">Waiting for authorization on OpenAI...</span>
+                        </div>
+                    </div>
+
+                    <div id="relogin-error-box" style="display: none; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 12px; font-size: 12px; color: #fca5a5; margin-top: 10px;">
+                    </div>
+                </div>
+                <div class="modal-actions" style="justify-content: flex-end;">
+                    <button type="button" class="modal-btn-cancel" onclick="closeReloginModal()">Close</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Delete Account Confirmation Modal -->
         <div id="delete-modal-overlay" class="modal-overlay" style="display: none;" onclick="closeDeleteModal(event)">
             <div class="modal-dialog glass-card" onclick="event.stopPropagation()">
@@ -4559,6 +4610,7 @@
                 const tokenBadgeHtml = `<span style="font-size:9px; background:rgba(245,158,11,0.16); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); padding:2px 6px; border-radius:6px; font-weight:700; font-family:'JetBrains Mono',monospace;" title="Total Tokens consumed by this account">🔥 ${formatTokenCount(totalTok)}</span>`;
 
                 const accountStatus = String(acc.status || '').toUpperCase();
+                const isSignedOut = (currentProvider === 'Codex') && (accountStatus === 'SIGNED OUT' || accountStatus === 'EXPIRED' || accountStatus === 'UNAUTHORIZED');
                 const isVerify = accountStatus === 'VERIFY' || !!acc.validation_url;
                 const statusBadge = accountStatus && isVerify
                     ? `<span style="font-size:9px; background:rgba(234,179,8,0.18); color:#eab308; border:1px solid rgba(234,179,8,0.3); padding:2px 7px; border-radius:6px; font-weight:800; font-family:monospace; letter-spacing:.3px;">VERIFY</span>`
@@ -4629,9 +4681,12 @@
                                 ? `<a href="${escapeHtml(acc.validation_url)}" target="_blank" rel="noopener noreferrer" class="account-btn-switch" style="text-decoration:none; display:inline-flex; align-items:center; justify-content:center; background:linear-gradient(135deg, #eab308, #ca8a04); color:#000; font-weight:700;" onclick="event.stopPropagation();" title="Verify Account #${acc.account}">🔐 Verify</a>`
                                 : `<button type="button" class="account-btn-switch" style="background:linear-gradient(135deg, #eab308, #ca8a04); color:#000; font-weight:700;" onclick="event.stopPropagation(); alert('Open Google Antigravity / Gemini Code Assist in your browser to complete verification for this account.');" title="Verify Account #${acc.account}">🔐 Verify</button>`
                               )
-                            : (isActive 
-                                ? `<button type="button" class="account-btn-switch" disabled style="opacity:0.5; cursor:not-allowed;">Active</button>`
-                                : `<button type="button" class="account-btn-switch" onclick="event.stopPropagation(); switchAccount(${acc.account}, this)" title="Switch to Account #${acc.account}">⚡ Switch</button>`
+                            : (isSignedOut
+                                ? `<button type="button" class="account-btn-switch" style="background:linear-gradient(135deg, #3b82f6, #1d4ed8); color:#fff; font-weight:700;" onclick="event.stopPropagation(); openReloginModal(${acc.account})" title="Re-authenticate Account #${acc.account}">🔄 Relogin</button>`
+                                : (isActive 
+                                    ? `<button type="button" class="account-btn-switch" disabled style="opacity:0.5; cursor:not-allowed;">Active</button>`
+                                    : `<button type="button" class="account-btn-switch" onclick="event.stopPropagation(); switchAccount(${acc.account}, this)" title="Switch to Account #${acc.account}">⚡ Switch</button>`
+                                  )
                               )
                         }
                         ${isActive
@@ -4655,6 +4710,133 @@
                 };
                 container.appendChild(div);
             });
+        }
+
+        let activeReloginPolling = null;
+        let activeReloginAccount = null;
+
+        async function openReloginModal(accountNum) {
+            activeReloginAccount = accountNum;
+            const labelEl = document.getElementById('modal-relogin-account-label');
+            if (labelEl) labelEl.innerText = `Account #${accountNum}`;
+
+            const loadingBox = document.getElementById('relogin-loading-box');
+            const codeBox = document.getElementById('relogin-code-box');
+            const errorBox = document.getElementById('relogin-error-box');
+            const codeEl = document.getElementById('relogin-device-code');
+            const verifyLink = document.getElementById('relogin-verify-link');
+            const statusText = document.getElementById('relogin-status-text');
+
+            if (loadingBox) loadingBox.style.display = 'block';
+            if (codeBox) codeBox.style.display = 'none';
+            if (errorBox) errorBox.style.display = 'none';
+            if (codeEl) codeEl.innerText = '----';
+
+            const overlay = document.getElementById('relogin-modal-overlay');
+            if (overlay) overlay.style.display = 'flex';
+
+            if (activeReloginPolling) {
+                clearInterval(activeReloginPolling);
+                activeReloginPolling = null;
+            }
+
+            try {
+                const res = await fetch(resolveApiUrl('/api/accounts/relogin'), {
+                    method: 'POST',
+                    headers: apiHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ system: 'codex', account: accountNum }),
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    if (loadingBox) loadingBox.style.display = 'none';
+                    if (errorBox) {
+                        errorBox.innerText = data.message || 'Failed to initiate re-login.';
+                        errorBox.style.display = 'block';
+                    }
+                    return;
+                }
+
+                // Start polling status
+                activeReloginPolling = setInterval(async () => {
+                    try {
+                        const statusRes = await fetch(resolveApiUrl(`/api/accounts/relogin_status?system=codex&account=${accountNum}`), {
+                            headers: apiHeaders(),
+                            credentials: 'same-origin'
+                        });
+                        const statusData = await statusRes.json();
+                        if (statusData.status === 'pending' && statusData.code) {
+                            if (loadingBox) loadingBox.style.display = 'none';
+                            if (codeBox) codeBox.style.display = 'block';
+                            if (codeEl) codeEl.innerText = statusData.code;
+                            if (verifyLink && statusData.url) verifyLink.href = statusData.url;
+                            if (statusText) statusText.innerText = 'Waiting for authorization on OpenAI...';
+                        } else if (statusData.status === 'completed') {
+                            clearInterval(activeReloginPolling);
+                            activeReloginPolling = null;
+                            closeReloginModal();
+                            showToast(`Account #${accountNum} re-authenticated successfully!`);
+                            fetchLiveLogs(false);
+                        } else if (statusData.status === 'failed') {
+                            clearInterval(activeReloginPolling);
+                            activeReloginPolling = null;
+                            if (loadingBox) loadingBox.style.display = 'none';
+                            if (errorBox) {
+                                errorBox.innerText = statusData.message || 'Authorization failed.';
+                                errorBox.style.display = 'block';
+                            }
+                        }
+                    } catch (pollErr) {
+                        console.error('Relogin poll error:', pollErr);
+                    }
+                }, 2000);
+
+            } catch (err) {
+                if (loadingBox) loadingBox.style.display = 'none';
+                if (errorBox) {
+                    errorBox.innerText = 'Network error initiating re-login.';
+                    errorBox.style.display = 'block';
+                }
+            }
+        }
+
+        function copyReloginCode(btn) {
+            const codeEl = document.getElementById('relogin-device-code');
+            if (!codeEl) return;
+            const code = codeEl.innerText.trim();
+            if (!code || code === '----') return;
+            navigator.clipboard.writeText(code).then(() => {
+                const orig = btn.innerHTML;
+                btn.innerHTML = '✅ Copied!';
+                btn.style.background = 'rgba(16, 185, 129, 0.2)';
+                btn.style.color = '#10b981';
+                setTimeout(() => {
+                    btn.innerHTML = orig;
+                    btn.style.background = 'rgba(56, 189, 248, 0.15)';
+                    btn.style.color = '#38bdf8';
+                }, 2000);
+            }).catch(() => {
+                prompt('Copy this code:', code);
+            });
+        }
+
+        function closeReloginModal(e) {
+            if (e && e.target && e.target !== e.currentTarget && !e.target.classList.contains('modal-close-btn') && !e.target.classList.contains('modal-btn-cancel')) return;
+            const overlay = document.getElementById('relogin-modal-overlay');
+            if (overlay) overlay.style.display = 'none';
+            if (activeReloginPolling) {
+                clearInterval(activeReloginPolling);
+                activeReloginPolling = null;
+            }
+            if (activeReloginAccount) {
+                fetch(resolveApiUrl('/api/accounts/relogin_cancel'), {
+                    method: 'POST',
+                    headers: apiHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ system: 'codex', account: activeReloginAccount }),
+                    credentials: 'same-origin'
+                }).catch(() => {});
+                activeReloginAccount = null;
+            }
         }
 
         let pendingDeleteAccount = null;

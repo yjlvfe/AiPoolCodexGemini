@@ -15,6 +15,9 @@ import hashlib
 import ipaddress
 import sqlite3
 import subprocess
+import re
+import shutil
+import tempfile
 import threading
 from typing import Dict, Any, Optional
 
@@ -490,6 +493,136 @@ class PoolManager:
         # Immediate background update to synchronize cache
         self.trigger_instant_refresh()
         return True, f'Account {account_num} deleted successfully.'
+
+    def initiate_relogin(self, system: str, account_num: int) -> dict:
+        if system != 'codex':
+            return {'success': False, 'message': 'Relogin currently supported for Codex accounts.'}
+        if not isinstance(account_num, int) or account_num < 1:
+            return {'success': False, 'message': 'Invalid account number.'}
+        
+        if not hasattr(self, '_relogin_sessions'):
+            self._relogin_sessions = {}
+
+        # Cancel any existing session for this account
+        existing = self._relogin_sessions.get(account_num)
+        if existing and existing.get('process'):
+            try:
+                existing['process'].terminate()
+            except Exception:
+                pass
+
+        session = {
+            'account': account_num,
+            'status': 'starting',
+            'code': None,
+            'url': 'https://auth.openai.com/codex/device',
+            'message': 'Starting device authorization...',
+            'error': None,
+            'started_at': time.time(),
+            'process': None,
+            'temp_dir': None,
+        }
+        self._relogin_sessions[account_num] = session
+
+        def _worker():
+            temp_home = tempfile.mkdtemp(prefix=f'codex-relogin-{account_num}-')
+            session['temp_dir'] = temp_home
+            try:
+                cli_dir = os.path.join(os.path.dirname(_CURRENT_DIR), 'cli')
+                if cli_dir not in sys.path:
+                    sys.path.insert(0, cli_dir)
+                import account_manager
+                env = account_manager.codex_env(temp_home)
+                cmd = [env['CODEX_REAL_BIN'], '-c', 'cli_auth_credentials_store="file"', 'login', '--device-auth']
+                p = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                session['process'] = p
+
+                # Read output until device code appears
+                code_found = False
+                for _ in range(50):
+                    line = p.stdout.readline()
+                    if not line:
+                        break
+                    # Strip ansi colors
+                    clean_line = re.sub(r'\x1b\[[0-9;]*m', '', line)
+                    if 'https://auth.openai.com/codex/device' in clean_line:
+                        session['url'] = 'https://auth.openai.com/codex/device'
+                    if 'Enter this one-time code' in clean_line:
+                        next_line = p.stdout.readline()
+                        clean_code = re.sub(r'\x1b\[[0-9;]*m', '', next_line).strip()
+                        code_match = re.search(r'([A-Z0-9]{4,5}-[A-Z0-9]{4,5})', clean_code)
+                        if code_match:
+                            session['code'] = code_match.group(1)
+                            session['status'] = 'pending'
+                            session['message'] = 'Device code generated. Awaiting user authorization.'
+                            code_found = True
+                            break
+
+                if not code_found:
+                    session['status'] = 'failed'
+                    session['message'] = 'Could not retrieve device code from Codex CLI.'
+                    return
+
+                # Wait for completion (up to 900 seconds)
+                ret = p.wait(timeout=900)
+                if ret == 0:
+                    # Successfully authenticated, auth.json should exist in temp_home
+                    auth_file = Path(temp_home) / 'auth.json'
+                    if auth_file.is_file():
+                        mgr = account_manager.Manager('codex')
+                        # Import/replace credentials for target slot
+                        mgr.add_or_switch(number=str(account_num), source=str(auth_file))
+                        session['status'] = 'completed'
+                        session['message'] = f'Account #{account_num} re-authenticated successfully!'
+                        self.trigger_instant_refresh()
+                    else:
+                        session['status'] = 'failed'
+                        session['message'] = 'auth.json was not created after login.'
+                else:
+                    session['status'] = 'failed'
+                    session['message'] = f'Codex login exited with status {ret}.'
+            except subprocess.TimeoutExpired:
+                session['status'] = 'failed'
+                session['message'] = 'Device code authorization timed out.'
+                if session.get('process'):
+                    session['process'].terminate()
+            except Exception as exc:
+                session['status'] = 'failed'
+                session['message'] = str(exc)
+            finally:
+                if temp_home and os.path.exists(temp_home):
+                    shutil.rmtree(temp_home, ignore_errors=True)
+
+        threading.Thread(target=_worker, daemon=True).start()
+        return {'success': True, 'account': account_num, 'status': 'starting'}
+
+    def get_relogin_status(self, system: str, account_num: int) -> dict:
+        if not hasattr(self, '_relogin_sessions'):
+            return {'success': False, 'status': 'none', 'message': 'No active session.'}
+        session = self._relogin_sessions.get(account_num)
+        if not session:
+            return {'success': False, 'status': 'none', 'message': 'No session found for this account.'}
+        return {
+            'success': True,
+            'account': account_num,
+            'status': session.get('status'),
+            'code': session.get('code'),
+            'url': session.get('url'),
+            'message': session.get('message'),
+        }
+
+    def cancel_relogin(self, system: str, account_num: int) -> dict:
+        if hasattr(self, '_relogin_sessions') and account_num in self._relogin_sessions:
+            s = self._relogin_sessions[account_num]
+            if s.get('process'):
+                try:
+                    s['process'].terminate()
+                except Exception:
+                    pass
+            s['status'] = 'cancelled'
+            s['message'] = 'Login cancelled by user.'
+            return {'success': True, 'message': 'Cancelled.'}
+        return {'success': False, 'message': 'No active session.'}
     def _get_active_account_instant(self, system: str) -> str:
         try:
             cli_dir = os.path.join(os.path.dirname(_CURRENT_DIR), 'cli')
