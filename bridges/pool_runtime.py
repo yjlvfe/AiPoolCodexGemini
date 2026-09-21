@@ -12,9 +12,10 @@ from account_manager import Manager, read_json, atomic_bytes, encoded, decode_cl
 
 
 class PoolError(RuntimeError):
-    def __init__(self, message, status=503):
+    def __init__(self, message, status=503, body=None):
         super().__init__(message)
         self.status = status
+        self.body = body
 
 
 class AccountPool:
@@ -88,6 +89,7 @@ class AccountPool:
             index = numbers.index(active)
             numbers = numbers[index:] + numbers[:index]
         seen, result = set(), []
+        now = time.time()
         for number in numbers:
             try:
                 data = read_json(manager.credential(number))
@@ -96,54 +98,67 @@ class AccountPool:
                 if not key or key in seen:
                     continue
                 seen.add(key)
-                local_until = self.cooldowns.get((number, model), 0)
+                local_until = self.cooldowns.get((number, model), 0.0)
                 persisted_until, persisted_reason = self._load_cooldown_record(number, model)
-                # Hard exhaustion is a durable exclusion.  Only an explicit
-                # authoritative reset record may make it eligible again.
-                if self._hard_reason(persisted_reason):
-                    continue
-                if self._authoritative_reset_reason(persisted_reason) and persisted_until > time.time():
-                    continue
-                local_reason = getattr(self, '_cooldown_reasons', {}).get((number, model), '')
-                if self._hard_reason(local_reason):
-                    continue
-                if not include_cooldown and local_until > time.time():
+                effective_until = max(local_until, persisted_until)
+                if not include_cooldown and effective_until > now:
                     continue
                 result.append(number)
             except (OSError, ValueError):
                 continue
         return result
 
-    def exhausted(self, number, model, seconds=60, reason='upstream'):
-        # Hard failures are not generic cooldowns: retry-after is advisory and
-        # must not resurrect the account.  Reset eligibility is granted only by
-        # authoritative_quota_reset() or manual_reenable().
-        until = 0 if self._hard_reason(reason) else time.time() + min(max(seconds, 1), 3600)
+    def exhausted(self, number, model, seconds=None, resets_at=None, reason='upstream'):
+        now = time.time()
+        until = None
+        if resets_at is not None:
+            try:
+                val = float(resets_at)
+                until = val if val > 1_000_000_000 else now + max(1.0, val)
+            except (ValueError, TypeError):
+                try:
+                    from datetime import datetime
+                    dt = datetime.fromisoformat(str(resets_at).replace('Z', '+00:00'))
+                    until = dt.timestamp()
+                except Exception:
+                    until = None
+
+        if until is None and seconds is not None:
+            try:
+                sec = float(seconds)
+                if sec > 0:
+                    until = now + sec
+            except (ValueError, TypeError):
+                pass
+
+        if until is None:
+            local_until = self.cooldowns.get((number, model), 0.0)
+            persisted_until, _ = self._load_cooldown_record(number, model)
+            prev_until = max(local_until, persisted_until)
+            prev_remaining = max(0.0, prev_until - now)
+            backoff = min(max(prev_remaining * 2.0, 30.0), 1800.0)
+            until = now + backoff
+
         with self._lock:
             self.cooldowns[number, model] = until
             self._cooldown_reasons[number, model] = reason
         self._store_cooldown(number, model, until, reason)
 
-    def authoritative_quota_reset(self, number, model, reset_at=None):
-        """Record an authoritative provider reset without changing active."""
-        until = time.time() if reset_at is None else float(reset_at)
+    def clear_cooldown(self, number, model=None):
+        """Clear cooldown in memory and delete/expire from pool_cooldowns table."""
         with self._lock:
-            self.cooldowns[number, model] = until
-            self._cooldown_reasons[number, model] = 'quota_reset_authoritative'
-        self._store_cooldown(number, model, until, 'quota_reset_authoritative')
-
-    def manual_reenable(self, number, model=None):
-        """Explicitly clear durable hard-exhaustion state for an account."""
-        with self._lock:
-            keys = [(number, model)] if model is not None else [
-                key for key in self.cooldowns if key[0] == number
-            ]
-            for key in keys:
+            keys_to_remove = []
+            for (acc, mod) in self.cooldowns.keys():
+                if str(acc) == str(number) and (model is None or mod == model):
+                    keys_to_remove.append((acc, mod))
+            for key in keys_to_remove:
                 self.cooldowns.pop(key, None)
                 self._cooldown_reasons.pop(key, None)
         try:
             path = self._cooldown_path()
             with sqlite3.connect(path, timeout=10) as conn:
+                conn.execute('PRAGMA busy_timeout=10000')
+                self._ensure_cooldown_table(conn)
                 if model is None:
                     conn.execute('DELETE FROM pool_cooldowns WHERE provider=? AND account=?',
                                  (self.provider, str(number)))
@@ -153,7 +168,16 @@ class AccountPool:
         except (OSError, sqlite3.Error):
             pass
 
-    clear_hard_exhaustion = manual_reenable
+    manual_reenable = clear_cooldown
+    clear_hard_exhaustion = clear_cooldown
+
+    def authoritative_quota_reset(self, number, model, reset_at=None):
+        """Record an authoritative provider reset without changing active."""
+        until = time.time() if reset_at is None else float(reset_at)
+        with self._lock:
+            self.cooldowns[number, model] = until
+            self._cooldown_reasons[number, model] = 'quota_reset_authoritative'
+        self._store_cooldown(number, model, until, 'quota_reset_authoritative')
 
     def credentials(self, number):
         with self._lock:
@@ -178,31 +202,31 @@ class AccountPool:
                 live = read_json(manager.live)
                 if manager.identity(live).get('identity') == manager.identity(data).get('identity'):
                     data = live
-            if manager.ag:
-                inner = data.get('token', data)
-                expiry = self._expiry_seconds(inner, data)
-                if not isinstance(inner.get('access_token'), str) or not inner.get('access_token') or expiry < time.time() + 60 or not data.get('project_id'):
-                    fresh, _, _ = ag_module().validate(data)
-                else:
-                    fresh = data
+        if manager.ag:
+            inner = data.get('token', data)
+            expiry = self._expiry_seconds(inner, data)
+            if not isinstance(inner.get('access_token'), str) or not inner.get('access_token') or expiry < time.time() + 60 or not data.get('project_id'):
+                fresh, _, _ = ag_module().validate(data)
             else:
                 fresh = data
-                expiry = decode_claims(data['tokens']['access_token']).get('exp')
-                if isinstance(expiry, (int, float)) and expiry < time.time() + 60:
-                    from usage_format import inspect
-                    if inspect(manager, number).get('status') != 'OK':
-                        raise PoolError('Account refresh failed', 401)
-                    fresh = read_json(path)
-            if fresh != data:
-                with manager.locked():
-                    if path.read_bytes() == original:
-                        atomic_bytes(path, encoded(fresh))
-                    if manager.active() == number:
-                        try:
-                            atomic_bytes(manager.live, encoded(fresh))
-                        except OSError:
-                            pass
-            return fresh
+        else:
+            fresh = data
+            expiry = decode_claims(data['tokens']['access_token']).get('exp')
+            if isinstance(expiry, (int, float)) and expiry < time.time() + 60:
+                from usage_format import inspect
+                if inspect(manager, number).get('status') != 'OK':
+                    raise PoolError('Account refresh failed', 401)
+                fresh = read_json(path)
+        if fresh != data:
+            with manager.locked():
+                if path.read_bytes() == original:
+                    atomic_bytes(path, encoded(fresh))
+                if manager.active() == number:
+                    try:
+                        atomic_bytes(manager.live, encoded(fresh))
+                    except OSError:
+                        pass
+        return fresh
 
     def promote(self, number, expected_current=None):
         """Promote atomically, optionally only from an observed active slot.

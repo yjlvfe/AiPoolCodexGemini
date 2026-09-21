@@ -1,5 +1,19 @@
 # Changelog
 
+## v2.2.8 — 2026-09-21
+
+### AiPool Native Smart Failover & Adaptive Dynamic Cooldowns
+- Replaced permanent 0.0 lockout deadlock on 429 quota exhaustion with AiPool bounded adaptive cooldowns.
+- Added parsing for upstream `resets_at`, `reset_at`, `resets_in_seconds`, and `retry_after` response fields and headers.
+- Implemented exponential backoff (30s to 1800s) on repeated rate limits when no upstream reset header is specified.
+- Enabled seamless in-flight failover across candidates on HTTP 401, 403, and 429 responses.
+- Implemented automatic cooldown clearing in memory and SQLite on successful upstream completions.
+- Fixed `ALL_ACCOUNTS_EXHAUSTED` deadlock where accounts were permanently retired without recovery windows.
+
+### Integrations
+- Enhanced Hermes Telegram picker compatibility to handle case-folding custom provider slugs.
+- Preserved configured model ordering in OpenClaw Telegram picker.
+
 ## v2.2.7 — 2026-09-17
 
 ### Stable

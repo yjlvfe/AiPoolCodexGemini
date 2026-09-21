@@ -341,7 +341,7 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
                 if clean_req not in clean_allowed:
                     raise PoolError(f"Model {model} is not permitted for this API Key", 403)
             wants_stream=bool(payload.get('stream'))
-            attempts=POOL.candidates(model, include_cooldown=True)
+            attempts=POOL.candidates(model, include_cooldown=False) or POOL.candidates(model, include_cooldown=True)
             last_status=429 if not attempts else 503
             quota_exhausted=set()
             next_index=0
@@ -371,15 +371,31 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
                     last_status=exc.code
                     raw_err = exc.read().decode(errors='replace') if hasattr(exc, 'read') else ''
                     retry_sec = retry_seconds(exc.headers)
+                    resets_at = None
+                    resets_in_seconds = None
+                    try:
+                        err_json = json.loads(raw_err)
+                        if isinstance(err_json, dict):
+                            err_details = err_json.get('error', err_json) if isinstance(err_json.get('error'), dict) else err_json
+                            resets_at = err_details.get('resets_at') or err_details.get('reset_at')
+                            resets_in_seconds = err_details.get('resets_in_seconds') or err_details.get('retry_after')
+                    except Exception:
+                        pass
+                    if resets_in_seconds is not None:
+                        try:
+                            retry_sec = float(resets_in_seconds)
+                        except (TypeError, ValueError):
+                            pass
                     exc.close()
-                    # Hard account failure vs transient error
-                    if exc.code in (401, 403) or (exc.code == 429 and hard_account_failure(exc.code, raw_err)):
-                        print(f"[codex-bridge] account {number} exhausted: HTTP {exc.code}", flush=True)
-                        POOL.exhausted(number, model, retry_sec, reason='invalid_credentials' if exc.code in (401, 403) else 'quota_exhausted')
+                    # Failover on HTTP 401, 403, or 429 (rate limit OR quota)
+                    if exc.code in (401, 403, 429):
+                        reason = 'quota_exhausted' if exc.code == 429 else 'invalid_credentials'
+                        print(f"[codex-bridge] failover account {number} exhausted: HTTP {exc.code} (resets_at={resets_at}, seconds={retry_sec})", flush=True)
+                        POOL.exhausted(number, model, seconds=retry_sec, resets_at=resets_at, reason=reason)
                         quota_exhausted.add(number)
                         rotated_after_hard_failure = True
                         continue
-                    # Transient error (5xx, temporary 429) -> immediate return
+                    # Transient error (5xx) -> immediate return
                     err_obj = PoolError(f'Codex upstream HTTP {last_status}', last_status)
                     err_obj.retry_after = retry_sec
                     raise err_obj from None
@@ -466,6 +482,7 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
                     if wants_stream:
                         lifecycle.complete()
                     outcome='OK'
+                    POOL.clear_cooldown(number, model)
                     if rotated_after_hard_failure or (number != active_at_start and active_at_start not in attempts):
                         try:
                             POOL.promote(number, expected_current=active_at_start)

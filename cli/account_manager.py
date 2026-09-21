@@ -153,7 +153,7 @@ class Manager:
         return slot(value) if value else ''
 
     @contextlib.contextmanager
-    def locked(self, timeout=5.0):
+    def locked(self, timeout=30.0):
         import time
         private_dir(self.store)
         key = str(self.store.resolve())

@@ -5,7 +5,7 @@
   <a href="README.ar.md"><b>العربية</b></a>
 </p>
 
-> **Current release:** `v2.2.7` — **Stable / Production Ready** (2026-09-17). Zero-Retry and Model-Aware Smart Failover are now production-ready, with model circuit breakers and the full suite passing **233/233**.
+> **Current release:** `v2.2.8` — **Stable / Production Ready** (2026-09-21). AiPool native in-flight smart failover and bounded adaptive cooldowns are now production-ready, resolving quota deadlocks with full suite passing **233/233**.
 
 > [!WARNING]
 > **⚠️ DISCLAIMER:**

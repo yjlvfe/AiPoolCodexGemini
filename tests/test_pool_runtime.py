@@ -24,9 +24,8 @@ class PoolRuntimeTests(unittest.TestCase):
                 first = AccountPool('codex')
                 first.exhausted(7, 'gpt-5.6-luna', seconds=60, reason='quota')
                 second = AccountPool('codex')
-                # Hard exhaustion is durable and intentionally has no generic
-                # expiry timestamp; the reason is the durable exclusion marker.
-                self.assertEqual(second._load_cooldown(7, 'gpt-5.6-luna'), 0)
+                # Cooldown is durable with bounded expiry timestamp
+                self.assertGreater(second._load_cooldown(7, 'gpt-5.6-luna'), 0)
                 row = sqlite3.connect(db).execute(
                     'SELECT reason FROM pool_cooldowns WHERE provider=? AND account=?',
                     ('codex', '7')).fetchone()

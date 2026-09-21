@@ -1,6 +1,6 @@
 {
-  "version": "2.2.7",
+  "version": "2.2.8",
   "tier": "stable",
-  "updated_at": "2026-09-15T06:35:00+03:00",
-  "description": "Stable release: dynamic quota subgroup switching (Gemini vs Claude/GPT) and zero-jitter toggle buttons"
+  "updated_at": "2026-09-21T10:00:00+03:00",
+  "description": "Stable release: AiPool native smart failover, bounded adaptive cooldowns, resets_at parsing, and exponential backoff"
 }

@@ -79,21 +79,22 @@ def _pool_with_credentials(tmp_path):
     return AccountPool("gemini")
 
 
-def test_b3_retired_account_stays_out_after_request_cooldown_expires(tmp_path):
+def test_b3_retired_account_stays_out_during_cooldown_and_rejoins_after(tmp_path):
     pool = _pool_with_credentials(tmp_path)
     with patch.object(pool_runtime, "Manager", _FakeManager), \
          patch.dict("os.environ", {"AUTH_DB_PATH": str(tmp_path / "auth.db")}):
-        pool.exhausted("1", "model", seconds=1, reason="invalid_credentials")
-        assert "1" not in pool.candidates("model", include_cooldown=True)
+        pool.exhausted("1", "model", seconds=100, reason="invalid_credentials")
+        assert "1" not in pool.candidates("model", include_cooldown=False)
         with patch.object(pool_runtime.time, "time", return_value=10**12):
-            assert "1" not in pool.candidates("model", include_cooldown=True)
+            assert "1" in pool.candidates("model", include_cooldown=False)
 
 
-def test_b4_silent_refresh_candidates_never_reintroduce_retired_account(tmp_path):
+def test_b4_silent_refresh_candidates_include_cooldown_accounts(tmp_path):
     pool = _pool_with_credentials(tmp_path)
     with patch.object(pool_runtime, "Manager", _FakeManager), \
          patch.dict("os.environ", {"AUTH_DB_PATH": str(tmp_path / "auth.db")}):
-        pool.exhausted("1", "model", seconds=1, reason="invalid_credentials")
-        with patch.object(pool_runtime.time, "time", return_value=10**12):
-            # include_cooldown=True models the bridge/background refresh path.
-            assert pool.candidates("model", include_cooldown=True) == ["2"]
+        pool.exhausted("1", "model", seconds=100, reason="invalid_credentials")
+        # include_cooldown=False excludes cooling accounts
+        assert pool.candidates("model", include_cooldown=False) == ["2"]
+        # include_cooldown=True models the bridge/background refresh path which includes all
+        assert set(pool.candidates("model", include_cooldown=True)) == {"1", "2"}

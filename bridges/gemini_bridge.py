@@ -325,7 +325,7 @@ def _content_parts(content):
     if content is None:
         return []
     if isinstance(content, str):
-        return [{"text": content}]
+        return [{"text": content if content else " "}]
     if not isinstance(content, list):
         raise PoolError("Message content must be text or content parts", 400)
     parts = []
@@ -333,7 +333,7 @@ def _content_parts(content):
         if not isinstance(block, dict):
             raise PoolError("Content parts must be objects", 400)
         if block.get("type") == "text" and isinstance(block.get("text"), str):
-            parts.append({"text": block["text"]})
+            parts.append({"text": block["text"] if block["text"] else " "})
         elif block.get("type") in ("image_url", "image"):
             image = block.get("image_url", block.get("url"))
             url = image.get("url") if isinstance(image, dict) else image
@@ -365,8 +365,8 @@ def to_antigravity_body(payload):
     wire_model = _send_model(model_name)
 
     instructions = payload.get("instructions")
-    system_parts = ([{"text": item} for item in instructions] if isinstance(instructions, list)
-                    else _content_parts(instructions))
+    system_parts = ([{"text": item} for item in instructions if item] if isinstance(instructions, list)
+                    else [p for p in _content_parts(instructions) if p.get("text", "").strip()])
     contents = []
     call_names = {}
     for m in messages:
@@ -376,7 +376,7 @@ def to_antigravity_body(payload):
             parts = _content_parts(content)
             if any("text" not in part for part in parts):
                 raise PoolError("System content must contain text only", 400)
-            system_parts.extend(parts)
+            system_parts.extend([p for p in parts if p.get("text", "").strip()])
         elif role in ("user", "assistant"):
             parts = _content_parts(content)
             tool_calls = m.get("tool_calls") or []
@@ -403,6 +403,8 @@ def to_antigravity_body(payload):
                         "thoughtSignature": tc.get("thought_signature") or SKIP_THOUGHT_SIGNATURE}
                 parts.append(part)
                 call_names[call_id] = fn["name"]
+            if not parts:
+                parts = [{"text": " "}]
             contents.append({"role": "model" if role == "assistant" else "user", "parts": parts})
         elif role == "tool":
             call_id = m.get("tool_call_id")
@@ -605,12 +607,18 @@ def call_antigravity(ag_body, access=None, deadline=None):
             status = exc.code
             last_status = status
             delay = retry_seconds(exc.headers)
+            body_text = ''
+            try:
+                body_text = exc.read().decode('utf-8', errors='replace')
+            except Exception:
+                pass
             exc.close()
             if status == 404:
                 continue # Deployment endpoint unavailable; try next, same account/model.
             if status in (401,403,429) or status < 500:
                 error = PoolError(f'Antigravity upstream HTTP {status}',status)
                 error.retry_after = delay
+                error.body = body_text
                 raise error from None
         except OSError:
             continue
@@ -621,8 +629,8 @@ def call_with_retry(ag_body, attempts=None, on_success=None, sleep=None, deadlin
     """Fast Account Failover for Antigravity/Gemini bridge in Zero-Retry Architecture.
 
     - Provider is called at most ONCE per account per request.
-    - Transient errors (5xx, transient 429, timeouts, network) terminate immediately; NO retry, NO account failover.
-    - Hard failures (401/403 invalid credentials, confirmed quota exhaustion 429) failover immediately to next healthy candidate.
+    - Transient errors (5xx, timeouts, network) terminate immediately; NO retry, NO account failover.
+    - Failures (401/403 invalid credentials, 429 rate limit or quota exhaustion) failover immediately to next candidate.
     - All accounts exhausted -> terminal structured ALL_ACCOUNTS_EXHAUSTED.
     """
     model = ag_body['model']
@@ -655,19 +663,34 @@ def call_with_retry(ag_body, attempts=None, on_success=None, sleep=None, deadlin
             body = deepcopy(ag_body)
             body['project'] = credentials.get('project_id') or body.get('project')
             result = call_antigravity(body, credentials['token']['access_token'], deadline=deadline)
+            AG_POOL.clear_cooldown(number, model)
             if on_success:
                 on_success(number, bool(rotated_after_hard_failure or active_at_start not in candidates))
             return result
         except (PoolError, ValueError, OSError, RuntimeError) as exc:
             last_status = int(getattr(exc, 'status', 503) or 503)
-            # Classify hard failure vs transient error
-            is_hard_auth = last_status in (401, 403)
-            is_hard_quota = (last_status == 429 and hard_account_failure(last_status, str(exc)))
-
-            if is_hard_auth or is_hard_quota:
-                reason = 'invalid_credentials' if is_hard_auth else 'quota_exhausted'
-                retry_sec = getattr(exc, 'retry_after', 60)
-                AG_POOL.exhausted(number, model, retry_sec, reason=reason)
+            # Failover on HTTP 401, 403, or 429 (rate limit OR quota)
+            if last_status in (401, 403, 429):
+                resets_at = getattr(exc, 'resets_at', None)
+                retry_sec = getattr(exc, 'retry_after', None)
+                body_str = getattr(exc, 'body', '') or str(exc)
+                if not resets_at:
+                    try:
+                        err_json = json.loads(body_str) if isinstance(body_str, str) else {}
+                        err_details = err_json.get('error', err_json) if isinstance(err_json.get('error'), dict) else err_json
+                        resets_at = err_details.get('resets_at') or err_details.get('reset_at')
+                        if retry_sec is None:
+                            retry_sec = err_details.get('resets_in_seconds') or err_details.get('retry_after')
+                    except Exception:
+                        pass
+                if retry_sec is None:
+                    retry_sec = 60
+                reason = 'quota_exhausted' if last_status == 429 else 'invalid_credentials'
+                print(f"[gemini-bridge] failover account {number} exhausted: HTTP {last_status}, resets_at={resets_at}, seconds={retry_sec}", flush=True)
+                if resets_at is not None:
+                    AG_POOL.exhausted(number, model, seconds=retry_sec, resets_at=resets_at, reason=reason)
+                else:
+                    AG_POOL.exhausted(number, model, retry_sec, reason=reason)
                 rotated_after_hard_failure = True
                 continue
             else:

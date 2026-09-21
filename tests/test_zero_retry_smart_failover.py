@@ -54,22 +54,20 @@ class ZeroRetrySmartFailoverTests(unittest.TestCase):
     @patch('gemini_bridge.call_antigravity')
     @patch('gemini_bridge.AG_POOL')
     @patch('gemini_bridge.Manager')
-    def test_2_no_internal_retry_on_temporary_429(self, mock_mgr, mock_pool, mock_call):
-        """Test 2: Transient 429 called exactly once, no sleep/backoff, active remains same."""
+    def test_2_failover_on_rate_limit_429(self, mock_mgr, mock_pool, mock_call):
+        """Test 2: Native in-flight smart failover on rate limit 429 to next candidate."""
         mock_mgr.return_value.active.return_value = '1'
         mock_pool.candidates.return_value = ['1', '2']
         mock_pool.credentials.return_value = {'token': {'access_token': 'tok1'}}
 
-        # Transient 429 (not hard quota)
+        # Transient 429 fails over to next candidate
         err = PoolError('rate limit spike - please slow down', 429)
-        mock_call.side_effect = err
+        mock_call.side_effect = [err, {'candidates': [{'content': 'ok'}]}]
 
-        with self.assertRaises(PoolError) as ctx:
-            call_with_retry({'model': 'gemini-3.8-flash'})
-
-        self.assertEqual(ctx.exception.status, 429)
-        self.assertEqual(mock_call.call_count, 1)
-        mock_pool.exhausted.assert_not_called()
+        res = call_with_retry({'model': 'gemini-3.8-flash'})
+        self.assertIn('candidates', res)
+        self.assertEqual(mock_call.call_count, 2)
+        mock_pool.exhausted.assert_called_once_with('1', 'gemini-3.8-flash', 60, reason='quota_exhausted')
 
     @patch('gemini_bridge.call_antigravity')
     @patch('gemini_bridge.AG_POOL')

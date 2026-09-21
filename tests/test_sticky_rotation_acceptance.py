@@ -68,7 +68,7 @@ def test_network_reset_retries_same_account_no_promote():
 
 
 def test_temporary_429_retries_same_account_no_promote():
-    """Test 4: Transient 429 returns immediately, no retry, no promote."""
+    """Test 4: Transient 429 fails over across candidates without promote if all fail."""
     body = {'model': 'gemini-3.8-flash'}
     failures = PoolError('rate limit spike - please slow down', 429)
     with patch.object(gemini_bridge.AG_POOL, 'candidates', return_value=['2', '3', '4', '1']), \
@@ -81,7 +81,7 @@ def test_temporary_429_retries_same_account_no_promote():
             gemini_bridge.call_with_retry(body, attempts=3, sleep=lambda _: None)
         except PoolError as err:
             assert err.status == 429
-        assert call.call_count == 1
+        assert call.call_count == 4
         promote.assert_not_called()
 
 
