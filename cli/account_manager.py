@@ -66,6 +66,52 @@ def encoded(data):
     return (json.dumps(data, indent=2) + '\n').encode()
 
 
+def gemini_cli_token(data):
+    """Format token dictionary to schema expected by agy / jetski / antigravity-cli."""
+    inner = dict(data.get('token', data))
+    expiry = inner.get('expiry')
+    if isinstance(expiry, (int, float)):
+        sec = expiry / 1000.0 if expiry > 100_000_000_000 else float(expiry)
+        import datetime
+        dt = datetime.datetime.fromtimestamp(sec, tz=datetime.timezone.utc)
+        inner['expiry'] = dt.isoformat()
+    elif not expiry:
+        import datetime
+        dt = datetime.datetime.now(datetime.timezone.utc) + datetime.timedelta(hours=1)
+        inner['expiry'] = dt.isoformat()
+    else:
+        inner['expiry'] = str(expiry)
+
+    return {
+        'token': {
+            'access_token': str(inner.get('access_token', '')),
+            'token_type': str(inner.get('token_type', 'Bearer')),
+            'refresh_token': str(inner.get('refresh_token', '')),
+            'expiry': inner['expiry'],
+        },
+        'auth_method': data.get('auth_method') or inner.get('auth_method') or 'consumer',
+        'id_token': data.get('id_token') or inner.get('id_token') or '',
+        'project_id': data.get('project_id') or inner.get('project_id') or 'aicode-consumers',
+    }
+
+
+def notify_agent_integration_sync(provider, number=None):
+    """Notify root agent-integration service over UNIX socket to sync root CLI credentials."""
+    sock_path = '/run/aipool/agent-integration.sock'
+    if not os.path.exists(sock_path):
+        return
+    try:
+        import socket
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.settimeout(2.0)
+            client.connect(sock_path)
+            req = json.dumps({'action': 'sync_cli', 'provider': provider, 'number': number}) + '\n'
+            client.sendall(req.encode('utf-8'))
+            client.recv(1024)
+    except Exception:
+        pass
+
+
 def slot(value):
     if not re.fullmatch(r'[1-9][0-9]*', value):
         raise ValueError('Account number must be a positive canonical integer')
@@ -128,12 +174,52 @@ def ag_module():
 class Manager:
     def __init__(self, provider):
         self.provider = provider
-        self.ag = provider == 'gemini'
+        self.ag = provider in ('gemini', 'antigravity')
         self.label = 'Antigravity' if self.ag else 'Codex'
         self.prefix = 'ag' if self.ag else 'c'
         self.store = Path(os.environ.get('AG_ACCOUNT_STORE' if self.ag else 'CODEX_ACCOUNT_STORE', Path.home() / ('.antigravity-accounts' if self.ag else '.codex-accounts')))
         self.filename = 'antigravity-oauth-token' if self.ag else 'auth.json'
         self.live = Path(os.environ.get('AG_CLI_AUTH', Path.home() / '.gemini/antigravity-cli/antigravity-oauth-token')) if self.ag else Path(os.environ.get('CODEX_SHARED_HOME', Path.home() / '.codex')) / 'auth.json'
+
+    def sync_live(self, data, number=None):
+        """Sync live CLI credentials across system/user locations."""
+        store_str = str(self.store)
+        is_test_store = store_str.startswith(('/tmp', '/var/tmp')) or '/tmp' in store_str
+        if self.ag:
+            cli_data = gemini_cli_token(data)
+            blob = encoded(cli_data)
+            targets = [self.live]
+            if not is_test_store:
+                targets.extend([
+                    Path('/root/.gemini/antigravity-cli/antigravity-oauth-token'),
+                    Path('/root/.gemini/jetski-standalone-oauth-token'),
+                    Path.home() / '.gemini/antigravity-cli/antigravity-oauth-token',
+                    Path.home() / '.gemini/jetski-standalone-oauth-token',
+                ])
+        else:
+            blob = encoded(data)
+            targets = [self.live]
+            if not is_test_store:
+                targets.extend([
+                    Path('/var/lib/aipool/.codex/auth.json'),
+                    Path('/root/.codex/auth.json'),
+                    Path.home() / '.codex/auth.json',
+                ])
+        seen = set()
+        for target in targets:
+            try:
+                resolved = target.resolve()
+            except Exception:
+                resolved = target
+            if resolved in seen:
+                continue
+            seen.add(resolved)
+            try:
+                atomic_bytes(target, blob)
+            except OSError:
+                pass
+        if not is_test_store and os.geteuid() != 0:
+            notify_agent_integration_sync(self.provider, number)
 
     def ids(self):
         if not self.store.exists():
@@ -318,10 +404,7 @@ class Manager:
             # Best-effort compatibility sync for external CLI credentials.
             # Hardened daemons (ProtectSystem=strict, ProtectHome=true) do not
             # and should not have write permissions to external user homes.
-            try:
-                atomic_bytes(self.live, encoded(data))
-            except OSError:
-                pass
+            self.sync_live(data, number=number)
             if os.geteuid() == 0 and str(self.store).startswith('/var/lib/aipool/'):
                 try:
                     owner = pwd.getpwnam('aipool')

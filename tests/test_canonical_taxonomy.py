@@ -45,11 +45,11 @@ class CanonicalTests(unittest.TestCase):
         self.assertTrue(e500.retryable)
         self.assertFalse(e500.failover)
 
-        # 2. Transient 429 without hard quota details
+        # 2. Transient 429 triggers pool failover (9Router parity: shouldFallback: true)
         e429 = classify(status=429)
         self.assertEqual(e429.code, ErrorCode.TEMP_RATE_LIMIT)
         self.assertTrue(e429.retryable)
-        self.assertFalse(e429.failover)
+        self.assertTrue(e429.failover)
 
         # 3. Hard quota 429
         e_quota = classify("quota exceeded", status=429)

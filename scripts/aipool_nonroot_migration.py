@@ -104,7 +104,7 @@ def _copy_one(source: Path, destination: Path, owner: str) -> None:
         os.chmod(temporary_path, mode)
         os.replace(temporary_path, destination)
         if owner:
-            shutil.chown(destination, user=owner)
+            shutil.chown(destination, user=owner, group=owner)
     finally:
         temporary_path.unlink(missing_ok=True)
 
@@ -152,7 +152,7 @@ def main() -> int:
             os.chmod(temporary_path, 0o600)
             os.replace(temporary_path, manifest_path)
             if args.owner:
-                shutil.chown(manifest_path, user=args.owner)
+                shutil.chown(manifest_path, user=args.owner, group=args.owner)
         finally:
             temporary_path.unlink(missing_ok=True)
         print(f'prepared {len(pairs)} files at {args.dest}; manifest={manifest_path}')

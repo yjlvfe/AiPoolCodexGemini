@@ -15,8 +15,8 @@ import urllib.parse
 import urllib.request
 import uuid
 from pool_runtime import AccountPool, PoolError, record, retry_seconds, hard_account_failure
-from account_manager import Manager
-from retry_policy import provider_attempts, retry_delay, transient_event, transient_exception, transient_status
+from account_manager import Manager, read_json
+from retry_policy import provider_attempts, retry_delay, transient_event, transient_exception, transient_status, should_transport_retry, transport_retry_delay, MAX_TRANSPORT_ATTEMPTS
 from model_catalog import CatalogError, DynamicCatalog, catalog_cache_dir, discover_codex_models
 
 HOST = os.environ.get('CODEX_BRIDGE_HOST','127.0.0.1')
@@ -172,7 +172,7 @@ def response_request(payload, chat=False):
     return out
 
 
-CODEX_CHUNK_IDLE_TIMEOUT = float(os.environ.get('AIPOOL_CODEX_CHUNK_IDLE_TIMEOUT', '30'))
+CODEX_CHUNK_IDLE_TIMEOUT = float(os.environ.get('AIPOOL_CODEX_CHUNK_IDLE_TIMEOUT', '180.0'))
 
 
 def events(response, idle_timeout=CODEX_CHUNK_IDLE_TIMEOUT):
@@ -223,6 +223,16 @@ def failed(event):
     return event.get('type') in ('error','response.failed','response.incomplete')
 
 
+def is_capacity_error(event, raw=b''):
+    text = (json.dumps(event) + ' ' + (raw.decode('utf-8', errors='replace') if isinstance(raw, (bytes, bytearray)) else str(raw))).lower()
+    return any(marker in text for marker in (
+        'selected model is at capacity',
+        'model_at_capacity',
+        'capacity',
+        'overloaded',
+    ))
+
+
 def rotate_event(event):
     if not failed(event):
         return False
@@ -252,12 +262,16 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
     def log_message(self,*args):
         pass
 
-    def send_json(self,data,status=200):
-        body=json.dumps(data).encode()
+    def send_json(self, data, status=200, headers=None):
+        body = json.dumps(data).encode()
         try:
             self.send_response(status)
-            self.send_header('Content-Type','application/json')
-            self.send_header('Content-Length',str(len(body)))
+            self.send_header('Content-Type', 'application/json')
+            self.send_header('Content-Length', str(len(body)))
+            if headers:
+                for k, v in headers.items():
+                    if v is not None:
+                        self.send_header(k, str(v))
             self.end_headers()
             self.wfile.write(body)
         except (BrokenPipeError, ConnectionResetError):
@@ -288,6 +302,8 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
         number=None
         usage=None
         started=False
+        chat=False
+        self._stream_started = False
         outcome='FAILED'
         from stream_state import StreamLifecycle
         lifecycle = StreamLifecycle()
@@ -341,8 +357,13 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
                 if clean_req not in clean_allowed:
                     raise PoolError(f"Model {model} is not permitted for this API Key", 403)
             wants_stream=bool(payload.get('stream'))
-            attempts=POOL.candidates(model, include_cooldown=False) or POOL.candidates(model, include_cooldown=True)
-            last_status=429 if not attempts else 503
+            attempts = POOL.candidates(model, include_cooldown=False)
+            if not attempts:
+                retry_sec = POOL.get_earliest_retry_after('codex', model)
+                err = PoolError('All accounts are cooling down or exhausted for this model', 503)
+                err.retry_after = retry_sec
+                raise err
+            last_status = 503
             quota_exhausted=set()
             next_index=0
             try:
@@ -361,47 +382,76 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
 
                 number = candidate
                 attempted_accounts.append(number)
-                try:
-                    credentials=POOL.credentials(number)['tokens']
-                    headers={'Authorization':'Bearer '+credentials['access_token'],'ChatGPT-Account-Id':credentials.get('account_id',''),'Content-Type':'application/json','Accept':'text/event-stream','User-Agent':'codex_cli_rs/0.1.0'}
-                    req=urllib.request.Request(UPSTREAM_URL,data=json.dumps(body).encode(),headers=headers)
-                    print(f"[codex-bridge] attempt account={number} model={model}", flush=True)
-                    upstream=urllib.request.urlopen(req,timeout=max(0.1, min(120, deadline - time.perf_counter())))
-                except urllib.error.HTTPError as exc:
-                    last_status=exc.code
-                    raw_err = exc.read().decode(errors='replace') if hasattr(exc, 'read') else ''
-                    retry_sec = retry_seconds(exc.headers)
-                    resets_at = None
-                    resets_in_seconds = None
+                upstream = None
+                transport_attempt = 0
+                while True:
+                    transport_attempt += 1
                     try:
-                        err_json = json.loads(raw_err)
-                        if isinstance(err_json, dict):
-                            err_details = err_json.get('error', err_json) if isinstance(err_json.get('error'), dict) else err_json
-                            resets_at = err_details.get('resets_at') or err_details.get('reset_at')
-                            resets_in_seconds = err_details.get('resets_in_seconds') or err_details.get('retry_after')
-                    except Exception:
-                        pass
-                    if resets_in_seconds is not None:
+                        credentials=POOL.credentials(number)['tokens']
+                        headers={'Authorization':'Bearer '+credentials['access_token'],'ChatGPT-Account-Id':credentials.get('account_id',''),'Content-Type':'application/json','Accept':'text/event-stream','User-Agent':'codex_cli_rs/0.1.0'}
+                        req=urllib.request.Request(UPSTREAM_URL,data=json.dumps(body).encode(),headers=headers)
+                        print(f"[codex-bridge] attempt account={number} model={model}", flush=True)
+                        upstream=urllib.request.urlopen(req,timeout=max(0.1, min(120, deadline - time.perf_counter())))
+                        break
+                    except urllib.error.HTTPError as exc:
+                        last_status=exc.code
+                        raw_err = exc.read().decode(errors='replace') if hasattr(exc, 'read') else ''
+                        retry_sec = retry_seconds(exc.headers)
+                        resets_at = None
+                        resets_in_seconds = None
                         try:
-                            retry_sec = float(resets_in_seconds)
-                        except (TypeError, ValueError):
+                            err_json = json.loads(raw_err)
+                            if isinstance(err_json, dict):
+                                err_details = err_json.get('error', err_json) if isinstance(err_json.get('error'), dict) else err_json
+                                resets_at = err_details.get('resets_at') or err_details.get('reset_at')
+                                resets_in_seconds = err_details.get('resets_in_seconds') or err_details.get('retry_after')
+                        except Exception:
                             pass
-                    exc.close()
-                    # Failover on HTTP 401, 403, or 429 (rate limit OR quota)
-                    if exc.code in (401, 403, 429):
-                        reason = 'quota_exhausted' if exc.code == 429 else 'invalid_credentials'
-                        print(f"[codex-bridge] failover account {number} exhausted: HTTP {exc.code} (resets_at={resets_at}, seconds={retry_sec})", flush=True)
-                        POOL.exhausted(number, model, seconds=retry_sec, resets_at=resets_at, reason=reason)
-                        quota_exhausted.add(number)
+                        if resets_in_seconds is not None:
+                            try:
+                                retry_sec = float(resets_in_seconds)
+                            except (TypeError, ValueError):
+                                pass
+                        exc.close()
+
+                        has_remaining = any(c not in attempted_accounts for c in attempts)
+                        if has_remaining and exc.code in (502, 503, 504) and should_transport_retry(exc.code, transport_attempt):
+                            delay = transport_retry_delay(exc.code, transport_attempt)
+                            if delay > 0:
+                                time.sleep(delay)
+                            continue
+
+                        # Failover on HTTP 401, 403, or 429 (rate limit OR quota) or hard failure marker
+                        if exc.code in (401, 403, 429) or hard_account_failure(exc.code, raw_err):
+                            reason = 'quota_exhausted' if exc.code in (409, 429) else ('account_locked' if exc.code == 400 else 'invalid_credentials')
+                            print(f"[codex-bridge] failover account {number} exhausted: HTTP {exc.code} (resets_at={resets_at}, seconds={retry_sec})", flush=True)
+                            POOL.exhausted(number, model, seconds=retry_sec, resets_at=resets_at, reason=reason)
+                            quota_exhausted.add(number)
+                            rotated_after_hard_failure = True
+                            break
+
+                        if exc.code in (502, 503, 504):
+                            print(f"[codex-bridge] account {number} transport retries exhausted HTTP {exc.code}, rotating to next candidate", flush=True)
+                            rotated_after_hard_failure = True
+                            break
+
+                        err_obj = PoolError(f'Codex upstream HTTP {last_status}', last_status)
+                        err_obj.retry_after = retry_sec
+                        raise err_obj from None
+                    except (urllib.error.URLError, OSError, TimeoutError) as exc:
+                        has_remaining = any(c not in attempted_accounts for c in attempts)
+                        if has_remaining and should_transport_retry(exc, transport_attempt):
+                            delay = transport_retry_delay(0, transport_attempt)
+                            if delay > 0:
+                                time.sleep(delay)
+                            continue
+                        print(f"[codex-bridge] account {number} network retries exhausted, rotating to next candidate", flush=True)
                         rotated_after_hard_failure = True
-                        continue
-                    # Transient error (5xx) -> immediate return
-                    err_obj = PoolError(f'Codex upstream HTTP {last_status}', last_status)
-                    err_obj.retry_after = retry_sec
-                    raise err_obj from None
-                except (PoolError, ValueError, OSError, TypeError, RuntimeError) as exc:
-                    # Network / Timeout -> immediate return
-                    raise exc
+                        break
+
+                if upstream is None:
+                    continue
+
                 with upstream:
                     iterator=events(upstream)
                     # Lifecycle events are not generated content. Buffer them until a
@@ -411,6 +461,22 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
                     for raw in iterator:
                         first=raw
                         first_event=event_data(raw)
+                        if is_capacity_error(first_event, raw):
+                            print(f"[codex-bridge] account {number} model at capacity: {first_event.get('type')}", flush=True)
+                            POOL.exhausted(number, model, reason='quota_exhausted')
+                            quota_exhausted.add(number)
+                            rotated_after_hard_failure = True
+                            last_status = 503
+                            first = b''
+                            break
+                        if rotate_event(first_event):
+                            print(f"[codex-bridge] account {number} exhausted: stream {first_event.get('type')}", flush=True)
+                            POOL.exhausted(number, model, reason='quota_exhausted')
+                            quota_exhausted.add(number)
+                            rotated_after_hard_failure = True
+                            last_status = 429
+                            first = b''
+                            break
                         if first_event.get('type') not in (None,'response.created','response.in_progress','ping'):
                             break
                         prelude.append(raw)
@@ -421,33 +487,48 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
                             break
                     else:
                         first = b''
+
+                    if not first:
+                        if rotated_after_hard_failure:
+                            continue
+                        raise PoolError('Codex upstream rejected the request or returned empty response', 502)
+
                     first_event = event_data(first)
-                    if rotate_event(first_event):
-                        print(f"[codex-bridge] account {number} exhausted: stream {first_event.get('type')}", flush=True)
-                        POOL.exhausted(number, model, reason='quota_exhausted')
-                        quota_exhausted.add(number)
-                        rotated_after_hard_failure = True
-                        last_status = 429
-                        continue
-                    if not first or failed(first_event):
+                    if failed(first_event):
+                        if is_capacity_error(first_event, first):
+                            print(f"[codex-bridge] account {number} model at capacity: {first_event.get('type')}", flush=True)
+                            POOL.exhausted(number, model, reason='quota_exhausted')
+                            quota_exhausted.add(number)
+                            rotated_after_hard_failure = True
+                            last_status = 503
+                            continue
                         raise PoolError('Codex upstream rejected the request', 502)
-                    if wants_stream:
-                        lifecycle.begin()
-                        self._stream_started = True
-                        self.send_response(200)
-                        self.send_header('Content-Type', 'text/event-stream')
-                        self.send_header('Cache-Control', 'no-cache')
-                        self.send_header('Connection', 'close')
-                        self.send_header('X-Request-ID', request_id)
-                        self.end_headers()
-                        started = True
+
                     import itertools
                     completed = None
                     observed_items = {}
                     tool_indexes = {}
-                    for raw in itertools.chain(prelude, [first], iterator):
+
+                    def send_headers_if_needed():
+                        nonlocal started
+                        if wants_stream and not started:
+                            lifecycle.begin()
+                            self._stream_started = True
+                            self.send_response(200)
+                            self.send_header('Content-Type', 'text/event-stream')
+                            self.send_header('Cache-Control', 'no-cache')
+                            self.send_header('Connection', 'close')
+                            self.send_header('X-Request-ID', request_id)
+                            self.end_headers()
+                            started = True
+                            if not chat:
+                                for p in prelude:
+                                    self.wfile.write(p)
+                                self.wfile.flush()
+
+                    for raw in itertools.chain([first], iterator):
                         event = event_data(raw)
-                        if wants_stream and lifecycle.state.value == 'started':
+                        if wants_stream and started and lifecycle.state.value == 'started':
                             lifecycle.observe()
                         if failed(event):
                             raise PoolError('Codex stream failed after it started; request was not replayed', 502)
@@ -460,29 +541,36 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
                             usage = completed.get('usage')
                         if wants_stream:
                             if not chat:
+                                send_headers_if_needed()
                                 self.wfile.write(raw)
+                                self.wfile.flush()
                             else:
                                 delta = None
                                 typ = event.get('type')
                                 if typ == 'response.output_text.delta':
-                                    delta = {'content': event.get('delta', '')}
+                                    delta_text = event.get('delta', '')
+                                    if delta_text != "":
+                                        delta = {'content': delta_text}
                                 elif typ == 'response.output_item.added' and event.get('item', {}).get('type') == 'function_call':
                                     item = event['item']; index = len(tool_indexes); tool_indexes[event.get('output_index')] = index
                                     delta = {'tool_calls': [{'index': index, 'id': item.get('call_id', item.get('id')), 'type': 'function', 'function': {'name': item.get('name'), 'arguments': ''}}]}
                                 elif typ == 'response.function_call_arguments.delta':
                                     delta = {'tool_calls': [{'index': tool_indexes.get(event.get('output_index'), 0), 'function': {'arguments': event.get('delta', '')}}]}
                                 if delta is not None:
+                                    send_headers_if_needed()
                                     chunk = {'id': 'chatcmpl-stream', 'object': 'chat.completion.chunk', 'created': int(time.time()), 'model': model, 'choices': [{'index': 0, 'delta': delta, 'finish_reason': None}]}
                                     self.wfile.write(('data: ' + json.dumps(chunk) + '\n\n').encode())
-                            self.wfile.flush()
+                                    self.wfile.flush()
                     if completed is None:
-                        if wants_stream and lifecycle.state.value == 'started':
+                        if wants_stream and started and lifecycle.state.value == 'started':
                             lifecycle.interrupt()
                         raise PoolError('Codex stream ended without response.completed', 502)
                     if wants_stream:
+                        if not started:
+                            send_headers_if_needed()
                         lifecycle.complete()
                     outcome='OK'
-                    POOL.clear_cooldown(number, model)
+                    POOL.clear_cooldown('codex', number, model)
                     if rotated_after_hard_failure or (number != active_at_start and active_at_start not in attempts):
                         try:
                             POOL.promote(number, expected_current=active_at_start)
@@ -490,6 +578,12 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
                             # Delivered response remains successful; surface pointer-sync failure separately.
                             print('[codex-bridge] Response delivered but active-account synchronization failed',file=sys.stderr)
                             outcome='OK_ACTIVE_SYNC_FAILED'
+                    else:
+                        try:
+                            m = Manager('codex')
+                            m.sync_live(read_json(m.credential(number)), number=number)
+                        except Exception:
+                            pass
                     if wants_stream and chat:
                         finish=chat_result(completed,model)
                         chunk={'id':finish['id'],'object':'chat.completion.chunk','model':model,'choices':[{'index':0,'delta':{},'finish_reason':finish['choices'][0]['finish_reason']}], 'usage':finish.get('usage')}
@@ -504,10 +598,25 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
                     lifecycle.interrupt()
                 try:
                     msg = str(exc) if isinstance(exc, PoolError) else str(exc)
-                    from stream_state import terminal_error_event, terminal_event
-                    request_id = (audit or {}).get('request_id') or str(uuid.uuid4())
-                    self.wfile.write(terminal_error_event(msg, request_id))
-                    self.wfile.write(terminal_event())
+                    req_id = (audit or {}).get('request_id') or str(uuid.uuid4())
+                    if chat:
+                        from stream_state import terminal_error_event, terminal_event
+                        self.wfile.write(terminal_error_event(msg, req_id))
+                        self.wfile.write(terminal_event())
+                    else:
+                        resp_failed = {
+                            "type": "response.failed",
+                            "response": {
+                                "id": f"resp_{int(time.time()*1000)}",
+                                "status": "failed",
+                                "error": {
+                                    "type": "stream_error",
+                                    "code": "stream_disconnected",
+                                    "message": msg
+                                }
+                            }
+                        }
+                        self.wfile.write(f"event: response.failed\ndata: {json.dumps(resp_failed)}\n\n".encode())
                     self.wfile.flush()
                 except OSError:
                     pass
@@ -515,10 +624,15 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
             else:
                 msg = str(exc) if isinstance(exc, PoolError) else 'Codex upstream request failed'
                 from error_taxonomy import classify, public_error
-                classified = classify(exc, status=getattr(exc, 'status', None), stream_started=False)
+                status = getattr(exc, 'status', 400 if isinstance(exc,(ValueError,KeyError)) else 502)
+                retry_after_val = getattr(exc, 'retry_after', None)
+                classified = classify(exc, status=status, stream_started=False, retry_after=retry_after_val, request_id=request_id)
                 if audit is not None:
                     audit['error_code'] = classified.code.value
-                self.send_json({'error':public_error(classified)},getattr(exc,'status',400 if isinstance(exc,(ValueError,KeyError)) else 502))
+                resp_headers = {}
+                if classified.retry_after is not None and classified.retry_after > 0:
+                    resp_headers["Retry-After"] = str(classified.retry_after)
+                self.send_json({'error':public_error(classified)}, classified.status, headers=resp_headers)
         finally:
             print(f"REQUEST_PROVIDER_CALLS request_id={request_id} accounts={attempted_accounts} total_calls={len(attempted_accounts)}", flush=True)
             if audit is not None:

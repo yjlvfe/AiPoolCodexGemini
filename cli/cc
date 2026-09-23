@@ -1,0 +1,10 @@
+#!/usr/bin/env python3
+"""All aliases share the same transactional implementation."""
+from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from account_manager import main
+if __name__ == "__main__":
+    from config_env import load
+    load()
+    raise SystemExit(main('claude'))

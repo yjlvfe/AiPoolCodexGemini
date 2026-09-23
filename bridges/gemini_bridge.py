@@ -23,6 +23,7 @@ import socket
 import socketserver
 import secrets
 import sqlite3
+from typing import Any
 from copy import deepcopy
 
 from model_catalog import CatalogError, DynamicCatalog, catalog_cache_dir, extract_gemini_catalog
@@ -569,9 +570,9 @@ def _antigravity_headers(access):
 
 
 from pool_runtime import AccountPool, PoolError, record, retry_seconds, clean_model_name, hard_account_failure
-from account_manager import Manager
+from account_manager import Manager, read_json
 from durable_requests import DurableRequestStore, request_key
-from retry_policy import provider_attempts, retry_delay
+from retry_policy import provider_attempts, retry_delay, should_transport_retry, transport_retry_delay, MAX_TRANSPORT_ATTEMPTS
 AG_POOL = AccountPool('gemini')
 REQUEST_BODY_TIMEOUT = 30.0
 DEFAULT_REQUEST_TOTAL_DEADLINE = 180.0
@@ -588,55 +589,248 @@ def request_total_deadline():
 # A provider outage is a transient infrastructure event, not a reason to
 # abandon a live Hermes turn after one account cycle.  The default is 20
 # upstream attempts; deployments may raise it but cannot lower it below 20.
-def call_antigravity(ag_body, access=None, deadline=None):
+def call_antigravity(ag_body, access=None, deadline=None, stream=False):
     access = access or get_access_token()
-    endpoints = [os.environ['AG_UPSTREAM_URL']] if os.environ.get('AG_UPSTREAM_URL') else [e + ANTIGRAVITY_PATH for e in ANTIGRAVITY_ENDPOINTS]
+    action = "streamGenerateContent?alt=sse" if stream else "generateContent"
+    if os.environ.get('AG_UPSTREAM_URL'):
+        base = os.environ['AG_UPSTREAM_URL']
+        endpoints = [base.replace("generateContent", action) if "generateContent" in base else base]
+    else:
+        endpoints = [f"{e}/v1internal:{action}" for e in ANTIGRAVITY_ENDPOINTS]
     last_status = 503
+    headers = _antigravity_headers(access)
+    if stream:
+        headers["Accept"] = "text/event-stream"
     for url in endpoints:
-        if deadline is not None and time.monotonic() >= deadline:
-            raise PoolError('Request deadline exceeded', 504)
-        req = urllib.request.Request(url, data=json.dumps(ag_body).encode(), headers=_antigravity_headers(access))
-        try:
-            timeout = 120 if deadline is None else max(0.1, min(120, deadline - time.monotonic()))
-            with urllib.request.urlopen(req, timeout=timeout) as resp:
-                result = json.loads(resp.read().decode())
-                if not isinstance(result, dict):
-                    raise PoolError('Antigravity returned a non-object response', 502)
-                return result
-        except urllib.error.HTTPError as exc:
-            status = exc.code
-            last_status = status
-            delay = retry_seconds(exc.headers)
-            body_text = ''
+        for transport_attempt in range(1, MAX_TRANSPORT_ATTEMPTS + 1):
+            if deadline is not None and time.monotonic() >= deadline:
+                raise PoolError('Request deadline exceeded', 504)
+            req = urllib.request.Request(url, data=json.dumps(ag_body).encode(), headers=headers)
             try:
-                body_text = exc.read().decode('utf-8', errors='replace')
-            except Exception:
-                pass
-            exc.close()
-            if status == 404:
-                continue # Deployment endpoint unavailable; try next, same account/model.
-            if status in (401,403,429) or status < 500:
-                error = PoolError(f'Antigravity upstream HTTP {status}',status)
+                timeout = 120 if deadline is None else max(0.1, min(120, deadline - time.monotonic()))
+                resp = urllib.request.urlopen(req, timeout=timeout)
+                if stream:
+                    return resp
+                with resp:
+                    raw_data = resp.read().decode()
+                    result = json.loads(raw_data)
+                    if not isinstance(result, dict):
+                        raise PoolError('Antigravity returned a non-object response', 502)
+                    return result
+            except urllib.error.HTTPError as exc:
+                status = exc.code
+                last_status = status
+                delay = retry_seconds(exc.headers)
+                body_text = ''
+                try:
+                    body_text = exc.read().decode('utf-8', errors='replace')
+                except Exception:
+                    pass
+                exc.close()
+                if status == 404:
+                    break # Deployment endpoint unavailable; try next endpoint.
+                if status in (502, 503, 504) and should_transport_retry(status, transport_attempt):
+                    retry_sec = transport_retry_delay(status, transport_attempt)
+                    if retry_sec > 0:
+                        time.sleep(retry_sec)
+                    continue
+                error = PoolError(f'Antigravity upstream HTTP {status}', status)
                 error.retry_after = delay
                 error.body = body_text
                 raise error from None
-        except OSError:
-            continue
-    raise PoolError('Antigravity endpoints are unavailable',last_status)
+            except (urllib.error.URLError, OSError, TimeoutError) as exc:
+                if should_transport_retry(exc, transport_attempt):
+                    retry_sec = transport_retry_delay(0, transport_attempt)
+                    if retry_sec > 0:
+                        time.sleep(retry_sec)
+                    continue
+                break
+    raise PoolError('Antigravity endpoints are unavailable', last_status)
+
+
+def stream_antigravity_events(resp, model_name=None, deadline=None):
+    """Parse Antigravity SSE events and yield translated OpenAI chunks."""
+    if isinstance(resp, dict):
+        import io
+        resp = io.BytesIO(b'data: ' + json.dumps({"response": resp}).encode('utf-8') + b'\n\n')
+
+    msg_id = f"chatcmpl-{secrets.token_hex(12)}"
+    created_ts = int(time.time())
+    model = clean_model_name(model_name or "gemini-3.8-flash")
+    role_sent = False
+    tool_index = 0
+    has_tool_call = False
+    observed_valid_content = False
+
+    buffer = []
+    with resp:
+        for raw_line in resp:
+            if deadline is not None and time.monotonic() >= deadline:
+                raise PoolError('Request deadline exceeded', 504)
+            line = raw_line.decode('utf-8', errors='replace').rstrip('\r\n')
+            if not line:
+                if not buffer:
+                    continue
+                data_str = '\n'.join(buffer)
+                buffer = []
+                if data_str.strip() == '[DONE]':
+                    break
+                try:
+                    payload = json.loads(data_str)
+                except Exception:
+                    continue
+
+                if isinstance(payload, dict):
+                    if 'error' in payload:
+                        err_obj = payload['error']
+                        code = err_obj.get('code') or 502
+                        msg = err_obj.get('message') or str(err_obj)
+                        err = PoolError(f"Antigravity upstream error: {msg}", code)
+                        err.body = json.dumps(payload)
+                        raise err
+
+                    data_obj = payload.get('response') or payload
+
+                    prompt_feedback = data_obj.get('promptFeedback') or {}
+                    if prompt_feedback.get('blockReason'):
+                        reason = prompt_feedback['blockReason']
+                        raise PoolError(f"Content blocked by safety policy: {reason}", 400)
+
+                    candidates = data_obj.get('candidates') or []
+                    usage_meta = data_obj.get('usageMetadata')
+                    translated_usage = None
+                    if usage_meta and 'promptTokenCount' in usage_meta and 'candidatesTokenCount' in usage_meta:
+                        out_tokens = usage_meta['candidatesTokenCount'] + usage_meta.get('thoughtsTokenCount', 0)
+                        translated_usage = {
+                            'prompt_tokens': usage_meta['promptTokenCount'],
+                            'completion_tokens': out_tokens,
+                            'total_tokens': usage_meta.get('totalTokenCount', usage_meta['promptTokenCount'] + out_tokens),
+                            'completion_tokens_details': {'reasoning_tokens': usage_meta.get('thoughtsTokenCount', 0)}
+                        }
+
+                    if not candidates:
+                        if translated_usage:
+                            yield {
+                                'id': msg_id,
+                                'object': 'chat.completion.chunk',
+                                'created': created_ts,
+                                'model': model,
+                                'choices': [],
+                                'usage': translated_usage,
+                            }
+                        continue
+
+                    cand = candidates[0]
+                    cand_reason = cand.get('finishReason')
+                    if cand_reason in ("SAFETY", "BLOCKLIST", "PROHIBITED_CONTENT", "SPII"):
+                        raise PoolError(f"Candidate blocked by safety policy: {cand_reason}", 400)
+
+                    content_obj = cand.get('content') or {}
+                    parts = content_obj.get('parts') or []
+
+                    for part in parts:
+                        if not isinstance(part, dict):
+                            continue
+                        if part.get('thought') or (isinstance(part.get('text'), str) and part.get('thought')):
+                            thought_text = part.get('text', '')
+                            if thought_text:
+                                delta = {'reasoning_content': thought_text}
+                                if not role_sent:
+                                    delta['role'] = 'assistant'
+                                    role_sent = True
+                                observed_valid_content = True
+                                yield {
+                                    'id': msg_id,
+                                    'object': 'chat.completion.chunk',
+                                    'created': created_ts,
+                                    'model': model,
+                                    'choices': [{'index': 0, 'delta': delta, 'finish_reason': None}],
+                                }
+                        elif part.get('text'):
+                            text = part['text']
+                            if text != "":
+                                delta = {'content': text}
+                                if not role_sent:
+                                    delta['role'] = 'assistant'
+                                    role_sent = True
+                                observed_valid_content = True
+                                yield {
+                                    'id': msg_id,
+                                    'object': 'chat.completion.chunk',
+                                    'created': created_ts,
+                                    'model': model,
+                                    'choices': [{'index': 0, 'delta': delta, 'finish_reason': None}],
+                                }
+                        elif part.get('functionCall'):
+                            fc = part['functionCall']
+                            fc_name = fc.get('name', '')
+                            fc_args = fc.get('args', {})
+                            call_id = str(fc.get('id') or f"call_{secrets.token_hex(8)}")
+                            args_str = json.dumps(fc_args) if isinstance(fc_args, dict) else str(fc_args)
+                            delta: dict[str, Any] = {
+                                'tool_calls': [{
+                                    'index': tool_index,
+                                    'id': call_id,
+                                    'type': 'function',
+                                    'function': {'name': fc_name, 'arguments': args_str},
+                                }]
+                            }
+                            tool_index += 1
+                            has_tool_call = True
+                            if not role_sent:
+                                delta['role'] = 'assistant'
+                                role_sent = True
+                            observed_valid_content = True
+                            yield {
+                                'id': msg_id,
+                                'object': 'chat.completion.chunk',
+                                'created': created_ts,
+                                'model': model,
+                                'choices': [{'index': 0, 'delta': delta, 'finish_reason': None}],
+                            }
+
+                    if cand_reason:
+                        finish_reason = "tool_calls" if has_tool_call else {
+                            "STOP": "stop", "MAX_TOKENS": "length", "SAFETY": "content_filter",
+                            "RECITATION": "content_filter", "BLOCKLIST": "content_filter",
+                            "PROHIBITED_CONTENT": "content_filter", "SPII": "content_filter",
+                        }.get(cand_reason, "stop")
+                        chunk = {
+                            'id': msg_id,
+                            'object': 'chat.completion.chunk',
+                            'created': created_ts,
+                            'model': model,
+                            'choices': [{'index': 0, 'delta': {}, 'finish_reason': finish_reason}],
+                        }
+                        if translated_usage:
+                            chunk['usage'] = translated_usage
+                        observed_valid_content = True
+                        yield chunk
+                continue
+
+            if line.startswith('data:'):
+                payload_part = line[5:].strip()
+                if payload_part:
+                    buffer.append(payload_part)
+
+    if not observed_valid_content:
+        raise PoolError("Provider returned no candidates (blocked or malformed response)", 502)
 
 
 def call_with_retry(ag_body, attempts=None, on_success=None, sleep=None, deadline=None, client_connected=None, request_id=None):
-    """Fast Account Failover for Antigravity/Gemini bridge in Zero-Retry Architecture.
+    """Fast Account Failover for Antigravity/Gemini bridge.
 
-    - Provider is called at most ONCE per account per request.
-    - Transient errors (5xx, timeouts, network) terminate immediately; NO retry, NO account failover.
-    - Failures (401/403 invalid credentials, 429 rate limit or quota exhaustion) failover immediately to next candidate.
-    - All accounts exhausted -> terminal structured ALL_ACCOUNTS_EXHAUSTED.
+    - Layer 1: Transport retries on the same account for transient 502/503/504 errors inside call_antigravity.
+    - Layer 3: Account failover on 401/403 (invalid credentials) or 429/409 (rate limit or quota).
+    - When all accounts are cooling down or exhausted -> HTTP 503 with earliest Retry-After.
     """
     model = ag_body['model']
-    candidates = AG_POOL.candidates(model, include_cooldown=False) or AG_POOL.candidates(model, include_cooldown=True)
+    candidates = AG_POOL.candidates(model, include_cooldown=False)
     if not candidates:
-        raise PoolError('All accounts are exhausted or invalid', 503)
+        retry_sec = AG_POOL.get_earliest_retry_after('antigravity', model)
+        err = PoolError('All accounts are cooling down or exhausted for this model', 503)
+        err.retry_after = retry_sec
+        raise err
 
     deadline = deadline if deadline is not None else time.monotonic() + request_total_deadline()
     last_status = 503
@@ -663,17 +857,17 @@ def call_with_retry(ag_body, attempts=None, on_success=None, sleep=None, deadlin
             body = deepcopy(ag_body)
             body['project'] = credentials.get('project_id') or body.get('project')
             result = call_antigravity(body, credentials['token']['access_token'], deadline=deadline)
-            AG_POOL.clear_cooldown(number, model)
+            AG_POOL.clear_cooldown('antigravity', number, model)
             if on_success:
                 on_success(number, bool(rotated_after_hard_failure or active_at_start not in candidates))
             return result
         except (PoolError, ValueError, OSError, RuntimeError) as exc:
             last_status = int(getattr(exc, 'status', 503) or 503)
-            # Failover on HTTP 401, 403, or 429 (rate limit OR quota)
-            if last_status in (401, 403, 429):
+            body_str = getattr(exc, 'body', '') or str(exc)
+
+            if last_status in (401, 403, 409, 429) or hard_account_failure(last_status, body_str):
                 resets_at = getattr(exc, 'resets_at', None)
                 retry_sec = getattr(exc, 'retry_after', None)
-                body_str = getattr(exc, 'body', '') or str(exc)
                 if not resets_at:
                     try:
                         err_json = json.loads(body_str) if isinstance(body_str, str) else {}
@@ -685,7 +879,7 @@ def call_with_retry(ag_body, attempts=None, on_success=None, sleep=None, deadlin
                         pass
                 if retry_sec is None:
                     retry_sec = 60
-                reason = 'quota_exhausted' if last_status == 429 else 'invalid_credentials'
+                reason = 'quota_exhausted' if last_status in (409, 429) else 'invalid_credentials'
                 print(f"[gemini-bridge] failover account {number} exhausted: HTTP {last_status}, resets_at={resets_at}, seconds={retry_sec}", flush=True)
                 if resets_at is not None:
                     AG_POOL.exhausted(number, model, seconds=retry_sec, resets_at=resets_at, reason=reason)
@@ -694,7 +888,6 @@ def call_with_retry(ag_body, attempts=None, on_success=None, sleep=None, deadlin
                 rotated_after_hard_failure = True
                 continue
             else:
-                # Transient error -> stop failover chain immediately, active stays sticky
                 raise exc
         finally:
             if request_id:
@@ -989,24 +1182,131 @@ class Handler(http.server.BaseHTTPRequestHandler):
                 self.close_connection = True
 
     def _handle_stream(self, ag_body, requested_model=None, durable_store=None, durable_key=None):
-        # Antigravity's authenticated endpoint is generateContent and returns
-        # one JSON document; it does not expose streamGenerateContent/SSE here.
-        # Keep the compatibility SSE conversion, but bound the buffered wait and
-        # stop retrying when the downstream client has gone away.
+        m = clean_model_name(requested_model or ag_body.get('model', 'gemini-3.8-flash'))
+        candidates = AG_POOL.candidates(m, include_cooldown=False)
+        if not candidates:
+            retry_after = AG_POOL.get_earliest_retry_after('antigravity', m)
+            err = PoolError('All accounts are cooling down or exhausted for this model', 503)
+            err.retry_after = retry_after
+            raise err
+
         deadline = getattr(self, '_request_deadline', None)
         stream_deadline = time.monotonic() + max(0.1, GEMINI_STREAM_DEADLINE)
-        if deadline is None:
-            deadline = stream_deadline
-        else:
-            deadline = min(deadline, stream_deadline)
-        ag_resp = self._call_with_retry(
-            ag_body, deadline=deadline, client_connected=self._client_connected
-        )
-        out = to_openai_response(ag_resp, request_model=requested_model)
-        if durable_store and durable_key:
-            durable_store.complete(durable_key, ag_resp, 200)
-        self._record_bridge_request(out, requested_model or out['model'], "Gemini")
-        self._send_cached_stream(out, requested_model=requested_model)
+        deadline = stream_deadline if deadline is None else min(deadline, stream_deadline)
+
+        attempted_accounts = []
+        try:
+            active_at_start = Manager('gemini').active()
+        except (ValueError, OSError):
+            active_at_start = ''
+        rotated_after_hard_failure = False
+
+        for candidate in list(candidates):
+            if candidate in attempted_accounts:
+                continue
+            if self._client_connected is not None and not self._client_connected():
+                raise PoolError('Client disconnected', 499)
+            if time.monotonic() >= deadline:
+                raise PoolError('Request deadline exceeded', 504)
+
+            number = candidate
+            attempted_accounts.append(number)
+            self._account_used = number
+
+            transport_attempt = 0
+            while True:
+                transport_attempt += 1
+                try:
+                    credentials = AG_POOL.credentials(number)
+                    body = deepcopy(ag_body)
+                    body['project'] = credentials.get('project_id') or body.get('project')
+                    token = credentials['token']['access_token']
+
+                    resp = call_antigravity(body, token, deadline=deadline, stream=True)
+                    events_iter = stream_antigravity_events(resp, model_name=m, deadline=deadline)
+
+                    # Buffer first content/reasoning chunk before sending HTTP 200 OK headers!
+                    first_chunk = None
+                    for chunk in events_iter:
+                        first_chunk = chunk
+                        break
+
+                    if first_chunk is None:
+                        raise PoolError("Provider returned no candidates (blocked or malformed response)", 502)
+
+                    # Flush 200 OK headers after verifying valid first chunk
+                    self._stream_started = True
+                    self.send_response(200)
+                    self.send_header("Content-Type", "text/event-stream")
+                    self.send_header("Cache-Control", "no-cache")
+                    self.send_header("Connection", "close")
+                    req_id = (self._audit or {}).get('request_id')
+                    if req_id:
+                        self.send_header("X-Request-ID", req_id)
+                    self.end_headers()
+
+                    AG_POOL.clear_cooldown('antigravity', number, m)
+
+                    if rotated_after_hard_failure or (number != active_at_start and active_at_start not in candidates):
+                        try:
+                            AG_POOL.promote(number, expected_current=active_at_start)
+                        except Exception:
+                            print('[gemini-bridge] Active-account synchronization failed after upstream success', file=sys.stderr)
+                    else:
+                        try:
+                            mgr = Manager('gemini')
+                            mgr.sync_live(read_json(mgr.credential(number)), number=number)
+                        except Exception:
+                            pass
+
+                    # Write first chunk
+                    self.wfile.write(('data: ' + json.dumps(first_chunk) + '\n\n').encode())
+                    self.wfile.flush()
+
+                    for chunk in events_iter:
+                        self.wfile.write(('data: ' + json.dumps(chunk) + '\n\n').encode())
+                        self.wfile.flush()
+
+                    self.wfile.write(b'data: [DONE]\n\n')
+                    self.wfile.flush()
+                    self._record_bridge_request({"model": m, "choices": []}, m, "Gemini")
+                    if durable_store and durable_key:
+                        durable_store.complete(durable_key, {"stream": "completed"}, 200)
+                    return
+
+                except (PoolError, ValueError, OSError, RuntimeError) as exc:
+                    if self._stream_started:
+                        try:
+                            self.wfile.write(f'data: {json.dumps({"error": {"message": str(exc)}})}\n\ndata: [DONE]\n\n'.encode())
+                            self.wfile.flush()
+                        except OSError:
+                            pass
+                        self.close_connection = True
+                        return
+
+                    last_status = int(getattr(exc, 'status', 503) or 503)
+                    body_str = getattr(exc, 'body', '') or str(exc)
+
+                    has_remaining = any(c not in attempted_accounts for c in candidates)
+                    if has_remaining and last_status in (502, 503, 504) and should_transport_retry(last_status, transport_attempt):
+                        delay = transport_retry_delay(last_status, transport_attempt)
+                        if delay > 0:
+                            time.sleep(delay)
+                        continue
+
+                    if last_status in (401, 403, 409, 429) or hard_account_failure(last_status, body_str):
+                        resets_at = getattr(exc, 'resets_at', None)
+                        retry_sec = getattr(exc, 'retry_after', None)
+                        reason = 'quota_exhausted' if last_status in (409, 429) else 'invalid_credentials'
+                        if retry_sec is None:
+                            retry_sec = 60
+                        AG_POOL.exhausted(number, m, seconds=retry_sec, resets_at=resets_at, reason=reason)
+                        rotated_after_hard_failure = True
+                        break
+                    else:
+                        raise exc
+
+        raise PoolError('All accounts are exhausted or invalid', 503)
 
     def _call_with_retry(self, ag_body, attempts=None, deadline=None, client_connected=None, request_id=None):
         try:
@@ -1016,12 +1316,17 @@ class Handler(http.server.BaseHTTPRequestHandler):
 
         def succeeded(number, should_promote=False):
             self._account_used = number
-            if not should_promote:
-                return
-            try:
-                AG_POOL.promote(number, expected_current=expected_current)
-            except Exception:
-                print('[gemini-bridge] Active-account synchronization failed after upstream success',file=sys.stderr)
+            if should_promote:
+                try:
+                    AG_POOL.promote(number, expected_current=expected_current)
+                except Exception:
+                    print('[gemini-bridge] Active-account synchronization failed after upstream success',file=sys.stderr)
+            else:
+                try:
+                    m = Manager('gemini')
+                    m.sync_live(read_json(m.credential(number)), number=number)
+                except Exception:
+                    pass
         return call_with_retry(
             ag_body, attempts=attempts, on_success=succeeded,
             deadline=deadline, client_connected=client_connected,

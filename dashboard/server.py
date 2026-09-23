@@ -236,19 +236,33 @@ def _migrate_legacy_client_counter(db_path, legacy_label, client_id):
 
 GLOBAL_POOL_MANAGER = PoolManager()
 
+def _agent_integration_request(agent, status=False):
+    import socket
+    if agent not in ('hermes', 'openclaw'):
+        return {'success': False, 'verified': False, 'message': 'Invalid integration agent'}
+    try:
+        with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as client:
+            client.settimeout(250)
+            client.connect('/run/aipool/agent-integration.sock')
+            client.sendall((json.dumps({'agent': agent, 'status': status}) + '\n').encode())
+            with client.makefile('rb') as stream:
+                response = json.loads(stream.readline(1048576))
+        if not isinstance(response, dict):
+            raise ValueError('Invalid integration response')
+        return response
+    except (OSError, ValueError, TypeError):
+        return {'success': False, 'verified': False,
+                'message': 'Agent integration service unavailable or returned an invalid response'}
+
+
 def get_settings_status():
-    import integrations
-    res = {agent: integrations.status(agent) for agent in ('hermes','openclaw')}
+    res = {agent: _agent_integration_request(agent, status=True) for agent in ('hermes','openclaw')}
     res['version'] = get_system_version()
     return res
 
 
 def integrate_agent(agent):
-    import integrations
-    try:
-        return integrations.integrate(agent)
-    except (OSError, ValueError, TypeError) as exc:
-        return {'success':False, 'verified':False, 'message':str(exc)}
+    return _agent_integration_request(agent)
 
 
 def get_cli_tools_status():

@@ -228,17 +228,23 @@ class ZeroRetrySmartFailoverTests(unittest.TestCase):
         call_with_retry({'model': 'gemini-3.8-flash'})
         mock_sleep.assert_not_called()
 
-    def test_10_retry_policy_disabled_by_config(self):
-        """Test 10: AIPOOL_PROVIDER_MAX_ATTEMPTS=100 cannot reactivate retries."""
+    def test_10_retry_policy_bounded_by_config(self):
+        """Test 10: AIPOOL_PROVIDER_MAX_ATTEMPTS is bounded (max 5)."""
         with patch.dict(os.environ, {'AIPOOL_PROVIDER_MAX_ATTEMPTS': '100'}):
-            self.assertEqual(provider_attempts(), 1)
-            self.assertEqual(provider_attempts(100), 1)
+            self.assertEqual(provider_attempts(), 5)
+            self.assertEqual(provider_attempts(100), 5)
 
-    def test_11_generic_429_is_not_account_failover(self):
-        """A 429 without quota evidence remains transient and sticky."""
+    def test_11_all_429_and_409_trigger_account_failover(self):
+        """All 429 rate limits and 409 quota conflicts trigger pool failover (9Router parity)."""
         from pool_runtime import hard_account_failure
-        self.assertFalse(hard_account_failure(429, ''))
-        self.assertFalse(hard_account_failure(429, 'rate limit; try again later'))
+        self.assertTrue(hard_account_failure(429, ''))
+        self.assertTrue(hard_account_failure(429, 'temporary upstream glitch'))
+        self.assertTrue(hard_account_failure(409, ''))
+        self.assertTrue(hard_account_failure(429, 'rate limit; try again later'))
+        self.assertTrue(hard_account_failure(429, 'rate_limit_exceeded'))
+        self.assertTrue(hard_account_failure(429, 'hit 5-hour limit for this model'))
+        self.assertTrue(hard_account_failure(429, 'resource_exhausted'))
+        self.assertTrue(hard_account_failure(400, 'not supported when using codex'))
 
     def test_12_model_and_provider_failures_are_never_account_failover(self):
         """Model/provider failures cannot qualify for account rotation."""

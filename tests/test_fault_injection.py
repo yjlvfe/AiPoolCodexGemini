@@ -11,7 +11,7 @@ class FaultInjectionTests(unittest.TestCase):
     def test_provider_faults_classify_without_failover_after_stream(self):
         cases = [
             (401, ErrorCode.ACCOUNT_AUTH_FAILURE, True),
-            (429, ErrorCode.TEMP_RATE_LIMIT, False),
+            (429, ErrorCode.TEMP_RATE_LIMIT, True),
             (503, ErrorCode.TRANSIENT_PROVIDER_ERROR, False),
             (400, ErrorCode.INVALID_REQUEST, False),
         ]
