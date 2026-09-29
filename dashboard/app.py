@@ -322,7 +322,7 @@ class PoolManager:
 
         # The service can disable periodic work; explicit refresh remains available.
         self._worker_thread = None
-        if os.environ.get('AIPOOL_DISABLE_BACKGROUND_POLLER', '').lower() not in ('1', 'true', 'yes', 'on'):
+        if os.environ.get('AIPOOL_DISABLE_BACKGROUND_POLLER', '').lower() not in ('1', 'true', 'yes', 'on') and 'pytest' not in sys.modules and not os.environ.get('PYTEST_CURRENT_TEST'):
             self._worker_thread = threading.Thread(target=self._background_poller, daemon=True)
             self._worker_thread.start()
     def _load_persisted_snapshot(self):
@@ -388,14 +388,20 @@ class PoolManager:
                 cdx_data = cdx_future.result()
             except Exception as exc:
                 if not (hasattr(sys, 'is_finalizing') and sys.is_finalizing()):
-                    print(f"[pool-worker] account refresh failed: {type(exc).__name__}: {str(exc)[:240]}", flush=True)
+                    try:
+                        print(f"[pool-worker] account refresh failed: {type(exc).__name__}: {str(exc)[:240]}", flush=True)
+                    except Exception:
+                        pass
                 raise
             finally:
                 # Never wait for a stuck provider: running Python threads cannot
                 # be safely killed, so they finish independently after timeout.
                 executor.shutdown(wait=False, cancel_futures=True)
             if not (hasattr(sys, 'is_finalizing') and sys.is_finalizing()):
-                print(f"[pool-worker] account refresh ok codex={cdx_data.get('pool_metrics', {}).get('healthy_accounts', 0)}", flush=True)
+                try:
+                    print(f"[pool-worker] account refresh ok codex={cdx_data.get('pool_metrics', {}).get('healthy_accounts', 0)}", flush=True)
+                except Exception:
+                    pass
 
             # Publish account reports before optional analytics. A log/metrics
             # failure must never hide a valid account snapshot.
@@ -404,7 +410,10 @@ class PoolManager:
                 logs_data = self._build_logs_report()
             except Exception as exc:
                 if not (hasattr(sys, 'is_finalizing') and sys.is_finalizing()):
-                    print(f"[pool-worker] analytics refresh skipped: {type(exc).__name__}", flush=True)
+                    try:
+                        print(f"[pool-worker] analytics refresh skipped: {type(exc).__name__}", flush=True)
+                    except Exception:
+                        pass
 
             # Never replace a healthy persisted snapshot with a transient
             # all-failed report. Keep per-provider last-known-good data.
@@ -743,7 +752,7 @@ class PoolManager:
             return {'success': True, 'message': 'Cancelled.'}
         return {'success': False, 'message': 'No active session.'}
 
-    def start_oauth(self, provider: str, flow: str) -> dict:
+    def start_oauth(self, provider: str, flow: str, slot: int | None = None) -> dict:
         if not hasattr(self, '_oauth_sessions'):
             self._oauth_sessions = {}
         if not hasattr(self, '_oauth_sessions_lock'):
@@ -762,6 +771,30 @@ class PoolManager:
             prov = 'codex'
         else:
             return {'success': False, 'message': f'Unsupported provider: {provider}'}
+
+        target_slot = None
+        expected_identity = None
+        if slot is not None and str(slot).strip():
+            try:
+                target_slot = int(slot)
+                if target_slot < 1:
+                    return {'success': False, 'message': 'Invalid slot number.'}
+                store_dir = Path(self.codex_store if prov == 'codex' else self.ag_store)
+                target = store_dir / str(target_slot)
+                if target.is_symlink() or not target.exists() or not (target.is_dir() or target.is_file()):
+                    return {'success': False, 'message': f'Account slot {target_slot} does not exist.'}
+                cli_dir = os.path.join(os.path.dirname(_CURRENT_DIR), 'cli')
+                if cli_dir not in sys.path:
+                    sys.path.insert(0, cli_dir)
+                import account_manager
+                mgr = account_manager.Manager(prov)
+                cred_path = mgr.credential(str(target_slot))
+                cred_data = account_manager.read_json(cred_path)
+                expected_identity = mgr.identity(cred_data).get('identity')
+                if not expected_identity:
+                    return {'success': False, 'message': f'Account {target_slot} has invalid identity.'}
+            except Exception as exc:
+                return {'success': False, 'message': f'Failed to validate target slot: {exc}'}
 
         fl = str(flow or '').strip().lower()
         if prov == 'gemini':
@@ -800,6 +833,8 @@ class PoolManager:
                 'device_auth_id': device_auth_id,
                 'interval': interval,
                 'verification_uri': verification_uri,
+                'target_slot': target_slot,
+                'expected_identity': expected_identity,
                 'created_at': now,
                 'expires_at': now + int(resp_data.get('expires_in') or 900),
                 'status': 'pending',
@@ -810,7 +845,7 @@ class PoolManager:
             with self._oauth_sessions_lock:
                 self._oauth_sessions[session_id] = session
 
-            return {
+            res_data = {
                 'success': True,
                 'session_id': session_id,
                 'flow': 'device_code',
@@ -819,6 +854,9 @@ class PoolManager:
                 'verification_uri': verification_uri,
                 'interval': interval,
             }
+            if target_slot is not None:
+                res_data['slot'] = target_slot
+            return res_data
 
         elif prov == 'codex' and fl == 'auth_url':
             verifier = secrets.token_urlsafe(64)
@@ -846,6 +884,8 @@ class PoolManager:
                 'code_verifier': verifier,
                 'state': state,
                 'redirect_uri': redirect_uri,
+                'target_slot': target_slot,
+                'expected_identity': expected_identity,
                 'created_at': now,
                 'expires_at': now + 900,
                 'status': 'pending',
@@ -856,13 +896,16 @@ class PoolManager:
             with self._oauth_sessions_lock:
                 self._oauth_sessions[session_id] = session
 
-            return {
+            res_data = {
                 'success': True,
                 'session_id': session_id,
                 'flow': 'auth_url',
                 'auth_url': auth_url,
                 'state': state,
             }
+            if target_slot is not None:
+                res_data['slot'] = target_slot
+            return res_data
 
         elif prov == 'gemini':
             client_id = os.environ.get('AG_OAUTH_CLIENT_ID', '').strip()
@@ -911,6 +954,8 @@ class PoolManager:
                 'code_verifier': verifier,
                 'state': state,
                 'redirect_uri': redirect_uri,
+                'target_slot': target_slot,
+                'expected_identity': expected_identity,
                 'created_at': now,
                 'expires_at': now + 900,
                 'status': 'pending',
@@ -921,13 +966,16 @@ class PoolManager:
             with self._oauth_sessions_lock:
                 self._oauth_sessions[session_id] = session
 
-            return {
+            res_data = {
                 'success': True,
                 'session_id': session_id,
                 'flow': 'auth_url',
                 'auth_url': auth_url,
                 'state': state,
             }
+            if target_slot is not None:
+                res_data['slot'] = target_slot
+            return res_data
         return {'success': False, 'message': 'Invalid flow or provider'}
 
     def poll_oauth(self, session_id: str) -> dict:
@@ -1068,8 +1116,13 @@ class PoolManager:
 
         try:
             mgr = account_manager.Manager('codex')
-            slot_res = mgr.add_or_switch(source=tmp_path)
-            slot_num = int(slot_res or mgr.active() or 1)
+            target_slot = session.get('target_slot')
+            if target_slot is not None:
+                mgr.replace_credentials(target_slot, tmp_path)
+                slot_num = int(target_slot)
+            else:
+                slot_res = mgr.add_or_switch(source=tmp_path)
+                slot_num = int(slot_res or mgr.active() or 1)
         except Exception as exc:
             with self._oauth_sessions_lock:
                 session['status'] = 'failed'
@@ -1170,8 +1223,13 @@ class PoolManager:
 
             try:
                 mgr = account_manager.Manager('codex')
-                slot_res = mgr.add_or_switch(source=tmp_path)
-                slot_num = int(slot_res or mgr.active() or 1)
+                target_slot = session.get('target_slot')
+                if target_slot is not None:
+                    mgr.replace_credentials(target_slot, tmp_path)
+                    slot_num = int(target_slot)
+                else:
+                    slot_res = mgr.add_or_switch(source=tmp_path)
+                    slot_num = int(slot_res or mgr.active() or 1)
             except Exception as exc:
                 return {'success': False, 'message': str(exc)}
             finally:
@@ -1260,8 +1318,13 @@ class PoolManager:
 
             try:
                 mgr = account_manager.Manager('antigravity')
-                slot_res = mgr.add_or_switch(source=tmp_path, server_verified=True)
-                slot_num = int(slot_res or mgr.active() or 1)
+                target_slot = session.get('target_slot')
+                if target_slot is not None:
+                    mgr.replace_credentials(target_slot, tmp_path)
+                    slot_num = int(target_slot)
+                else:
+                    slot_res = mgr.add_or_switch(source=tmp_path, server_verified=True)
+                    slot_num = int(slot_res or mgr.active() or 1)
             except Exception as exc:
                 return {'success': False, 'message': str(exc)}
             finally:

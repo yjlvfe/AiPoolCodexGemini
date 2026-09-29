@@ -14,10 +14,10 @@ from typing import Any
 
 
 try:
-    TIMEOUT_SECONDS = float(os.environ.get("CODEX_ACCOUNT_QUERY_TIMEOUT", "15"))
+    TIMEOUT_SECONDS = float(os.environ.get("CODEX_ACCOUNT_QUERY_TIMEOUT", "20"))
 except (TypeError, ValueError):
-    TIMEOUT_SECONDS = 15.0
-TIMEOUT_SECONDS = min(20.0, max(0.1, TIMEOUT_SECONDS))
+    TIMEOUT_SECONDS = 20.0
+TIMEOUT_SECONDS = min(30.0, max(0.1, TIMEOUT_SECONDS))
 SERVER_INVALIDATED_MARKERS = (
     "refresh_token_invalidated",
     "refresh token already used",
@@ -218,7 +218,7 @@ def main() -> int:
         )
         server.send({"method": "initialized"})
         account_result = server.request(
-            "account/read", {"refreshToken": False}
+            "account/read", {"refreshToken": True}
         )
         account = account_result.get("account")
         requires_auth = account_result.get("requiresOpenaiAuth") is True
@@ -237,8 +237,16 @@ def main() -> int:
             "windows": [],
         }
         if mode == "usage":
-            rate_result = server.request("account/rateLimits/read", None)
-            output["windows"] = collect_windows(rate_result)
+            try:
+                rate_result = server.request("account/rateLimits/read", None)
+                output["windows"] = collect_windows(rate_result)
+            except Exception:
+                try:
+                    time.sleep(0.5)
+                    rate_result = server.request("account/rateLimits/read", None)
+                    output["windows"] = collect_windows(rate_result)
+                except Exception:
+                    output["windows"] = []
 
         print(json.dumps(output, separators=(",", ":"), sort_keys=True))
         return 0

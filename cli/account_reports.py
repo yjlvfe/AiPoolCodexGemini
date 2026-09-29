@@ -1,4 +1,5 @@
 """Structured dashboard views of the same account and quota data as the CLI."""
+import time
 from concurrent.futures import ThreadPoolExecutor
 from account_manager import Manager, read_json
 from usage_format import inspect, countdown
@@ -54,6 +55,9 @@ def pool_report(provider):
         try:
             item['email'] = manager.identity(read_json(manager.credential(n))).get('email') or item['email']
             info = inspect(manager, n)
+            if not manager.ag and info.get('status') == 'CHECK FAILED':
+                time.sleep(1.0)
+                info = inspect(manager, n)
             item.update(status=info.get('status', 'CHECK FAILED'), email=info.get('email') or item['email'])
         except Exception as exc:
             info = {}
@@ -72,7 +76,7 @@ def pool_report(provider):
             is_free = plan.lower() == 'free'
             item.update(windows(info.get('windows') or [], ag=False, is_free=is_free), plan=plan)
         return item
-    with ThreadPoolExecutor(max_workers=8) as executor:
+    with ThreadPoolExecutor(max_workers=8 if manager.ag else 2) as executor:
         accounts = list(executor.map(one, ids))
     totals = {'total_accounts':len(accounts), 'healthy_accounts':sum(a['status'] == 'OK' for a in accounts)}
     if manager.ag:

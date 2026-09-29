@@ -377,6 +377,70 @@ class WebAddAccountsTests(unittest.TestCase):
             res_cancel = json.loads(handler_cancel.wfile.getvalue())
             self.assertTrue(res_cancel['success'])
 
+    def test_relogin_with_target_slot_updates_slot_and_rejects_mismatch(self):
+        # Create slot 1
+        slot1 = self.codex_store / '1'
+        slot1.mkdir(parents=True, exist_ok=True)
+        initial_data = {
+            'tokens': {'access_token': 'old_tok', 'refresh_token': 'old_ref', 'account_id': 'acct_123'},
+            'email': 'user1@example.com'
+        }
+        (slot1 / 'auth.json').write_text(json.dumps(initial_data))
+        (slot1 / 'metadata.json').write_text(json.dumps({'identity': 'acct_123', 'email': 'user1@example.com'}))
+
+        pm = PoolManager()
+        pm.codex_store = str(self.codex_store)
+
+        # 1. Non-existent slot returns error
+        res_bad = pm.start_oauth('codex', 'auth_url', slot=99)
+        self.assertFalse(res_bad['success'])
+        self.assertIn('does not exist', res_bad['message'])
+
+        # 2. Start valid relogin for slot 1
+        res = pm.start_oauth('codex', 'auth_url', slot=1)
+        self.assertTrue(res['success'])
+        self.assertEqual(res['slot'], 1)
+        session_id = res['session_id']
+        state = res['state']
+
+        # 3. Attempt callback with mismatched identity -> should be rejected
+        mismatched_tokens = {
+            'access_token': 'new_access',
+            'refresh_token': 'new_refresh',
+            'id_token': make_jwt({'sub': 'different_user_999', 'email': 'other@example.com'}),
+            'account_id': 'different_user_999'
+        }
+        with patch('urllib.request.urlopen', return_value=MockHTTPResponse(mismatched_tokens)):
+            cb_res = pm.callback_oauth(session_id, f'http://localhost:1455/auth/callback?code=testcode&state={state}')
+            self.assertFalse(cb_res['success'])
+            self.assertIn('does not match', cb_res['message'].lower())
+
+        # Slot 1 should remain unchanged
+        curr = json.loads((slot1 / 'auth.json').read_text())
+        self.assertEqual(curr['tokens']['access_token'], 'old_tok')
+
+        # 4. Callback with MATCHING identity -> should succeed and update credentials
+        res2 = pm.start_oauth('codex', 'auth_url', slot=1)
+        session_id2 = res2['session_id']
+        state2 = res2['state']
+
+        matching_tokens = {
+            'access_token': 'fresh_access_token_123',
+            'refresh_token': 'fresh_refresh_token_123',
+            'id_token': make_jwt({'sub': 'acct_123', 'email': 'user1@example.com'}),
+            'account_id': 'acct_123'
+        }
+        with patch('urllib.request.urlopen', return_value=MockHTTPResponse(matching_tokens)), \
+             patch.object(pm, 'trigger_instant_refresh'):
+            cb_res2 = pm.callback_oauth(session_id2, f'http://localhost:1455/auth/callback?code=testcode&state={state2}')
+            self.assertTrue(cb_res2['success'])
+            self.assertEqual(cb_res2['account'], 1)
+
+        # Slot 1 should now have updated access token
+        updated = json.loads((slot1 / 'auth.json').read_text())
+        self.assertEqual(updated['tokens']['access_token'], 'fresh_access_token_123')
+        self.assertEqual(updated['tokens']['refresh_token'], 'fresh_refresh_token_123')
+
 
 if __name__ == '__main__':
     unittest.main()

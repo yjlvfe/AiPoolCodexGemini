@@ -29,36 +29,35 @@ def countdown(value):
 
 def inspect(manager, number):
     with manager.locked():
-        with manager.locked():
-            path = manager.credential(number)
-            data = read_json(path)
-            snapshot = path.read_bytes()
-        if manager.ag:
-            provider = ag_module()
-            fresh, _, meta = provider.refresh(data)
-            project = fresh.get('project_id') or data.get('project_id')
-            if not project:
-                raise ValueError('No Code Assist project on this account yet; run: ' + manager.prefix + ' switch ' + number + ' --verify to onboard it')
-            info = {'status':'OK', 'email':meta['email'], 'usage':provider.quota({**fresh, 'project_id':project})}
-        else:
-            with tempfile.TemporaryDirectory(prefix='.query-', dir=manager.store) as home:
-                atomic_bytes(Path(home) / 'auth.json', encoded(data))
-                env = codex_env(home)
-                result = subprocess.run([sys.executable, str(ROOT / 'cli/codex-account-query'), 'usage'], env=env, capture_output=True, text=True, timeout=50)
-                if result.returncode:
-                    raise ValueError('Codex account query failed')
-                info = json.loads(result.stdout)
-                fresh = read_json(Path(home) / 'auth.json')
-        with manager.locked():
-            # CAS: do not overwrite credentials that another process refreshed during the query.
-            if path.is_file() and path.read_bytes() == snapshot:
-                atomic_bytes(path, encoded(fresh))
-                if manager.active() == number and manager.live.is_file() and manager.live.read_bytes() == snapshot:
-                    try:
-                        atomic_bytes(manager.live, encoded(fresh))
-                    except OSError:
-                        pass
-        return info
+        path = manager.credential(number)
+        data = read_json(path)
+        snapshot = path.read_bytes()
+    if manager.ag:
+        provider = ag_module()
+        fresh, _, meta = provider.refresh(data)
+        project = fresh.get('project_id') or data.get('project_id')
+        if not project:
+            raise ValueError('No Code Assist project on this account yet; run: ' + manager.prefix + ' switch ' + number + ' --verify to onboard it')
+        info = {'status':'OK', 'email':meta['email'], 'usage':provider.quota({**fresh, 'project_id':project})}
+    else:
+        with tempfile.TemporaryDirectory(prefix='.query-', dir=manager.store) as home:
+            atomic_bytes(Path(home) / 'auth.json', encoded(data))
+            env = codex_env(home)
+            result = subprocess.run([sys.executable, str(ROOT / 'cli/codex-account-query'), 'usage'], env=env, capture_output=True, text=True, timeout=50)
+            if result.returncode:
+                raise ValueError('Codex account query failed')
+            info = json.loads(result.stdout)
+            fresh = read_json(Path(home) / 'auth.json')
+    with manager.locked():
+        # CAS: do not overwrite credentials that another process refreshed during the query.
+        if path.is_file() and path.read_bytes() == snapshot:
+            atomic_bytes(path, encoded(fresh))
+            if manager.active() == number and manager.live.is_file() and manager.live.read_bytes() == snapshot:
+                try:
+                    atomic_bytes(manager.live, encoded(fresh))
+                except OSError:
+                    pass
+    return info
 
 def show_account(manager, number, short=False):
     email = '-'

@@ -843,7 +843,8 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                 return
             provider = payload.get("provider", "codex")
             flow = payload.get("flow", "device_code")
-            res = pm.start_oauth(provider, flow)
+            slot = payload.get("slot") or payload.get("account")
+            res = pm.start_oauth(provider, flow, slot=slot)
             self.send_json_response(res, status_code=200 if res.get("success") else 400)
             return
 
