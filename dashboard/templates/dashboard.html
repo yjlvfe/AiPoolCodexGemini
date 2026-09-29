@@ -2584,7 +2584,7 @@
                     </div>
                 </div>
                 <div class="modal-actions" style="justify-content: flex-end;">
-                    <button type="button" class="modal-btn-cancel" onclick="closeReloginModal()">Close</button>
+                    <button type="button" class="modal-btn-cancel" onclick="closeReloginModal()">Cancel</button>
                 </div>
             </div>
         </div>
@@ -4610,7 +4610,7 @@
                 const tokenBadgeHtml = `<span style="font-size:9px; background:rgba(245,158,11,0.16); color:#fbbf24; border:1px solid rgba(245,158,11,0.3); padding:2px 6px; border-radius:6px; font-weight:700; font-family:'JetBrains Mono',monospace;" title="Total Tokens consumed by this account">🔥 ${formatTokenCount(totalTok)}</span>`;
 
                 const accountStatus = String(acc.status || '').toUpperCase();
-                const isSignedOut = (currentProvider === 'Codex') && (accountStatus === 'SIGNED OUT' || accountStatus === 'EXPIRED' || accountStatus === 'UNAUTHORIZED');
+                const isSignedOut = (currentProvider === 'Codex') && (accountStatus === 'CHECK FAILED' || accountStatus === 'SIGNED OUT' || accountStatus === 'EXPIRED' || accountStatus === 'UNAUTHORIZED');
                 const isVerify = accountStatus === 'VERIFY' || !!acc.validation_url;
                 const statusBadge = accountStatus && isVerify
                     ? `<span style="font-size:9px; background:rgba(234,179,8,0.18); color:#eab308; border:1px solid rgba(234,179,8,0.3); padding:2px 7px; border-radius:6px; font-weight:800; font-family:monospace; letter-spacing:.3px;">VERIFY</span>`

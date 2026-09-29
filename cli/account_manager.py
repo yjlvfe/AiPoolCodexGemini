@@ -333,7 +333,7 @@ class Manager:
                 raise ValueError('Codex did not create auth.json; update the official CLI and retry')
             return read_json(path)
 
-    def add_or_switch(self, number=None, source=None, browser=False, server_verified=False, verify=False, resume=False):
+    def add_or_switch(self, number=None, source=None, browser=False, server_verified=False, verify=False, resume=False, force_enroll=False, expected_identity=None):
         with self.locked():
             ids = self.ids()
             resume_slot = ag_module().pending_slot() if self.ag and resume else None
@@ -347,8 +347,8 @@ class Manager:
                 saved = read_json(self.credential(previous))
                 if self.identity(candidate).get('identity') == self.identity(saved).get('identity'):
                     previous_live = candidate
-            data = read_json(Path(source).expanduser()) if source else read_json(path) if existing else self.enroll(browser, resume=resume, slot=number)
-            if source is None and existing and previous == number and previous_live:
+            data = read_json(Path(source).expanduser()) if source else self.enroll(browser, resume=resume, slot=number) if force_enroll or not existing else read_json(path)
+            if source is None and existing and previous == number and previous_live and not force_enroll:
                 data = previous_live
             if self.ag:
                 if server_verified or (source is None and existing and not verify):
@@ -364,6 +364,8 @@ class Manager:
             else:
                 meta = codex_identity(data)
                 derived = None
+            if expected_identity is not None and str(meta.get('identity')) != str(expected_identity):
+                raise ValueError('Re-login identity does not match the existing slot; slot was left unchanged')
             self.duplicate(data, meta, number)
             # No writes to live credentials or numbered slots occur before validation and uniqueness.
             target = self.store / number
@@ -461,17 +463,54 @@ class Manager:
                 except Exception:
                     pass
 
-    def relogin(self, number, browser=False):
-        """Purge existing credential for slot number and immediately trigger fresh enrollment."""
-        number = slot(number)
+    def replace_credentials(self, number, source):
+        """Atomically refresh one existing slot without changing its identity or metadata."""
+        number = slot(str(number))
         with self.locked():
             target = self.store / number
-            if target.is_dir():
-                shutil.rmtree(target)
-            elif target.is_file():
-                target.unlink()
-        print(f'Purged existing session for {self.prefix}{number}. Initiating fresh login...', flush=True)
-        return self.add_or_switch(number=number, browser=browser)
+            if target.is_symlink() or not target.is_dir():
+                raise ValueError(f'Account {number} does not exist on this device.')
+            credential = self.credential(number)
+            old = read_json(credential)
+            data = read_json(Path(source).expanduser())
+            old_identity = self.identity(old).get('identity')
+            new_identity = self.identity(data).get('identity')
+            if old_identity != new_identity:
+                raise ValueError('Re-login identity does not match the selected account.')
+            atomic_bytes(credential, encoded(data))
+            self.sync_live(data, number=number)
+            return number
+
+    def relogin(self, number, browser=False):
+        """Re-authenticate an existing Codex slot without changing its slot identity."""
+        if self.ag:
+            raise ValueError('Relogin is currently supported for Codex accounts only')
+        number = slot(number)
+        target = self.store / number
+        if target.is_symlink() or not target.exists():
+            raise ValueError(f'Account {number} does not exist; relogin requires an existing slot')
+        if not target.is_dir() and not target.is_file():
+            raise ValueError(f'Account {number} is not a valid slot')
+        expected_identity = None
+        metadata = target / 'metadata.json' if target.is_dir() else None
+        if metadata and metadata.is_file():
+            try:
+                expected_identity = read_json(metadata).get('identity')
+            except (OSError, ValueError):
+                raise ValueError(f'Account {number} has invalid metadata; relogin was not started') from None
+        else:
+            try:
+                auth_path = target / 'auth.json' if target.is_dir() else target
+                expected_identity = codex_identity(read_json(auth_path)).get('identity')
+            except (OSError, ValueError, KeyError, TypeError):
+                raise ValueError(f'Account {number} has invalid or missing identity; relogin was not started') from None
+        if not expected_identity:
+            raise ValueError(f'Account {number} has missing identity; relogin was not started')
+        print(f'Re-authenticating existing Codex account slot {number}; slot metadata will be preserved.', flush=True)
+        # Enrollment completes in an isolated temporary CODEX_HOME.  Only after
+        # validation succeeds does add_or_switch atomically replace auth.json and
+        # metadata, so a cancelled/failed login leaves the old slot untouched.
+        return self.add_or_switch(number=number, browser=browser, force_enroll=True, expected_identity=expected_identity)
 
     def remove(self, number):
         number = slot(number)

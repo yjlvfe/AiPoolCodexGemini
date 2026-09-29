@@ -19,6 +19,7 @@ import re
 import shutil
 import tempfile
 import threading
+import signal
 from typing import Dict, Any, Optional
 
 _CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -289,12 +290,19 @@ class PoolManager:
         self._cached_logs = None
         self._load_persisted_snapshot()
         self._refresh_lock = threading.Lock()
+        self._refresh_done = threading.Event()
         self._refresh_inflight = False
+        self._refresh_state = 'idle'
+        self._refresh_error = None
+        self._refresh_started_at = None
+        self._refresh_completed_at = None
         self._running = True
 
-        # Start continuous background daemon thread
-        self._worker_thread = threading.Thread(target=self._background_poller, daemon=True)
-        self._worker_thread.start()
+        # The service can disable periodic work; explicit refresh remains available.
+        self._worker_thread = None
+        if os.environ.get('AIPOOL_DISABLE_BACKGROUND_POLLER', '').lower() not in ('1', 'true', 'yes', 'on'):
+            self._worker_thread = threading.Thread(target=self._background_poller, daemon=True)
+            self._worker_thread.start()
     def _load_persisted_snapshot(self):
         try:
             if not self._snapshot_path.is_file():
@@ -321,33 +329,51 @@ class PoolManager:
 
     def _background_poller(self):
         while self._running:
+            if hasattr(sys, 'is_finalizing') and sys.is_finalizing():
+                break
             try:
                 self._update_all_background()
             except RuntimeError:
                 pass
             except Exception as e:
-                print(f"[pool-worker] Polling error: {e}")
+                try:
+                    if not (hasattr(sys, 'is_finalizing') and sys.is_finalizing()):
+                        print(f"[pool-worker] Polling error: {e}")
+                except Exception:
+                    pass
             # Poll every 10 seconds asynchronously
             time.sleep(10)
 
     def _update_all_background(self):
+        if hasattr(sys, 'is_finalizing') and sys.is_finalizing():
+            return
         try:
-            import sys
             cli_dir = os.path.join(os.path.dirname(_CURRENT_DIR), 'cli')
             if cli_dir not in sys.path:
                 sys.path.insert(0, cli_dir)
             from account_reports import pool_report
-            from concurrent.futures import ThreadPoolExecutor
-            with ThreadPoolExecutor(max_workers=2) as executor:
-                ag_future = executor.submit(pool_report, 'gemini')
-                cdx_future = executor.submit(pool_report, 'codex')
-                try:
-                    ag_data = ag_future.result(timeout=30.0)
-                    cdx_data = cdx_future.result(timeout=30.0)
-                except Exception as exc:
+            from concurrent.futures import ThreadPoolExecutor, wait
+            executor = ThreadPoolExecutor(max_workers=2)
+            ag_future = executor.submit(pool_report, 'gemini')
+            cdx_future = executor.submit(pool_report, 'codex')
+            try:
+                done, pending = wait((ag_future, cdx_future), timeout=30.0)
+                if pending:
+                    for future in pending:
+                        future.cancel()
+                    raise TimeoutError('provider refresh exceeded 30 seconds')
+                ag_data = ag_future.result()
+                cdx_data = cdx_future.result()
+            except Exception as exc:
+                if not (hasattr(sys, 'is_finalizing') and sys.is_finalizing()):
                     print(f"[pool-worker] account refresh failed: {type(exc).__name__}: {str(exc)[:240]}", flush=True)
-                    raise
-            print(f"[pool-worker] account refresh ok codex={cdx_data.get('pool_metrics', {}).get('healthy_accounts', 0)}", flush=True)
+                raise
+            finally:
+                # Never wait for a stuck provider: running Python threads cannot
+                # be safely killed, so they finish independently after timeout.
+                executor.shutdown(wait=False, cancel_futures=True)
+            if not (hasattr(sys, 'is_finalizing') and sys.is_finalizing()):
+                print(f"[pool-worker] account refresh ok codex={cdx_data.get('pool_metrics', {}).get('healthy_accounts', 0)}", flush=True)
 
             # Publish account reports before optional analytics. A log/metrics
             # failure must never hide a valid account snapshot.
@@ -355,7 +381,8 @@ class PoolManager:
             try:
                 logs_data = self._build_logs_report()
             except Exception as exc:
-                print(f"[pool-worker] analytics refresh skipped: {type(exc).__name__}", flush=True)
+                if not (hasattr(sys, 'is_finalizing') and sys.is_finalizing()):
+                    print(f"[pool-worker] analytics refresh skipped: {type(exc).__name__}", flush=True)
 
             # Never replace a healthy persisted snapshot with a transient
             # all-failed report. Keep per-provider last-known-good data.
@@ -397,21 +424,57 @@ class PoolManager:
         result['status'] = self.get_all_status()
         return result
 
-    def trigger_instant_refresh(self):
-        """Return cached data immediately and refresh account reports in background."""
+    def trigger_instant_refresh(self, timeout=35.0):
+        """Run one bounded refresh and return its state plus the latest snapshot.
+
+        Only one refresh may run at once. A timeout/failure never publishes partial
+        account data; callers receive the last-good snapshot with an explicit state.
+        """
         with self._refresh_lock:
             if self._refresh_inflight:
-                return
-            self._refresh_inflight = True
-        def refresh():
-            try:
-                self._update_all_background()
-            except Exception as e:
-                print(f"[pool] refresh error: {e}")
-            finally:
-                with self._refresh_lock:
-                    self._refresh_inflight = False
-        threading.Thread(target=refresh, daemon=True).start()
+                state = 'pending'
+                done = self._refresh_done
+            else:
+                self._refresh_inflight = True
+                self._refresh_state = 'pending'
+                self._refresh_error = None
+                self._refresh_started_at = time.time()
+                self._refresh_completed_at = None
+                self._refresh_done = threading.Event()
+                done = self._refresh_done
+                state = 'pending'
+
+                def refresh():
+                    success = False
+                    error = None
+                    try:
+                        self._update_all_background()
+                        success = True
+                    except Exception as exc:
+                        error = f'{type(exc).__name__}: {str(exc)[:240]}'
+                        print(f"[pool] refresh error: {error}", flush=True)
+                    finally:
+                        with self._refresh_lock:
+                            self._refresh_inflight = False
+                            self._refresh_state = 'completed' if success else 'failed'
+                            self._refresh_error = error
+                            self._refresh_completed_at = time.time()
+                            self._refresh_done.set()
+                threading.Thread(target=refresh, daemon=True).start()
+
+        finished = done.wait(timeout=max(0.0, float(timeout)))
+        with self._refresh_lock:
+            if not finished and self._refresh_inflight:
+                state = 'pending'
+            else:
+                state = self._refresh_state
+            return {
+                'state': state,
+                'inflight': self._refresh_inflight,
+                'error': self._refresh_error,
+                'started_at': self._refresh_started_at,
+                'completed_at': self._refresh_completed_at,
+            }
 
 
     def get_usage_logs_report(self) -> Dict[str, Any]:
@@ -496,9 +559,29 @@ class PoolManager:
 
     def initiate_relogin(self, system: str, account_num: int) -> dict:
         if system != 'codex':
-            return {'success': False, 'message': 'Relogin currently supported for Codex accounts.'}
+            return {'success': False, 'status': 'unsupported', 'message': 'Relogin currently supported for Codex accounts only.'}
         if not isinstance(account_num, int) or account_num < 1:
-            return {'success': False, 'message': 'Invalid account number.'}
+            return {'success': False, 'status': 'invalid_target', 'message': 'Invalid account number.'}
+        target = Path(self.codex_store) / str(account_num)
+        if target.is_symlink() or not target.exists() or not (target.is_dir() or target.is_file()):
+            return {'success': False, 'status': 'invalid_target', 'message': f'Codex account {account_num} does not exist; relogin requires an existing slot.'}
+        # Capture the slot identity before OAuth starts.  The worker must use
+        # this immutable value when importing the resulting auth.json.
+        try:
+            metadata_path = target / 'metadata.json' if target.is_dir() else None
+            if metadata_path and metadata_path.is_file():
+                expected_identity = str(json.loads(metadata_path.read_text()).get('identity') or '')
+            else:
+                auth_path = target / 'auth.json' if target.is_dir() else target
+                cli_dir = os.path.join(os.path.dirname(_CURRENT_DIR), 'cli')
+                if cli_dir not in sys.path:
+                    sys.path.insert(0, cli_dir)
+                from account_manager import codex_identity
+                expected_identity = str(codex_identity(json.loads(auth_path.read_text())).get('identity') or '')
+            if not expected_identity:
+                raise ValueError('missing slot identity')
+        except (OSError, ValueError, json.JSONDecodeError, KeyError, TypeError):
+            return {'success': False, 'status': 'invalid_target', 'message': f'Codex account {account_num} has invalid or missing identity metadata.'}
         
         if not hasattr(self, '_relogin_sessions'):
             self._relogin_sessions = {}
@@ -506,10 +589,7 @@ class PoolManager:
         # Cancel any existing session for this account
         existing = self._relogin_sessions.get(account_num)
         if existing and existing.get('process'):
-            try:
-                existing['process'].terminate()
-            except Exception:
-                pass
+            self._terminate_relogin_process(existing['process'])
 
         session = {
             'account': account_num,
@@ -534,7 +614,7 @@ class PoolManager:
                 import account_manager
                 env = account_manager.codex_env(temp_home)
                 cmd = [env['CODEX_REAL_BIN'], '-c', 'cli_auth_credentials_store="file"', 'login', '--device-auth']
-                p = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1)
+                p = subprocess.Popen(cmd, env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1, start_new_session=True)
                 session['process'] = p
 
                 # Read output until device code appears
@@ -570,8 +650,8 @@ class PoolManager:
                     auth_file = Path(temp_home) / 'auth.json'
                     if auth_file.is_file():
                         mgr = account_manager.Manager('codex')
-                        # Import/replace credentials for target slot
-                        mgr.add_or_switch(number=str(account_num), source=str(auth_file))
+                        # Import only after validating the re-authenticated identity.
+                        mgr.add_or_switch(number=str(account_num), source=str(auth_file), expected_identity=expected_identity)
                         session['status'] = 'completed'
                         session['message'] = f'Account #{account_num} re-authenticated successfully!'
                         self.trigger_instant_refresh()
@@ -584,8 +664,7 @@ class PoolManager:
             except subprocess.TimeoutExpired:
                 session['status'] = 'failed'
                 session['message'] = 'Device code authorization timed out.'
-                if session.get('process'):
-                    session['process'].terminate()
+                self._terminate_relogin_process(session.get('process'))
             except Exception as exc:
                 session['status'] = 'failed'
                 session['message'] = str(exc)
@@ -611,14 +690,32 @@ class PoolManager:
             'message': session.get('message'),
         }
 
+    @staticmethod
+    def _terminate_relogin_process(process):
+        if not process or process.poll() is not None:
+            return
+        try:
+            os.killpg(process.pid, signal.SIGTERM)
+            process.wait(timeout=5)
+        except (ProcessLookupError, subprocess.TimeoutExpired):
+            if process.poll() is None:
+                try:
+                    os.killpg(process.pid, signal.SIGKILL)
+                except ProcessLookupError:
+                    pass
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    pass
+
     def cancel_relogin(self, system: str, account_num: int) -> dict:
         if hasattr(self, '_relogin_sessions') and account_num in self._relogin_sessions:
             s = self._relogin_sessions[account_num]
             if s.get('process'):
-                try:
-                    s['process'].terminate()
-                except Exception:
-                    pass
+                self._terminate_relogin_process(s['process'])
+            temp_dir = s.get('temp_dir')
+            if temp_dir:
+                shutil.rmtree(temp_dir, ignore_errors=True)
             s['status'] = 'cancelled'
             s['message'] = 'Login cancelled by user.'
             return {'success': True, 'message': 'Cancelled.'}
@@ -683,4 +780,8 @@ class PoolManager:
                 "fallback_status": "Disabled (Pure Model Lock)",
                 "timestamp": time.time(),
                 "refresh_inflight": self._refresh_inflight,
+                "refresh_state": self._refresh_state,
+                "refresh_error": self._refresh_error,
+                "refresh_started_at": self._refresh_started_at,
+                "refresh_completed_at": self._refresh_completed_at,
             }

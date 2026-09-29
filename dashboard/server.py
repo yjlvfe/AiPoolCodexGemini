@@ -492,8 +492,10 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
 
         # API: force refresh
         if path in ("/aipool/api/refresh", "/api/refresh"):
-            pm.trigger_instant_refresh()
-            self.send_json_response(pm.get_usage_logs_report())
+            refresh = pm.trigger_instant_refresh()
+            report = pm.get_usage_logs_report()
+            report['refresh'] = refresh
+            self.send_json_response(report)
             return
 
         # API: pool status data
