@@ -20,11 +20,31 @@ import shutil
 import tempfile
 import threading
 import signal
+import base64
+import urllib.error
+import urllib.parse
+import urllib.request
 from typing import Dict, Any, Optional
 
 _CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.environ.get("AUTH_DB_PATH", "/var/lib/aipool/runtime/auth.db")
 DEFAULT_SESSION_EXPIRY_HOURS = 100 * 365 * 24
+
+CODEX_CLIENT_ID = "app_EMoamEEZ73f0CkXaXp7hrann"
+CODEX_DEVICE_USERCODE_URL = "https://auth.openai.com/api/accounts/deviceauth/usercode"
+CODEX_DEVICE_TOKEN_URL = "https://auth.openai.com/api/accounts/deviceauth/token"
+CODEX_OAUTH_TOKEN_URL = "https://auth.openai.com/oauth/token"
+CODEX_OAUTH_AUTHORIZE_URL = "https://auth.openai.com/oauth/authorize"
+CODEX_DEVICE_REDIRECT_URI = "https://auth.openai.com/deviceauth/callback"
+CODEX_LINK_REDIRECT_URI = "http://localhost:1455/auth/callback"
+CODEX_DEVICE_VERIFY_URL = "https://auth.openai.com/codex/device"
+
+GEMINI_CLIENT_ID = "1071006060591-tmhssin2h21lcre235vtolojh4g403ep.apps.googleusercontent.com"
+GEMINI_CLIENT_SECRET = "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"
+GEMINI_OAUTH_AUTHORIZE_URL = "https://accounts.google.com/o/oauth2/v2/auth"
+GEMINI_TOKEN_URL = "https://oauth2.googleapis.com/token"
+GEMINI_USERINFO_URL = "https://www.googleapis.com/oauth2/v1/userinfo?alt=json"
+GEMINI_REDIRECT_URI = "http://localhost:8085/oauth2callback"
 
 
 def configured_session_expiry_hours() -> int:
@@ -297,6 +317,8 @@ class PoolManager:
         self._refresh_started_at = None
         self._refresh_completed_at = None
         self._running = True
+        self._oauth_sessions = {}
+        self._oauth_sessions_lock = threading.Lock()
 
         # The service can disable periodic work; explicit refresh remains available.
         self._worker_thread = None
@@ -720,6 +742,576 @@ class PoolManager:
             s['message'] = 'Login cancelled by user.'
             return {'success': True, 'message': 'Cancelled.'}
         return {'success': False, 'message': 'No active session.'}
+
+    def start_oauth(self, provider: str, flow: str) -> dict:
+        if not hasattr(self, '_oauth_sessions'):
+            self._oauth_sessions = {}
+        if not hasattr(self, '_oauth_sessions_lock'):
+            self._oauth_sessions_lock = threading.Lock()
+
+        now = time.time()
+        with self._oauth_sessions_lock:
+            expired = [sid for sid, s in self._oauth_sessions.items() if now > s.get('expires_at', 0)]
+            for sid in expired:
+                self._oauth_sessions.pop(sid, None)
+
+        p = str(provider or '').strip().lower()
+        if p in ('gemini', 'antigravity'):
+            prov = 'gemini'
+        elif p == 'codex':
+            prov = 'codex'
+        else:
+            return {'success': False, 'message': f'Unsupported provider: {provider}'}
+
+        fl = str(flow or '').strip().lower()
+        if prov == 'gemini':
+            if fl != 'auth_url':
+                return {'success': False, 'message': 'Gemini only supports auth_url flow'}
+        else:
+            if fl not in ('device_code', 'auth_url'):
+                return {'success': False, 'message': 'Codex flow must be device_code or auth_url'}
+
+        session_id = secrets.token_hex(16)
+        if prov == 'codex' and fl == 'device_code':
+            try:
+                payload = json.dumps({'client_id': CODEX_CLIENT_ID}).encode('utf-8')
+                req = urllib.request.Request(
+                    CODEX_DEVICE_USERCODE_URL,
+                    data=payload,
+                    headers={'Content-Type': 'application/json', 'Accept': 'application/json', 'User-Agent': 'codex_cli_rs/0.154.0'},
+                    method='POST'
+                )
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    resp_data = json.loads(resp.read().decode('utf-8'))
+            except Exception as exc:
+                return {'success': False, 'message': f'Failed to request device code from OpenAI: {exc}'}
+
+            user_code = resp_data.get('user_code')
+            device_auth_id = resp_data.get('device_auth_id')
+            interval = int(resp_data.get('interval') or 5)
+            verification_uri = resp_data.get('verification_uri') or CODEX_DEVICE_VERIFY_URL
+
+            session = {
+                'id': session_id,
+                'provider': 'codex',
+                'flow': 'device_code',
+                'client_id': CODEX_CLIENT_ID,
+                'user_code': user_code,
+                'device_auth_id': device_auth_id,
+                'interval': interval,
+                'verification_uri': verification_uri,
+                'created_at': now,
+                'expires_at': now + int(resp_data.get('expires_in') or 900),
+                'status': 'pending',
+                'account': None,
+                'email': None,
+                'error': None,
+            }
+            with self._oauth_sessions_lock:
+                self._oauth_sessions[session_id] = session
+
+            return {
+                'success': True,
+                'session_id': session_id,
+                'flow': 'device_code',
+                'user_code': user_code,
+                'device_auth_id': device_auth_id,
+                'verification_uri': verification_uri,
+                'interval': interval,
+            }
+
+        elif prov == 'codex' and fl == 'auth_url':
+            verifier = secrets.token_urlsafe(64)
+            challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode('utf-8')).digest()).rstrip(b'=').decode('utf-8')
+            state = secrets.token_urlsafe(32)
+            redirect_uri = CODEX_LINK_REDIRECT_URI
+            params = {
+                'response_type': 'code',
+                'client_id': CODEX_CLIENT_ID,
+                'redirect_uri': redirect_uri,
+                'scope': 'openid profile email offline_access',
+                'code_challenge': challenge,
+                'code_challenge_method': 'S256',
+                'id_token_add_organizations': 'true',
+                'codex_cli_simplified_flow': 'true',
+                'originator': 'codex_cli_rs',
+                'state': state,
+            }
+            auth_url = CODEX_OAUTH_AUTHORIZE_URL + '?' + urllib.parse.urlencode(params)
+            session = {
+                'id': session_id,
+                'provider': 'codex',
+                'flow': 'auth_url',
+                'client_id': CODEX_CLIENT_ID,
+                'code_verifier': verifier,
+                'state': state,
+                'redirect_uri': redirect_uri,
+                'created_at': now,
+                'expires_at': now + 900,
+                'status': 'pending',
+                'account': None,
+                'email': None,
+                'error': None,
+            }
+            with self._oauth_sessions_lock:
+                self._oauth_sessions[session_id] = session
+
+            return {
+                'success': True,
+                'session_id': session_id,
+                'flow': 'auth_url',
+                'auth_url': auth_url,
+                'state': state,
+            }
+
+        elif prov == 'gemini':
+            client_id = os.environ.get('AG_OAUTH_CLIENT_ID', '').strip()
+            client_secret = os.environ.get('AG_OAUTH_CLIENT_SECRET', '').strip()
+            if not client_id or not client_secret:
+                try:
+                    bridges_dir = os.path.join(os.path.dirname(_CURRENT_DIR), 'bridges')
+                    if bridges_dir not in sys.path:
+                        sys.path.insert(0, bridges_dir)
+                    import oauth_credentials
+                    client_id, client_secret = oauth_credentials.oauth_credentials()
+                except Exception:
+                    client_id = GEMINI_CLIENT_ID
+                    client_secret = GEMINI_CLIENT_SECRET
+
+            verifier = secrets.token_urlsafe(64)
+            challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode('utf-8')).digest()).rstrip(b'=').decode('utf-8')
+            state = secrets.token_urlsafe(32)
+            redirect_uri = GEMINI_REDIRECT_URI
+
+            cli_dir = os.path.join(os.path.dirname(_CURRENT_DIR), 'cli')
+            if cli_dir not in sys.path:
+                sys.path.insert(0, cli_dir)
+            import ag_provider
+            scopes_str = ' '.join(ag_provider.SCOPES)
+
+            params = {
+                'client_id': client_id,
+                'redirect_uri': redirect_uri,
+                'response_type': 'code',
+                'scope': scopes_str,
+                'access_type': 'offline',
+                'prompt': 'consent select_account',
+                'state': state,
+                'code_challenge': challenge,
+                'code_challenge_method': 'S256',
+            }
+            auth_url = GEMINI_OAUTH_AUTHORIZE_URL + '?' + urllib.parse.urlencode(params)
+
+            session = {
+                'id': session_id,
+                'provider': 'gemini',
+                'flow': 'auth_url',
+                'client_id': client_id,
+                'client_secret': client_secret,
+                'code_verifier': verifier,
+                'state': state,
+                'redirect_uri': redirect_uri,
+                'created_at': now,
+                'expires_at': now + 900,
+                'status': 'pending',
+                'account': None,
+                'email': None,
+                'error': None,
+            }
+            with self._oauth_sessions_lock:
+                self._oauth_sessions[session_id] = session
+
+            return {
+                'success': True,
+                'session_id': session_id,
+                'flow': 'auth_url',
+                'auth_url': auth_url,
+                'state': state,
+            }
+        return {'success': False, 'message': 'Invalid flow or provider'}
+
+    def poll_oauth(self, session_id: str) -> dict:
+        if not hasattr(self, '_oauth_sessions'):
+            self._oauth_sessions = {}
+        if not hasattr(self, '_oauth_sessions_lock'):
+            self._oauth_sessions_lock = threading.Lock()
+
+        with self._oauth_sessions_lock:
+            session = self._oauth_sessions.get(session_id)
+            if not session:
+                return {'status': 'failed', 'error': 'Invalid or expired session.'}
+            if time.time() > session.get('expires_at', 0):
+                self._oauth_sessions.pop(session_id, None)
+                return {'status': 'failed', 'error': 'OAuth session has expired.'}
+            if session.get('status') == 'completed':
+                return {'status': 'completed', 'account': session.get('account'), 'email': session.get('email')}
+            if session.get('status') == 'failed':
+                return {'status': 'failed', 'error': session.get('error') or 'Authorization failed.'}
+
+        if session.get('provider') != 'codex' or session.get('flow') != 'device_code':
+            return {'status': 'pending'}
+
+        device_auth_id = session.get('device_auth_id')
+        user_code = session.get('user_code')
+        client_id = session.get('client_id')
+
+        poll_payload = json.dumps({
+            'client_id': client_id,
+            'device_auth_id': device_auth_id,
+            'user_code': user_code,
+        }).encode('utf-8')
+
+        req = urllib.request.Request(
+            CODEX_DEVICE_TOKEN_URL,
+            data=poll_payload,
+            headers={'Content-Type': 'application/json', 'Accept': 'application/json', 'User-Agent': 'codex_cli_rs/0.154.0'},
+            method='POST'
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=15) as resp:
+                resp_data = json.loads(resp.read().decode('utf-8'))
+        except urllib.error.HTTPError as exc:
+            try:
+                err_data = json.loads(exc.read().decode('utf-8'))
+            except Exception:
+                err_data = {}
+            err_code = ''
+            if isinstance(err_data, dict):
+                err_field = err_data.get('error')
+                if isinstance(err_field, dict):
+                    err_code = err_field.get('code') or ''
+                elif isinstance(err_field, str):
+                    err_code = err_field
+                if not err_code:
+                    err_code = err_data.get('code') or ''
+            if err_code in ('deviceauth_authorization_pending', 'authorization_pending'):
+                return {'status': 'pending'}
+            err_msg = 'Device authorization failed'
+            if isinstance(err_data, dict):
+                err_field = err_data.get('error')
+                if isinstance(err_field, dict) and err_field.get('message'):
+                    err_msg = err_field['message']
+                elif err_data.get('error_description'):
+                    err_msg = err_data['error_description']
+                elif err_data.get('message'):
+                    err_msg = err_data['message']
+            with self._oauth_sessions_lock:
+                session['status'] = 'failed'
+                session['error'] = err_msg
+            return {'status': 'failed', 'error': err_msg}
+        except Exception as exc:
+            return {'status': 'pending'}
+
+        auth_code = resp_data.get('authorization_code') or resp_data.get('authorizationCode')
+        code_verifier = resp_data.get('code_verifier') or resp_data.get('codeVerifier')
+        if not auth_code or not code_verifier:
+            err_msg = 'Incomplete device authorization response from OpenAI'
+            with self._oauth_sessions_lock:
+                session['status'] = 'failed'
+                session['error'] = err_msg
+            return {'status': 'failed', 'error': err_msg}
+
+        try:
+            exchange_body = urllib.parse.urlencode({
+                'grant_type': 'authorization_code',
+                'client_id': client_id,
+                'code': auth_code,
+                'redirect_uri': CODEX_DEVICE_REDIRECT_URI,
+                'code_verifier': code_verifier,
+            }).encode('utf-8')
+            ex_req = urllib.request.Request(
+                CODEX_OAUTH_TOKEN_URL,
+                data=exchange_body,
+                headers={'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json', 'User-Agent': 'codex_cli_rs/0.154.0'},
+                method='POST'
+            )
+            with urllib.request.urlopen(ex_req, timeout=15) as ex_resp:
+                tokens = json.loads(ex_resp.read().decode('utf-8'))
+        except Exception as exc:
+            err_msg = f'Token exchange failed: {exc}'
+            with self._oauth_sessions_lock:
+                session['status'] = 'failed'
+                session['error'] = err_msg
+            return {'status': 'failed', 'error': err_msg}
+
+        if not tokens.get('access_token'):
+            err_msg = tokens.get('error_description') or 'OpenAI returned no access token'
+            with self._oauth_sessions_lock:
+                session['status'] = 'failed'
+                session['error'] = err_msg
+            return {'status': 'failed', 'error': err_msg}
+
+        cli_dir = os.path.join(os.path.dirname(_CURRENT_DIR), 'cli')
+        if cli_dir not in sys.path:
+            sys.path.insert(0, cli_dir)
+        import account_manager
+        claims = account_manager.decode_claims(tokens.get('id_token', ''))
+        access_claims = account_manager.decode_claims(tokens.get('access_token', ''))
+        chatgpt = claims.get('https://api.openai.com/auth', {}) or access_claims.get('https://api.openai.com/auth', {})
+        account_id = tokens.get('account_id') or chatgpt.get('chatgpt_account_id') or claims.get('sub') or access_claims.get('sub') or f'codex_{secrets.token_hex(4)}'
+        email = claims.get('email') or access_claims.get('https://api.openai.com/profile', {}).get('email') or access_claims.get('email') or 'codex_user@openai.com'
+
+        auth_data = {
+            'tokens': {
+                'access_token': tokens['access_token'],
+                'refresh_token': tokens['refresh_token'],
+                'id_token': tokens.get('id_token', ''),
+                'account_id': str(account_id),
+            },
+            'email': str(email),
+        }
+
+        with tempfile.NamedTemporaryFile('w', delete=False, suffix='.json') as tmp:
+            json.dump(auth_data, tmp)
+            tmp_path = tmp.name
+
+        try:
+            mgr = account_manager.Manager('codex')
+            slot_res = mgr.add_or_switch(source=tmp_path)
+            slot_num = int(slot_res or mgr.active() or 1)
+        except Exception as exc:
+            with self._oauth_sessions_lock:
+                session['status'] = 'failed'
+                session['error'] = str(exc)
+            return {'status': 'failed', 'error': str(exc)}
+        finally:
+            try:
+                os.unlink(tmp_path)
+            except OSError:
+                pass
+
+        with self._oauth_sessions_lock:
+            session['status'] = 'completed'
+            session['account'] = slot_num
+            session['email'] = str(email)
+
+        self.trigger_instant_refresh()
+        return {'status': 'completed', 'account': slot_num, 'email': str(email)}
+
+    def callback_oauth(self, session_id: str, url_or_code: str) -> dict:
+        if not hasattr(self, '_oauth_sessions'):
+            self._oauth_sessions = {}
+        if not hasattr(self, '_oauth_sessions_lock'):
+            self._oauth_sessions_lock = threading.Lock()
+
+        with self._oauth_sessions_lock:
+            session = self._oauth_sessions.get(session_id)
+            if not session:
+                return {'success': False, 'message': 'Session not found or expired.'}
+            if time.time() > session.get('expires_at', 0):
+                self._oauth_sessions.pop(session_id, None)
+                return {'success': False, 'message': 'OAuth session has expired.'}
+
+        if not url_or_code or not str(url_or_code).strip():
+            return {'success': False, 'message': 'Missing authorization code or callback URL.'}
+
+        try:
+            code = self._extract_oauth_code(str(url_or_code).strip(), session.get('state'))
+        except ValueError as exc:
+            return {'success': False, 'message': str(exc)}
+
+        cli_dir = os.path.join(os.path.dirname(_CURRENT_DIR), 'cli')
+        if cli_dir not in sys.path:
+            sys.path.insert(0, cli_dir)
+        import account_manager
+
+        provider = session.get('provider')
+        if provider == 'codex':
+            try:
+                exchange_body = urllib.parse.urlencode({
+                    'grant_type': 'authorization_code',
+                    'client_id': session['client_id'],
+                    'code': code,
+                    'redirect_uri': session['redirect_uri'],
+                    'code_verifier': session['code_verifier'],
+                }).encode('utf-8')
+                req = urllib.request.Request(
+                    CODEX_OAUTH_TOKEN_URL,
+                    data=exchange_body,
+                    headers={'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json', 'User-Agent': 'codex_cli_rs/0.154.0'},
+                    method='POST'
+                )
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    tokens = json.loads(resp.read().decode('utf-8'))
+            except urllib.error.HTTPError as exc:
+                err_text = exc.read().decode('utf-8', errors='replace')
+                try:
+                    err_json = json.loads(err_text)
+                    msg = err_json.get('error_description') or err_json.get('error') or f'HTTP {exc.code}'
+                except Exception:
+                    msg = f'Token exchange failed: HTTP {exc.code}'
+                return {'success': False, 'message': msg}
+            except Exception as exc:
+                return {'success': False, 'message': f'Token exchange failed: {exc}'}
+
+            if not tokens.get('access_token'):
+                return {'success': False, 'message': tokens.get('error_description') or 'OpenAI returned no access token'}
+
+            claims = account_manager.decode_claims(tokens.get('id_token', ''))
+            access_claims = account_manager.decode_claims(tokens.get('access_token', ''))
+            chatgpt = claims.get('https://api.openai.com/auth', {}) or access_claims.get('https://api.openai.com/auth', {})
+            account_id = tokens.get('account_id') or chatgpt.get('chatgpt_account_id') or claims.get('sub') or access_claims.get('sub') or f'codex_{secrets.token_hex(4)}'
+            email = claims.get('email') or access_claims.get('https://api.openai.com/profile', {}).get('email') or access_claims.get('email') or 'codex_user@openai.com'
+
+            auth_data = {
+                'tokens': {
+                    'access_token': tokens['access_token'],
+                    'refresh_token': tokens['refresh_token'],
+                    'id_token': tokens.get('id_token', ''),
+                    'account_id': str(account_id),
+                },
+                'email': str(email),
+            }
+
+            with tempfile.NamedTemporaryFile('w', delete=False, suffix='.json') as tmp:
+                json.dump(auth_data, tmp)
+                tmp_path = tmp.name
+
+            try:
+                mgr = account_manager.Manager('codex')
+                slot_res = mgr.add_or_switch(source=tmp_path)
+                slot_num = int(slot_res or mgr.active() or 1)
+            except Exception as exc:
+                return {'success': False, 'message': str(exc)}
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+
+            with self._oauth_sessions_lock:
+                session['status'] = 'completed'
+                session['account'] = slot_num
+                session['email'] = str(email)
+
+            self.trigger_instant_refresh()
+            return {'success': True, 'status': 'completed', 'account': slot_num, 'email': str(email)}
+
+        elif provider == 'gemini':
+            try:
+                exchange_body = urllib.parse.urlencode({
+                    'grant_type': 'authorization_code',
+                    'client_id': session['client_id'],
+                    'client_secret': session['client_secret'],
+                    'code': code,
+                    'redirect_uri': session['redirect_uri'],
+                    'code_verifier': session['code_verifier'],
+                }).encode('utf-8')
+                req = urllib.request.Request(
+                    GEMINI_TOKEN_URL,
+                    data=exchange_body,
+                    headers={'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json', 'User-Agent': 'antigravity/hub/2.1.4 linux/amd64'},
+                    method='POST'
+                )
+                with urllib.request.urlopen(req, timeout=15) as resp:
+                    tokens = json.loads(resp.read().decode('utf-8'))
+            except urllib.error.HTTPError as exc:
+                err_text = exc.read().decode('utf-8', errors='replace')
+                try:
+                    err_json = json.loads(err_text)
+                    msg = err_json.get('error_description') or err_json.get('error') or f'Google OAuth failed: HTTP {exc.code}'
+                except Exception:
+                    msg = f'Google OAuth failed: HTTP {exc.code}'
+                return {'success': False, 'message': msg}
+            except Exception as exc:
+                return {'success': False, 'message': f'Google token exchange failed: {exc}'}
+
+            access_token = tokens.get('access_token')
+            refresh_token = tokens.get('refresh_token')
+            if not access_token or not refresh_token:
+                return {'success': False, 'message': 'Google returned no refresh token; approve offline consent and retry.'}
+
+            try:
+                user_req = urllib.request.Request(
+                    GEMINI_USERINFO_URL,
+                    headers={'Authorization': f'Bearer {access_token}', 'User-Agent': 'antigravity/hub/2.1.4 linux/amd64'}
+                )
+                with urllib.request.urlopen(user_req, timeout=15) as u_resp:
+                    userinfo = json.loads(u_resp.read().decode('utf-8'))
+            except Exception as exc:
+                return {'success': False, 'message': f'Failed to retrieve Google userinfo: {exc}'}
+
+            email = userinfo.get('email')
+            if not email or userinfo.get('verified_email') is False:
+                return {'success': False, 'message': 'Google returned no verified account email identity'}
+
+            import ag_provider
+            try:
+                project = ag_provider.project_id(access_token)
+            except Exception as exc:
+                return {'success': False, 'message': f'Google Code Assist onboarding failed: {exc}'}
+
+            expiry = time.time() + int(tokens.get('expires_in', 3599))
+            canonical = {
+                'token': {
+                    'access_token': access_token,
+                    'refresh_token': refresh_token,
+                    'token_type': tokens.get('token_type', 'Bearer'),
+                    'expiry': int(expiry * 1000),
+                },
+                'email': email,
+                'project_id': project,
+            }
+
+            with tempfile.NamedTemporaryFile('w', delete=False, suffix='.json') as tmp:
+                json.dump(canonical, tmp)
+                tmp_path = tmp.name
+
+            try:
+                mgr = account_manager.Manager('antigravity')
+                slot_res = mgr.add_or_switch(source=tmp_path, server_verified=True)
+                slot_num = int(slot_res or mgr.active() or 1)
+            except Exception as exc:
+                return {'success': False, 'message': str(exc)}
+            finally:
+                try:
+                    os.unlink(tmp_path)
+                except OSError:
+                    pass
+
+            with self._oauth_sessions_lock:
+                session['status'] = 'completed'
+                session['account'] = slot_num
+                session['email'] = str(email)
+
+            self.trigger_instant_refresh()
+            return {'success': True, 'status': 'completed', 'account': slot_num, 'email': str(email), 'project_id': project}
+
+        return {'success': False, 'message': f'Unknown provider: {provider}'}
+
+    @staticmethod
+    def _extract_oauth_code(raw_input: str, expected_state: Optional[str] = None) -> str:
+        s = raw_input.strip()
+        if '://' in s or '?' in s or '&' in s or s.startswith('localhost'):
+            url_str = s if '://' in s else 'http://' + s
+            parsed = urllib.parse.urlparse(url_str)
+            qs = urllib.parse.parse_qs(parsed.query)
+            if qs.get('error'):
+                err_list = qs.get('error', [''])
+                err = err_list[0] if err_list else 'error'
+                desc_list = qs.get('error_description', [''])
+                desc = desc_list[0] if desc_list else ''
+                raise ValueError(f'Authorization error: {err} {desc}'.strip())
+            url_state = qs.get('state', [''])[0]
+            if expected_state and url_state and url_state != expected_state:
+                raise ValueError('OAuth state mismatch; restart authorization with the link provided')
+            code = qs.get('code', [''])[0]
+            if not code and 'code=' in s:
+                for part in s.split('&'):
+                    if 'code=' in part:
+                        code = part.split('code=')[1].split('&')[0].split('?')[0]
+                        break
+            if not code:
+                raise ValueError('No authorization code found in pasted URL')
+            return code
+        return s
+
+    def cancel_oauth(self, session_id: str) -> dict:
+        if hasattr(self, '_oauth_sessions') and hasattr(self, '_oauth_sessions_lock'):
+            with self._oauth_sessions_lock:
+                self._oauth_sessions.pop(session_id, None)
+        return {'success': True, 'message': 'OAuth session cancelled.'}
     def _get_active_account_instant(self, system: str) -> str:
         try:
             cli_dir = os.path.join(os.path.dirname(_CURRENT_DIR), 'cli')

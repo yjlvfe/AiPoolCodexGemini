@@ -421,6 +421,7 @@ class Manager:
             print(f'Active {self.label} account: {number}\nEmail: {meta["email"]}')
             if not self.ag:
                 print('OAuth credentials saved. Use cusage to verify current server status.')
+            return number
 
     def clean(self):
         # Intentionally non-destructive: old versions deleted valid or active accounts.

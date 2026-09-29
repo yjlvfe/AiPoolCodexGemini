@@ -1550,6 +1550,53 @@
         .modal-close-btn:hover {
             color: #fff;
         }
+        .add-account-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 12px;
+            background: linear-gradient(135deg, rgba(37, 99, 235, 0.8), rgba(29, 78, 216, 0.8));
+            color: #fff;
+            font-weight: 700;
+            font-size: 12px;
+            border-radius: 8px;
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .add-account-btn:hover {
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.35);
+            transform: translateY(-1px);
+        }
+        .add-account-btn-sm {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            background: rgba(59, 130, 246, 0.15);
+            color: #60a5fa;
+            font-weight: 600;
+            font-size: 11px;
+            border-radius: 6px;
+            border: 1px solid rgba(59, 130, 246, 0.3);
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+        .add-account-btn-sm:hover {
+            background: rgba(59, 130, 246, 0.25);
+            color: #93c5fd;
+        }
+        .flow-tab-btn {
+            background: transparent;
+            color: #94a3b8;
+        }
+        .flow-tab-btn.active {
+            background: rgba(59, 130, 246, 0.25);
+            color: #fff;
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            border: 1px solid rgba(59, 130, 246, 0.4) !important;
+        }
         .modal-input {
             width: 100%;
             background: rgba(0, 0, 0, 0.45);
@@ -2538,6 +2585,114 @@
             </div>
         </div>
 
+        <!-- Add Account Modal -->
+        <div id="add-account-modal-overlay" class="modal-overlay" style="display: none;" onclick="closeAddAccountModal(event)">
+            <div class="modal-dialog glass-card" onclick="event.stopPropagation()" style="max-width: 500px; border-color: rgba(59, 130, 246, 0.4);">
+                <div class="modal-header">
+                    <div style="display: flex; align-items: center; gap: 8px;">
+                        <span id="add-modal-icon" style="font-size: 20px;">➕</span>
+                        <span id="add-modal-title" style="font-weight: 700; color: #fff; font-size: 15px;">Add New Account</span>
+                    </div>
+                    <button class="modal-close-btn" onclick="closeAddAccountModal()">&times;</button>
+                </div>
+
+                <div class="modal-body" style="padding: 16px 18px;">
+                    <!-- Provider Badge -->
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
+                        <div id="add-modal-provider-badge" style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 700; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);">
+                            <span id="add-modal-prov-icon">🟣</span>
+                            <span id="add-modal-prov-label">OpenAI Codex / ChatGPT</span>
+                        </div>
+                        <span id="add-modal-subtitle" style="font-size: 11.5px; color: var(--text-tertiary);">Slot allocation auto</span>
+                    </div>
+
+                    <!-- Flow Tabs (Visible for Codex, Hidden for Gemini) -->
+                    <div id="add-codex-tabs-wrap" style="display: flex; gap: 8px; margin-bottom: 16px; background: rgba(15, 23, 42, 0.6); padding: 4px; border-radius: 10px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                        <button type="button" id="tab-flow-device" class="flow-tab-btn active" onclick="switchAddFlow('device_code')" style="flex: 1; padding: 8px 12px; font-size: 12px; font-weight: 700; border-radius: 8px; border: none; cursor: pointer; transition: all 0.2s ease;">
+                            <span>📱 Device Code (كود)</span>
+                        </button>
+                        <button type="button" id="tab-flow-link" class="flow-tab-btn" onclick="switchAddFlow('auth_url')" style="flex: 1; padding: 8px 12px; font-size: 12px; font-weight: 700; border-radius: 8px; border: none; cursor: pointer; transition: all 0.2s ease;">
+                            <span>🌐 Browser Link (رابط)</span>
+                        </button>
+                    </div>
+
+                    <!-- Loading State -->
+                    <div id="add-account-loading" style="display: none; padding: 26px 12px; text-align: center;">
+                        <div class="spinner" style="margin: 0 auto 12px; width: 30px; height: 30px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+                        <div id="add-loading-text" style="font-size: 12.5px; color: #94a3b8;">Initializing authorization...</div>
+                    </div>
+
+                    <!-- View 1: Device Code (Codex) -->
+                    <div id="add-flow-device-view" style="display: none; text-align: center;">
+                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;">
+                            Enter this one-time code on the OpenAI verification page:
+                        </div>
+                        <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
+                            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; margin-bottom: 6px;">One-Time Device Code</div>
+                            <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+                                <span id="add-device-code-display" style="font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 800; color: #38bdf8; letter-spacing: 2px;">----</span>
+                                <button type="button" class="btn-copy-sm" onclick="copyAddDeviceCode(this)" style="padding: 5px 10px; border-radius: 8px; font-size: 11.5px; font-weight: 600; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); cursor: pointer;">📋 Copy</button>
+                            </div>
+                        </div>
+
+                        <div style="margin-bottom: 14px;">
+                            <a id="add-device-verify-link" href="https://auth.openai.com/codex/device" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 10px 14px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; font-weight: 700; font-size: 13px; border-radius: 8px; text-decoration: none; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);">
+                                <span>🔗 Open auth.openai.com/codex/device</span>
+                            </a>
+                        </div>
+
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: #38bdf8; padding: 6px 0;">
+                            <span class="spinner" style="width: 14px; height: 14px; border: 2px solid rgba(56,189,248,0.2); border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.8s linear infinite;"></span>
+                            <span id="add-device-status-text">Waiting for authorization on OpenAI... (polling every 3s)</span>
+                        </div>
+                    </div>
+
+                    <!-- View 2: Browser Link & Paste Code/URL (Codex or Gemini) -->
+                    <div id="add-flow-link-view" style="display: none;">
+                        <div id="add-link-instruction" style="font-size: 12px; color: #94a3b8; margin-bottom: 10px; line-height: 1.4;">
+                            Step 1: Open the authorization link below in your browser and sign in.
+                        </div>
+
+                        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 12px; margin-bottom: 14px;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                <input type="text" id="add-auth-url-input" readonly style="flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 7px 10px; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #94a3b8; outline: none;" />
+                                <button type="button" class="btn-copy-sm" onclick="copyAuthUrl(this)" style="padding: 7px 12px; border-radius: 6px; font-size: 11.5px; font-weight: 600; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); cursor: pointer; white-space: nowrap;">📋 Copy Link</button>
+                            </div>
+                            <a id="add-auth-url-open-btn" href="#" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 9px 12px; background: linear-gradient(135deg, #0ea5e9, #0284c7); color: #fff; font-weight: 700; font-size: 12.5px; border-radius: 6px; text-decoration: none;">
+                                <span>🔗 Open Authorization Link</span>
+                            </a>
+                        </div>
+
+                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 8px; line-height: 1.4;">
+                            Step 2: Copy the redirected URL or code from the browser and paste it here:
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px;">
+                            <textarea id="add-callback-code-input" rows="2" placeholder="Paste redirected URL (e.g. http://localhost:.../?code=...) or code here" style="width: 100%; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; padding: 10px; font-size: 12px; font-family: 'JetBrains Mono', monospace; color: #f1f5f9; outline: none; resize: vertical; box-sizing: border-box;"></textarea>
+                            <button type="button" id="add-submit-code-btn" onclick="submitCallbackCode()" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 10px 14px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-weight: 700; font-size: 13px; border-radius: 8px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
+                                <span id="add-submit-spinner" class="spinner" style="display: none; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite;"></span>
+                                <span id="add-submit-text">✓ Submit & Connect Account</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Success Box -->
+                    <div id="add-account-success-box" style="display: none; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 10px; padding: 14px; font-size: 12.5px; color: #6ee7b7; text-align: center; margin-top: 10px;">
+                        <div style="font-size: 20px; margin-bottom: 6px;">🎉</div>
+                        <div id="add-success-message" style="font-weight: 700;">Account added successfully!</div>
+                    </div>
+
+                    <!-- Error Box -->
+                    <div id="add-account-error-box" style="display: none; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 10px; padding: 12px; font-size: 12px; color: #fca5a5; margin-top: 10px; word-break: break-word;">
+                    </div>
+                </div>
+
+                <div class="modal-actions" style="display: flex; justify-content: flex-end; padding: 12px 18px; border-top: 1px solid rgba(255,255,255,0.06);">
+                    <button type="button" class="modal-btn-cancel" onclick="closeAddAccountModal()">Cancel</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Relogin Account Modal -->
         <div id="relogin-modal-overlay" class="modal-overlay" style="display: none;" onclick="closeReloginModal(event)">
             <div class="modal-dialog glass-card" onclick="event.stopPropagation()" style="max-width: 440px; border-color: rgba(59, 130, 246, 0.4);">
@@ -2665,11 +2820,17 @@
                         <button type="button" id="btn-subgroup-claude" class="quota-subgroup-btn" onclick="switchGeminiSubgroup('claude')">Claude / GPT</button>
                     </div>
                 </div>
-                <button class="refresh-btn" id="main-refresh-btn" onclick="fetchLiveLogs(true)" title="Sync real-time metrics and stream">
-                    <div class="fill-progress" id="main-refresh-progress"></div>
-                    <span id="main-refresh-spinner" style="display:none;" class="sync-spin-icon"></span>
-                    <span id="main-refresh-text">Sync</span>
-                </button>
+                <div style="display: flex; gap: 8px; align-items: center;">
+                    <button class="add-account-btn" id="pool-add-account-btn" onclick="openAddAccountModal()" title="Add Account">
+                        <span>➕</span>
+                        <span id="pool-add-account-label">Add Account</span>
+                    </button>
+                    <button class="refresh-btn" id="main-refresh-btn" onclick="fetchLiveLogs(true)" title="Sync real-time metrics and stream">
+                        <div class="fill-progress" id="main-refresh-progress"></div>
+                        <span id="main-refresh-spinner" style="display:none;" class="sync-spin-icon"></span>
+                        <span id="main-refresh-text">Sync</span>
+                    </button>
+                </div>
             </div>
 
             <!-- Pool Overall Capacity Card -->
@@ -2721,11 +2882,17 @@
             <div style="margin-top: 14px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 8px;">
                     <div id="accounts-section-title" style="font-size: 12px; font-weight: 700; color: var(--text-secondary);">Connected Accounts:</div>
-                    <button id="accounts-toggle-btn" class="accounts-toggle-btn" onclick="toggleAccountsList()">
-                        <span id="accounts-toggle-icon">👁️</span>
-                        <span id="accounts-toggle-text">View Accounts</span>
-                        <span id="accounts-toggle-chevron" style="transition: transform 0.3s ease; display: inline-block; font-size: 10px; transform: rotate(0deg);">▾</span>
-                    </button>
+                    <div style="display: flex; gap: 8px; align-items: center;">
+                        <button class="add-account-btn-sm" id="section-add-account-btn" onclick="openAddAccountModal()" title="Add Account">
+                            <span>➕</span>
+                            <span>Add Account</span>
+                        </button>
+                        <button id="accounts-toggle-btn" class="accounts-toggle-btn" onclick="toggleAccountsList()">
+                            <span id="accounts-toggle-icon">👁️</span>
+                            <span id="accounts-toggle-text">View Accounts</span>
+                            <span id="accounts-toggle-chevron" style="transition: transform 0.3s ease; display: inline-block; font-size: 10px; transform: rotate(0deg);">▾</span>
+                        </button>
+                    </div>
                 </div>
                 <div class="accounts-strip collapsed" id="pool-accounts-container">
                     <!-- Loaded dynamically -->
@@ -4205,6 +4372,19 @@
                 tabCodex.className = 'provider-tab-btn active codex-theme';
                 document.getElementById('pool-icon').innerText = '🟣';
                 document.getElementById('pool-title-label').innerText = 'ChatGPT Pool';
+                const addBtn = document.getElementById('pool-add-account-btn');
+                if (addBtn) {
+                    addBtn.style.background = 'linear-gradient(135deg, rgba(147, 51, 234, 0.8), rgba(126, 34, 206, 0.8))';
+                    addBtn.style.borderColor = 'rgba(192, 132, 252, 0.4)';
+                    addBtn.title = 'Add OpenAI Codex / ChatGPT Account';
+                }
+                const secAddBtn = document.getElementById('section-add-account-btn');
+                if (secAddBtn) {
+                    secAddBtn.style.background = 'rgba(147, 51, 234, 0.15)';
+                    secAddBtn.style.color = '#c084fc';
+                    secAddBtn.style.borderColor = 'rgba(147, 51, 234, 0.3)';
+                    secAddBtn.title = 'Add OpenAI Codex / ChatGPT Account';
+                }
                 if (subgroupWrap) {
                     subgroupWrap.style.visibility = 'hidden';
                     subgroupWrap.style.display = 'none';
@@ -4217,6 +4397,19 @@
                 tabAg.className = 'provider-tab-btn active antigravity-theme';
                 document.getElementById('pool-icon').innerText = '🟢';
                 document.getElementById('pool-title-label').innerText = 'Gemini Pool';
+                const addBtn = document.getElementById('pool-add-account-btn');
+                if (addBtn) {
+                    addBtn.style.background = 'linear-gradient(135deg, rgba(16, 185, 129, 0.8), rgba(5, 150, 105, 0.8))';
+                    addBtn.style.borderColor = 'rgba(52, 211, 153, 0.4)';
+                    addBtn.title = 'Add Google Gemini Account';
+                }
+                const secAddBtn = document.getElementById('section-add-account-btn');
+                if (secAddBtn) {
+                    secAddBtn.style.background = 'rgba(16, 185, 129, 0.15)';
+                    secAddBtn.style.color = '#34d399';
+                    secAddBtn.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+                    secAddBtn.title = 'Add Google Gemini Account';
+                }
                 if (subgroupWrap) {
                     subgroupWrap.style.visibility = 'visible';
                     subgroupWrap.style.display = 'inline-flex';
@@ -4836,6 +5029,335 @@
                     credentials: 'same-origin'
                 }).catch(() => {});
                 activeReloginAccount = null;
+            }
+        }
+
+        let activeAddAccountSession = null;
+        let activeAddAccountPolling = null;
+        let activeAddAccountProvider = 'codex';
+        let activeAddAccountFlow = 'device_code';
+
+        function openAddAccountModal(provider = null) {
+            const chosenProv = provider ? provider.toLowerCase() : (currentProvider === 'Gemini' ? 'gemini' : 'codex');
+            activeAddAccountProvider = (chosenProv === 'gemini' || chosenProv === 'antigravity') ? 'gemini' : 'codex';
+
+            const overlay = document.getElementById('add-account-modal-overlay');
+            const titleEl = document.getElementById('add-modal-title');
+            const provIcon = document.getElementById('add-modal-prov-icon');
+            const provLabel = document.getElementById('add-modal-prov-label');
+            const provBadge = document.getElementById('add-modal-provider-badge');
+            const codexTabs = document.getElementById('add-codex-tabs-wrap');
+            const errorBox = document.getElementById('add-account-error-box');
+            const successBox = document.getElementById('add-account-success-box');
+            const codeInput = document.getElementById('add-callback-code-input');
+
+            if (errorBox) { errorBox.style.display = 'none'; errorBox.innerText = ''; }
+            if (successBox) { successBox.style.display = 'none'; }
+            if (codeInput) { codeInput.value = ''; }
+
+            if (activeAddAccountPolling) {
+                clearInterval(activeAddAccountPolling);
+                activeAddAccountPolling = null;
+            }
+
+            if (activeAddAccountProvider === 'gemini') {
+                if (titleEl) titleEl.innerText = 'Add Google Gemini Account';
+                if (provIcon) provIcon.innerText = '🟢';
+                if (provLabel) provLabel.innerText = 'Google Gemini / Antigravity';
+                if (provBadge) {
+                    provBadge.style.background = 'rgba(16, 185, 129, 0.15)';
+                    provBadge.style.color = '#34d399';
+                    provBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
+                }
+                if (codexTabs) codexTabs.style.display = 'none';
+                activeAddAccountFlow = 'auth_url';
+            } else {
+                if (titleEl) titleEl.innerText = 'Add OpenAI Codex / ChatGPT Account';
+                if (provIcon) provIcon.innerText = '🟣';
+                if (provLabel) provLabel.innerText = 'OpenAI Codex / ChatGPT';
+                if (provBadge) {
+                    provBadge.style.background = 'rgba(147, 51, 234, 0.15)';
+                    provBadge.style.color = '#c084fc';
+                    provBadge.style.borderColor = 'rgba(147, 51, 234, 0.3)';
+                }
+                if (codexTabs) codexTabs.style.display = 'flex';
+                activeAddAccountFlow = 'device_code';
+                const tabDev = document.getElementById('tab-flow-device');
+                const tabLink = document.getElementById('tab-flow-link');
+                if (tabDev) tabDev.className = 'flow-tab-btn active';
+                if (tabLink) tabLink.className = 'flow-tab-btn';
+            }
+
+            if (overlay) overlay.style.display = 'flex';
+            startAddOAuth(activeAddAccountProvider, activeAddAccountFlow);
+        }
+
+        function switchAddFlow(flow) {
+            if (activeAddAccountFlow === flow) return;
+            activeAddAccountFlow = flow;
+
+            const tabDev = document.getElementById('tab-flow-device');
+            const tabLink = document.getElementById('tab-flow-link');
+            if (flow === 'device_code') {
+                if (tabDev) tabDev.className = 'flow-tab-btn active';
+                if (tabLink) tabLink.className = 'flow-tab-btn';
+            } else {
+                if (tabDev) tabDev.className = 'flow-tab-btn';
+                if (tabLink) tabLink.className = 'flow-tab-btn active';
+            }
+
+            if (activeAddAccountPolling) {
+                clearInterval(activeAddAccountPolling);
+                activeAddAccountPolling = null;
+            }
+            if (activeAddAccountSession) {
+                fetch(resolveApiUrl('/api/accounts/oauth/cancel'), {
+                    method: 'POST',
+                    headers: apiHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ session_id: activeAddAccountSession }),
+                    credentials: 'same-origin'
+                }).catch(() => {});
+                activeAddAccountSession = null;
+            }
+
+            startAddOAuth(activeAddAccountProvider, flow);
+        }
+
+        async function startAddOAuth(provider, flow) {
+            const loadingBox = document.getElementById('add-account-loading');
+            const deviceView = document.getElementById('add-flow-device-view');
+            const linkView = document.getElementById('add-flow-link-view');
+            const errorBox = document.getElementById('add-account-error-box');
+            const successBox = document.getElementById('add-account-success-box');
+            const loadingText = document.getElementById('add-loading-text');
+
+            if (loadingBox) loadingBox.style.display = 'block';
+            if (deviceView) deviceView.style.display = 'none';
+            if (linkView) linkView.style.display = 'none';
+            if (errorBox) { errorBox.style.display = 'none'; errorBox.innerText = ''; }
+            if (successBox) successBox.style.display = 'none';
+            if (loadingText) loadingText.innerText = flow === 'device_code' ? 'Requesting device code from OpenAI...' : 'Generating authorization link...';
+
+            try {
+                const res = await fetch(resolveApiUrl('/api/accounts/oauth/start'), {
+                    method: 'POST',
+                    headers: apiHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ provider, flow }),
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    if (loadingBox) loadingBox.style.display = 'none';
+                    if (errorBox) {
+                        errorBox.innerText = data.message || 'Failed to start authorization.';
+                        errorBox.style.display = 'block';
+                    }
+                    return;
+                }
+
+                activeAddAccountSession = data.session_id;
+
+                if (flow === 'device_code') {
+                    if (loadingBox) loadingBox.style.display = 'none';
+                    if (deviceView) deviceView.style.display = 'block';
+                    const codeEl = document.getElementById('add-device-code-display');
+                    const linkEl = document.getElementById('add-device-verify-link');
+                    if (codeEl) codeEl.innerText = data.user_code || '----';
+                    if (linkEl && data.verification_uri) linkEl.href = data.verification_uri;
+                    startAddAccountPolling(data.session_id);
+                } else {
+                    if (loadingBox) loadingBox.style.display = 'none';
+                    if (linkView) linkView.style.display = 'block';
+                    const inputEl = document.getElementById('add-auth-url-input');
+                    const btnEl = document.getElementById('add-auth-url-open-btn');
+                    if (inputEl) inputEl.value = data.auth_url || '';
+                    if (btnEl && data.auth_url) btnEl.href = data.auth_url;
+                }
+            } catch (err) {
+                if (loadingBox) loadingBox.style.display = 'none';
+                if (errorBox) {
+                    errorBox.innerText = err.message || 'Network error starting authorization.';
+                    errorBox.style.display = 'block';
+                }
+            }
+        }
+
+        function startAddAccountPolling(sessionId) {
+            if (activeAddAccountPolling) {
+                clearInterval(activeAddAccountPolling);
+                activeAddAccountPolling = null;
+            }
+
+            activeAddAccountPolling = setInterval(async () => {
+                if (!activeAddAccountSession || activeAddAccountSession !== sessionId) {
+                    clearInterval(activeAddAccountPolling);
+                    activeAddAccountPolling = null;
+                    return;
+                }
+
+                try {
+                    const res = await fetch(resolveApiUrl(`/api/accounts/oauth/poll?session_id=${encodeURIComponent(sessionId)}`), {
+                        headers: apiHeaders(),
+                        credentials: 'same-origin'
+                    });
+                    const data = await res.json();
+                    if (data.status === 'completed') {
+                        clearInterval(activeAddAccountPolling);
+                        activeAddAccountPolling = null;
+                        const deviceView = document.getElementById('add-flow-device-view');
+                        const successBox = document.getElementById('add-account-success-box');
+                        const successMsg = document.getElementById('add-success-message');
+                        if (deviceView) deviceView.style.display = 'none';
+                        if (successBox) {
+                            successBox.style.display = 'block';
+                            if (successMsg) successMsg.innerText = `Account #${data.account} (${data.email || ''}) connected successfully!`;
+                        }
+                        showToast(`Account #${data.account} added successfully!`);
+                        fetchLiveLogs(false);
+                        setTimeout(() => { closeAddAccountModal(); }, 2200);
+                    } else if (data.status === 'failed') {
+                        clearInterval(activeAddAccountPolling);
+                        activeAddAccountPolling = null;
+                        const errorBox = document.getElementById('add-account-error-box');
+                        if (errorBox) {
+                            errorBox.innerText = data.error || 'Authorization failed or expired.';
+                            errorBox.style.display = 'block';
+                        }
+                    }
+                } catch (pollErr) {
+                    // Transient network failure on poll
+                }
+            }, 3000);
+        }
+
+        async function submitCallbackCode() {
+            const inputEl = document.getElementById('add-callback-code-input');
+            const submitBtn = document.getElementById('add-submit-code-btn');
+            const spinner = document.getElementById('add-submit-spinner');
+            const btnText = document.getElementById('add-submit-text');
+            const errorBox = document.getElementById('add-account-error-box');
+            const successBox = document.getElementById('add-account-success-box');
+            const successMsg = document.getElementById('add-success-message');
+            const linkView = document.getElementById('add-flow-link-view');
+
+            const val = inputEl ? inputEl.value.trim() : '';
+            if (!val) {
+                if (errorBox) {
+                    errorBox.innerText = 'Please paste the redirected URL or code from your browser.';
+                    errorBox.style.display = 'block';
+                }
+                return;
+            }
+
+            if (!activeAddAccountSession) {
+                if (errorBox) {
+                    errorBox.innerText = 'No active authorization session. Please restart.';
+                    errorBox.style.display = 'block';
+                }
+                return;
+            }
+
+            if (errorBox) { errorBox.style.display = 'none'; errorBox.innerText = ''; }
+            if (submitBtn) submitBtn.disabled = true;
+            if (spinner) spinner.style.display = 'inline-block';
+            if (btnText) btnText.innerText = 'Connecting account...';
+
+            try {
+                const res = await fetch(resolveApiUrl('/api/accounts/oauth/callback'), {
+                    method: 'POST',
+                    headers: apiHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ session_id: activeAddAccountSession, url_or_code: val }),
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    if (errorBox) {
+                        errorBox.innerText = data.message || 'Failed to complete authorization.';
+                        errorBox.style.display = 'block';
+                    }
+                    if (submitBtn) submitBtn.disabled = false;
+                    if (spinner) spinner.style.display = 'none';
+                    if (btnText) btnText.innerText = '✓ Submit & Connect Account';
+                    return;
+                }
+
+                if (linkView) linkView.style.display = 'none';
+                if (successBox) {
+                    successBox.style.display = 'block';
+                    if (successMsg) successMsg.innerText = `Account #${data.account} (${data.email || ''}) connected successfully!`;
+                }
+                showToast(`Account #${data.account} added successfully!`);
+                fetchLiveLogs(false);
+                setTimeout(() => { closeAddAccountModal(); }, 2200);
+            } catch (err) {
+                if (errorBox) {
+                    errorBox.innerText = err.message || 'Network error connecting account.';
+                    errorBox.style.display = 'block';
+                }
+                if (submitBtn) submitBtn.disabled = false;
+                if (spinner) spinner.style.display = 'none';
+                if (btnText) btnText.innerText = '✓ Submit & Connect Account';
+            }
+        }
+
+        function copyAddDeviceCode(btn) {
+            const codeEl = document.getElementById('add-device-code-display');
+            if (!codeEl) return;
+            const code = codeEl.innerText.trim();
+            if (!code || code === '----') return;
+
+            navigator.clipboard.writeText(code).then(() => {
+                const orig = btn.innerHTML;
+                btn.innerHTML = '✓ Copied!';
+                btn.style.background = 'rgba(16, 185, 129, 0.2)';
+                btn.style.color = '#34d399';
+                setTimeout(() => {
+                    btn.innerHTML = orig;
+                    btn.style.background = 'rgba(56, 189, 248, 0.15)';
+                    btn.style.color = '#38bdf8';
+                }, 2000);
+            }).catch(() => {
+                prompt('Copy this code:', code);
+            });
+        }
+
+        function copyAuthUrl(btn) {
+            const inputEl = document.getElementById('add-auth-url-input');
+            if (!inputEl || !inputEl.value) return;
+
+            navigator.clipboard.writeText(inputEl.value).then(() => {
+                const orig = btn.innerHTML;
+                btn.innerHTML = '✓ Copied!';
+                btn.style.background = 'rgba(16, 185, 129, 0.2)';
+                btn.style.color = '#34d399';
+                setTimeout(() => {
+                    btn.innerHTML = orig;
+                    btn.style.background = 'rgba(56, 189, 248, 0.15)';
+                    btn.style.color = '#38bdf8';
+                }, 2000);
+            }).catch(() => {
+                prompt('Copy this URL:', inputEl.value);
+            });
+        }
+
+        function closeAddAccountModal(e) {
+            if (e && e.target && e.target !== e.currentTarget && !e.target.classList.contains('modal-close-btn') && !e.target.classList.contains('modal-btn-cancel')) return;
+            const overlay = document.getElementById('add-account-modal-overlay');
+            if (overlay) overlay.style.display = 'none';
+
+            if (activeAddAccountPolling) {
+                clearInterval(activeAddAccountPolling);
+                activeAddAccountPolling = null;
+            }
+
+            if (activeAddAccountSession) {
+                fetch(resolveApiUrl('/api/accounts/oauth/cancel'), {
+                    method: 'POST',
+                    headers: apiHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ session_id: activeAddAccountSession }),
+                    credentials: 'same-origin'
+                }).catch(() => {});
+                activeAddAccountSession = null;
             }
         }
 

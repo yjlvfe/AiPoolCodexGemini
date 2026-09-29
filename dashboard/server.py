@@ -427,7 +427,8 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
                 return
 
         sensitive_query_keys = {"session", "session_id", "token"}
-        if sensitive_query_keys.intersection(qs) and path != "/auth":
+        is_api_path = path.startswith("/api/") or path.startswith("/aipool/api/")
+        if sensitive_query_keys.intersection(qs) and path != "/auth" and not is_api_path:
             self.send_response(302)
             self.send_header("Location", path or "/")
             self.send_header("Cache-Control", "no-store")
@@ -633,6 +634,13 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             self.send_json_response(res)
             return
 
+        if path in ("/aipool/api/accounts/oauth/poll", "/api/accounts/oauth/poll"):
+            query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+            session_id = query.get("session_id", [""])[0]
+            res = pm.poll_oauth(session_id)
+            self.send_json_response(res, status_code=200 if res.get("status") != "failed" else 400)
+            return
+
         if path in ("/aipool/api/tokens/revoke", "/api/tokens/revoke"):
             try:
                 payload = self._read_json_body()
@@ -824,6 +832,41 @@ class ProDashboardHandler(http.server.BaseHTTPRequestHandler):
             except (TypeError, ValueError):
                 account = 0
             res = pm.cancel_relogin(system, account)
+            self.send_json_response(res, status_code=200 if res.get("success") else 400)
+            return
+
+        if path in ("/aipool/api/accounts/oauth/start", "/api/accounts/oauth/start"):
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self.send_json_response({"success": False, "message": str(exc)}, status_code=408 if isinstance(exc, RequestBodyTimeout) else 400)
+                return
+            provider = payload.get("provider", "codex")
+            flow = payload.get("flow", "device_code")
+            res = pm.start_oauth(provider, flow)
+            self.send_json_response(res, status_code=200 if res.get("success") else 400)
+            return
+
+        if path in ("/aipool/api/accounts/oauth/callback", "/api/accounts/oauth/callback"):
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self.send_json_response({"success": False, "message": str(exc)}, status_code=408 if isinstance(exc, RequestBodyTimeout) else 400)
+                return
+            session_id = payload.get("session_id", "")
+            url_or_code = payload.get("url_or_code", "")
+            res = pm.callback_oauth(session_id, url_or_code)
+            self.send_json_response(res, status_code=200 if res.get("success") else 400)
+            return
+
+        if path in ("/aipool/api/accounts/oauth/cancel", "/api/accounts/oauth/cancel"):
+            try:
+                payload = self._read_json_body()
+            except ValueError as exc:
+                self.send_json_response({"success": False, "message": str(exc)}, status_code=408 if isinstance(exc, RequestBodyTimeout) else 400)
+                return
+            session_id = payload.get("session_id", "")
+            res = pm.cancel_oauth(session_id)
             self.send_json_response(res, status_code=200 if res.get("success") else 400)
             return
 
