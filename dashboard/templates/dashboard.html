@@ -2596,7 +2596,17 @@
                         <span id="add-modal-subtitle" style="font-size: 11.5px; color: var(--text-tertiary);">Slot allocation auto</span>
                     </div>
 
-            <!-- Loading State -->
+                    <!-- Flow Switcher Tabs (For Codex: Device Code vs Browser Link) -->
+                    <div id="add-account-tabs" style="display: flex; gap: 8px; background: rgba(0, 0, 0, 0.35); padding: 5px; border-radius: 10px; margin-bottom: 16px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                        <button type="button" id="add-tab-device" onclick="switchAddAccountTab('device_code')" style="flex: 1; padding: 9px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; border: 1px solid rgba(59, 130, 246, 0.35); cursor: pointer; transition: all 0.2s ease; background: rgba(59, 130, 246, 0.22); color: #93c5fd; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            <span>📱</span> <span>Device Code (كود)</span>
+                        </button>
+                        <button type="button" id="add-tab-link" onclick="switchAddAccountTab('auth_url')" style="flex: 1; padding: 9px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; border: 1px solid transparent; cursor: pointer; transition: all 0.2s ease; background: transparent; color: #94a3b8; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            <span>🔗</span> <span>Browser Link (رابط)</span>
+                        </button>
+                    </div>
+
+                    <!-- Loading State -->
                     <div id="add-account-loading" style="display: none; padding: 26px 12px; text-align: center;">
                         <div class="spinner" style="margin: 0 auto 12px; width: 30px; height: 30px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
                         <div id="add-loading-text" style="font-size: 12.5px; color: #94a3b8;">Initializing authorization...</div>
@@ -2629,11 +2639,14 @@
 
                     <!-- View 2: Browser Link & Paste Code/URL (Codex or Gemini) -->
                     <div id="add-flow-link-view" style="display: none;">
-                        <div id="add-link-instruction" style="font-size: 12px; color: #94a3b8; margin-bottom: 10px; line-height: 1.4;">
-                            Step 1: Open the authorization link below in your browser and sign in.
+                        <div style="font-size: 12.5px; color: #cbd5e1; margin-bottom: 4px; font-weight: 600;">
+                            Step 1: Open Authorization URL
+                        </div>
+                        <div id="add-link-instruction" style="font-size: 11.5px; color: #94a3b8; margin-bottom: 10px; line-height: 1.4;">
+                            Open the link below in your browser and sign in:
                         </div>
 
-                        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 12px; margin-bottom: 14px;">
+                        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 12px; margin-bottom: 12px;">
                             <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
                                 <input type="text" id="add-auth-url-input" readonly style="flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 7px 10px; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #94a3b8; outline: none;" />
                                 <button type="button" class="btn-copy-sm" onclick="copyAuthUrl(this)" style="padding: 7px 12px; border-radius: 6px; font-size: 11.5px; font-weight: 600; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); cursor: pointer; white-space: nowrap;">📋 Copy Link</button>
@@ -2643,8 +2656,15 @@
                             </a>
                         </div>
 
-                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 8px; line-height: 1.4;">
-                            Step 2: Copy the redirected URL or code from the browser and paste it here:
+                        <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; padding: 9px 12px; margin-bottom: 12px; font-size: 11.5px; color: #93c5fd; line-height: 1.45;">
+                            💡 <strong>طريقة 9Router:</strong> بعد الدخول على OpenAI سيتحول المتصفح لرابط <code>localhost:1455</code> ولن تفتح الصفحة (هذا طبيعي جداً). انسخ الرابط كاملاً من شريط عنوان المتصفح والصقه في الخطوة 2.
+                        </div>
+
+                        <div style="font-size: 12.5px; color: #cbd5e1; margin-bottom: 4px; font-weight: 600;">
+                            Step 2: Paste Callback URL or Code
+                        </div>
+                        <div style="font-size: 11.5px; color: #94a3b8; margin-bottom: 8px; line-height: 1.4;">
+                            After authorization, copy the full redirected URL (e.g. <code>http://localhost:1455/auth/callback?code=...</code>) or code from your browser address bar and paste it below:
                         </div>
 
                         <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px;">
@@ -2683,18 +2703,32 @@
                     </div>
                     <button class="modal-close-btn" onclick="closeReloginModal()">&times;</button>
                 </div>
-                <div class="modal-body" style="text-align: center; padding: 18px 20px;">
-                    <div style="font-size: 13px; color: #cbd5e1; margin-bottom: 14px;">
+                <div class="modal-body" style="padding: 16px 18px;">
+                    <div style="font-size: 13px; color: #cbd5e1; margin-bottom: 12px; text-align: center;">
                         Re-authenticating <strong id="modal-relogin-account-label" style="color: #60a5fa;">Account</strong> with OpenAI
                     </div>
 
-                    <!-- Step 1 & Code Box -->
-                    <div id="relogin-loading-box" style="padding: 24px 12px;">
-                        <div class="spinner" style="margin: 0 auto 12px; width: 28px; height: 28px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
-                        <div style="font-size: 12px; color: #94a3b8;">Requesting device code from OpenAI...</div>
+                    <!-- Flow Switcher Tabs for Relogin -->
+                    <div id="relogin-account-tabs" style="display: flex; gap: 8px; background: rgba(0, 0, 0, 0.35); padding: 5px; border-radius: 10px; margin-bottom: 16px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                        <button type="button" id="relogin-tab-device" onclick="switchReloginTab('device_code')" style="flex: 1; padding: 9px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; border: 1px solid rgba(59, 130, 246, 0.35); cursor: pointer; transition: all 0.2s ease; background: rgba(59, 130, 246, 0.22); color: #93c5fd; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            <span>📱</span> <span>Device Code (كود)</span>
+                        </button>
+                        <button type="button" id="relogin-tab-link" onclick="switchReloginTab('auth_url')" style="flex: 1; padding: 9px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; border: 1px solid transparent; cursor: pointer; transition: all 0.2s ease; background: transparent; color: #94a3b8; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            <span>🔗</span> <span>Browser Link (رابط)</span>
+                        </button>
                     </div>
 
-                    <div id="relogin-code-box" style="display: none;">
+                    <!-- Step 1 & Code Box -->
+                    <div id="relogin-loading-box" style="padding: 24px 12px; text-align: center;">
+                        <div class="spinner" style="margin: 0 auto 12px; width: 28px; height: 28px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+                        <div id="relogin-loading-text" style="font-size: 12px; color: #94a3b8;">Requesting authorization from OpenAI...</div>
+                    </div>
+
+                    <!-- View 1: Device Code (Codex) -->
+                    <div id="relogin-code-box" style="display: none; text-align: center;">
+                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;">
+                            Enter this one-time code on the OpenAI verification page:
+                        </div>
                         <div style="background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
                             <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; margin-bottom: 6px;">One-Time Device Code</div>
                             <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
@@ -2709,9 +2743,44 @@
                             </a>
                         </div>
 
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: #38bdf8;">
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: #38bdf8; padding: 6px 0;">
                             <span class="spinner" style="width: 14px; height: 14px; border: 2px solid rgba(56,189,248,0.2); border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.8s linear infinite;"></span>
-                            <span id="relogin-status-text">Waiting for authorization on OpenAI...</span>
+                            <span id="relogin-status-text">Waiting for authorization on OpenAI... (polling every 3s)</span>
+                        </div>
+                    </div>
+
+                    <!-- View 2: Browser Link & Paste Code/URL (Codex) -->
+                    <div id="relogin-link-view" style="display: none;">
+                        <div style="font-size: 12.5px; color: #cbd5e1; margin-bottom: 4px; font-weight: 600;">
+                            Step 1: Open Authorization URL
+                        </div>
+                        <div style="font-size: 11.5px; color: #94a3b8; margin-bottom: 10px; line-height: 1.4;">
+                            Open the link below in your browser and sign in with the same account:
+                        </div>
+
+                        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 12px; margin-bottom: 14px;">
+                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
+                                <input type="text" id="relogin-auth-url-input" readonly style="flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 7px 10px; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #94a3b8; outline: none;" />
+                                <button type="button" class="btn-copy-sm" onclick="copyReloginAuthUrl(this)" style="padding: 7px 12px; border-radius: 6px; font-size: 11.5px; font-weight: 600; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); cursor: pointer; white-space: nowrap;">📋 Copy Link</button>
+                            </div>
+                            <a id="relogin-auth-url-open-btn" href="#" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 9px 12px; background: linear-gradient(135deg, #0ea5e9, #0284c7); color: #fff; font-weight: 700; font-size: 12.5px; border-radius: 6px; text-decoration: none;">
+                                <span>🔗 Open Authorization Link</span>
+                            </a>
+                        </div>
+
+                        <div style="font-size: 12.5px; color: #cbd5e1; margin-bottom: 4px; font-weight: 600;">
+                            Step 2: Paste Callback URL or Code
+                        </div>
+                        <div style="font-size: 11.5px; color: #94a3b8; margin-bottom: 8px; line-height: 1.4;">
+                            After authorization, copy the full redirected URL (e.g. <code>http://localhost:1455/auth/callback?code=...</code>) or code from your browser address bar and paste it below:
+                        </div>
+
+                        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px;">
+                            <textarea id="relogin-callback-code-input" rows="2" placeholder="Paste redirected URL (e.g. http://localhost:.../?code=...) or code here" style="width: 100%; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; padding: 10px; font-size: 12px; font-family: 'JetBrains Mono', monospace; color: #f1f5f9; outline: none; resize: vertical; box-sizing: border-box;"></textarea>
+                            <button type="button" id="relogin-submit-code-btn" onclick="submitReloginCallbackCode()" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 10px 14px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-weight: 700; font-size: 13px; border-radius: 8px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
+                                <span id="relogin-submit-spinner" class="spinner" style="display: none; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite;"></span>
+                                <span id="relogin-submit-text">✓ Re-authenticate & Save</span>
+                            </button>
                         </div>
                     </div>
 
@@ -4870,11 +4939,49 @@
         let activeReloginSessionId = null;
         let activeReloginPolling = null;
         let activeReloginAccount = null;
+        let activeReloginFlow = 'device_code';
+
+        function switchReloginTab(flow) {
+            if (activeReloginFlow === flow && activeReloginSessionId) return;
+            activeReloginFlow = flow;
+            updateReloginTabStyles(flow);
+            if (activeReloginPolling) {
+                clearInterval(activeReloginPolling);
+                activeReloginPolling = null;
+            }
+            if (activeReloginAccount) {
+                startReloginFlow();
+            }
+        }
+
+        function updateReloginTabStyles(flow) {
+            const tabDevice = document.getElementById('relogin-tab-device');
+            const tabLink = document.getElementById('relogin-tab-link');
+            if (!tabDevice || !tabLink) return;
+            if (flow === 'device_code') {
+                tabDevice.style.background = 'rgba(59, 130, 246, 0.22)';
+                tabDevice.style.color = '#93c5fd';
+                tabDevice.style.borderColor = 'rgba(59, 130, 246, 0.35)';
+                tabLink.style.background = 'transparent';
+                tabLink.style.color = '#94a3b8';
+                tabLink.style.borderColor = 'transparent';
+            } else {
+                tabLink.style.background = 'rgba(59, 130, 246, 0.22)';
+                tabLink.style.color = '#93c5fd';
+                tabLink.style.borderColor = 'rgba(59, 130, 246, 0.35)';
+                tabDevice.style.background = 'transparent';
+                tabDevice.style.color = '#94a3b8';
+                tabDevice.style.borderColor = 'transparent';
+            }
+        }
 
         async function openReloginModal(accountNum) {
             activeReloginAccount = accountNum;
+            activeReloginFlow = 'device_code';
             const labelEl = document.getElementById('modal-relogin-account-label');
             if (labelEl) labelEl.innerText = `Account #${accountNum}`;
+
+            updateReloginTabStyles('device_code');
 
             const overlay = document.getElementById('relogin-modal-overlay');
             if (overlay) overlay.style.display = 'flex';
@@ -4899,19 +5006,23 @@
 
             const loadingBox = document.getElementById('relogin-loading-box');
             const codeBox = document.getElementById('relogin-code-box');
+            const linkView = document.getElementById('relogin-link-view');
             const errorBox = document.getElementById('relogin-error-box');
             const successBox = document.getElementById('relogin-success-box');
+            const loadingText = document.getElementById('relogin-loading-text');
 
             if (loadingBox) loadingBox.style.display = 'block';
             if (codeBox) codeBox.style.display = 'none';
+            if (linkView) linkView.style.display = 'none';
             if (errorBox) errorBox.style.display = 'none';
             if (successBox) successBox.style.display = 'none';
+            if (loadingText) loadingText.innerText = activeReloginFlow === 'device_code' ? 'Requesting device code from OpenAI...' : 'Generating authorization link...';
 
             try {
                 const res = await fetch(resolveApiUrl('/api/accounts/oauth/start'), {
                     method: 'POST',
                     headers: apiHeaders({ 'Content-Type': 'application/json' }),
-                    body: JSON.stringify({ provider: 'codex', flow: 'device_code', slot: activeReloginAccount }),
+                    body: JSON.stringify({ provider: 'codex', flow: activeReloginFlow, slot: activeReloginAccount }),
                     credentials: 'same-origin'
                 });
                 const data = await res.json();
@@ -4926,48 +5037,60 @@
 
                 activeReloginSessionId = data.session_id;
 
-                if (loadingBox) loadingBox.style.display = 'none';
-                if (codeBox) codeBox.style.display = 'block';
-                const codeEl = document.getElementById('relogin-device-code');
-                const verifyLink = document.getElementById('relogin-verify-link');
-                if (codeEl) codeEl.innerText = data.user_code || '----';
-                if (verifyLink && data.verification_uri) verifyLink.href = data.verification_uri;
+                if (activeReloginFlow === 'device_code') {
+                    if (loadingBox) loadingBox.style.display = 'none';
+                    if (codeBox) codeBox.style.display = 'block';
+                    const codeEl = document.getElementById('relogin-device-code');
+                    const verifyLink = document.getElementById('relogin-verify-link');
+                    if (codeEl) codeEl.innerText = data.user_code || '----';
+                    if (verifyLink && data.verification_uri) verifyLink.href = data.verification_uri;
 
-                const interval = Math.max(3000, (data.interval || 5) * 1000);
-                activeReloginPolling = setInterval(async () => {
-                    try {
-                        const pollRes = await fetch(resolveApiUrl(`/api/accounts/oauth/poll?session_id=${data.session_id}`), {
-                            headers: apiHeaders(),
-                            credentials: 'same-origin'
-                        });
-                        const pollData = await pollRes.json();
-                        if (pollData.status === 'completed') {
-                            clearInterval(activeReloginPolling);
-                            activeReloginPolling = null;
-                            if (codeBox) codeBox.style.display = 'none';
-                            if (successBox) {
-                                const msgEl = document.getElementById('relogin-success-message');
-                                if (msgEl) msgEl.innerText = `Account #${activeReloginAccount} re-authenticated successfully!`;
-                                successBox.style.display = 'block';
+                    const interval = Math.max(3000, (data.interval || 5) * 1000);
+                    activeReloginPolling = setInterval(async () => {
+                        try {
+                            const pollRes = await fetch(resolveApiUrl(`/api/accounts/oauth/poll?session_id=${data.session_id}`), {
+                                headers: apiHeaders(),
+                                credentials: 'same-origin'
+                            });
+                            const pollData = await pollRes.json();
+                            if (pollData.status === 'completed') {
+                                clearInterval(activeReloginPolling);
+                                activeReloginPolling = null;
+                                if (codeBox) codeBox.style.display = 'none';
+                                if (successBox) {
+                                    const msgEl = document.getElementById('relogin-success-message');
+                                    if (msgEl) msgEl.innerText = `Account #${activeReloginAccount} re-authenticated successfully!`;
+                                    successBox.style.display = 'block';
+                                }
+                                showToast(`Account #${activeReloginAccount} re-authenticated successfully!`);
+                                setTimeout(() => {
+                                    closeReloginModal();
+                                    fetchLiveLogs(false);
+                                }, 1500);
+                            } else if (pollData.status === 'failed') {
+                                clearInterval(activeReloginPolling);
+                                activeReloginPolling = null;
+                                if (codeBox) codeBox.style.display = 'none';
+                                if (errorBox) {
+                                    errorBox.innerText = pollData.error || 'Authorization failed.';
+                                    errorBox.style.display = 'block';
+                                }
                             }
-                            showToast(`Account #${activeReloginAccount} re-authenticated successfully!`);
-                            setTimeout(() => {
-                                closeReloginModal();
-                                fetchLiveLogs(false);
-                            }, 1500);
-                        } else if (pollData.status === 'failed') {
-                            clearInterval(activeReloginPolling);
-                            activeReloginPolling = null;
-                            if (codeBox) codeBox.style.display = 'none';
-                            if (errorBox) {
-                                errorBox.innerText = pollData.error || 'Authorization failed.';
-                                errorBox.style.display = 'block';
-                            }
+                        } catch (err) {
+                            console.error('Relogin poll error:', err);
                         }
-                    } catch (err) {
-                        console.error('Relogin poll error:', err);
-                    }
-                }, interval);
+                    }, interval);
+
+                } else if (activeReloginFlow === 'auth_url') {
+                    if (loadingBox) loadingBox.style.display = 'none';
+                    if (linkView) linkView.style.display = 'block';
+                    const urlInput = document.getElementById('relogin-auth-url-input');
+                    const openBtn = document.getElementById('relogin-auth-url-open-btn');
+                    const codeInput = document.getElementById('relogin-callback-code-input');
+                    if (urlInput) urlInput.value = data.auth_url || '';
+                    if (openBtn && data.auth_url) openBtn.href = data.auth_url;
+                    if (codeInput) codeInput.value = '';
+                }
 
             } catch (err) {
                 if (loadingBox) loadingBox.style.display = 'none';
@@ -4976,6 +5099,88 @@
                     errorBox.style.display = 'block';
                 }
             }
+        }
+
+        async function submitReloginCallbackCode() {
+            if (!activeReloginSessionId) return;
+            const codeInput = document.getElementById('relogin-callback-code-input');
+            const codeVal = codeInput ? codeInput.value.trim() : '';
+            const errorBox = document.getElementById('relogin-error-box');
+            const successBox = document.getElementById('relogin-success-box');
+            const spinner = document.getElementById('relogin-submit-spinner');
+            const submitText = document.getElementById('relogin-submit-text');
+            const btn = document.getElementById('relogin-submit-code-btn');
+
+            if (!codeVal) {
+                if (errorBox) {
+                    errorBox.innerText = 'Please paste the redirected URL or authorization code.';
+                    errorBox.style.display = 'block';
+                }
+                return;
+            }
+
+            if (errorBox) errorBox.style.display = 'none';
+            if (spinner) spinner.style.display = 'inline-block';
+            if (submitText) submitText.innerText = 'Re-authenticating...';
+            if (btn) btn.disabled = true;
+
+            try {
+                const res = await fetch(resolveApiUrl('/api/accounts/oauth/callback'), {
+                    method: 'POST',
+                    headers: apiHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ session_id: activeReloginSessionId, url_or_code: codeVal }),
+                    credentials: 'same-origin'
+                });
+                const data = await res.json();
+                if (!res.ok || !data.success) {
+                    if (errorBox) {
+                        errorBox.innerText = data.message || 'Failed to complete re-authentication.';
+                        errorBox.style.display = 'block';
+                    }
+                    return;
+                }
+
+                const linkView = document.getElementById('relogin-link-view');
+                if (linkView) linkView.style.display = 'none';
+                if (successBox) {
+                    const msgEl = document.getElementById('relogin-success-message');
+                    if (msgEl) msgEl.innerText = `Account #${activeReloginAccount} re-authenticated successfully!`;
+                    successBox.style.display = 'block';
+                }
+                showToast(`Account #${activeReloginAccount} re-authenticated successfully!`);
+                setTimeout(() => {
+                    closeReloginModal();
+                    fetchLiveLogs(false);
+                }, 1500);
+
+            } catch (err) {
+                if (errorBox) {
+                    errorBox.innerText = 'Network error completing re-authentication: ' + err.message;
+                    errorBox.style.display = 'block';
+                }
+            } finally {
+                if (spinner) spinner.style.display = 'none';
+                if (submitText) submitText.innerText = '✓ Re-authenticate & Save';
+                if (btn) btn.disabled = false;
+            }
+        }
+
+        function copyReloginAuthUrl(btn) {
+            const input = document.getElementById('relogin-auth-url-input');
+            if (!input || !input.value) return;
+            navigator.clipboard.writeText(input.value).then(() => {
+                const orig = btn.innerHTML;
+                btn.innerHTML = '✅ Copied!';
+                btn.style.background = 'rgba(16, 185, 129, 0.2)';
+                btn.style.color = '#10b981';
+                setTimeout(() => {
+                    btn.innerHTML = orig;
+                    btn.style.background = 'rgba(56, 189, 248, 0.15)';
+                    btn.style.color = '#38bdf8';
+                }, 2000);
+            }).catch(() => {
+                prompt('Copy this link:', input.value);
+            });
         }
 
         function copyReloginCode(btn) {
@@ -5031,6 +5236,47 @@
         let activeAddAccountProvider = 'codex';
         let activeAddAccountFlow = 'device_code';
 
+        function switchAddAccountTab(flow) {
+            if (activeAddAccountFlow === flow && activeAddAccountSession) return;
+            activeAddAccountFlow = flow;
+            updateAddAccountTabStyles(flow);
+            if (activeAddAccountPolling) {
+                clearInterval(activeAddAccountPolling);
+                activeAddAccountPolling = null;
+            }
+            if (activeAddAccountSession) {
+                fetch(resolveApiUrl('/api/accounts/oauth/cancel'), {
+                    method: 'POST',
+                    headers: apiHeaders({ 'Content-Type': 'application/json' }),
+                    body: JSON.stringify({ session_id: activeAddAccountSession }),
+                    credentials: 'same-origin'
+                }).catch(() => {});
+                activeAddAccountSession = null;
+            }
+            startAddOAuth(activeAddAccountProvider, flow);
+        }
+
+        function updateAddAccountTabStyles(flow) {
+            const tabDevice = document.getElementById('add-tab-device');
+            const tabLink = document.getElementById('add-tab-link');
+            if (!tabDevice || !tabLink) return;
+            if (flow === 'device_code') {
+                tabDevice.style.background = 'rgba(59, 130, 246, 0.22)';
+                tabDevice.style.color = '#93c5fd';
+                tabDevice.style.borderColor = 'rgba(59, 130, 246, 0.35)';
+                tabLink.style.background = 'transparent';
+                tabLink.style.color = '#94a3b8';
+                tabLink.style.borderColor = 'transparent';
+            } else {
+                tabLink.style.background = 'rgba(59, 130, 246, 0.22)';
+                tabLink.style.color = '#93c5fd';
+                tabLink.style.borderColor = 'rgba(59, 130, 246, 0.35)';
+                tabDevice.style.background = 'transparent';
+                tabDevice.style.color = '#94a3b8';
+                tabDevice.style.borderColor = 'transparent';
+            }
+        }
+
         function openAddAccountModal(provider = null) {
             const chosenProv = provider ? provider.toLowerCase() : (currentProvider === 'Gemini' ? 'gemini' : 'codex');
             activeAddAccountProvider = (chosenProv === 'gemini' || chosenProv === 'antigravity') ? 'gemini' : 'codex';
@@ -5043,6 +5289,7 @@
             const errorBox = document.getElementById('add-account-error-box');
             const successBox = document.getElementById('add-account-success-box');
             const codeInput = document.getElementById('add-callback-code-input');
+            const tabsEl = document.getElementById('add-account-tabs');
 
             if (errorBox) { errorBox.style.display = 'none'; errorBox.innerText = ''; }
             if (successBox) { successBox.style.display = 'none'; }
@@ -5062,6 +5309,7 @@
                     provBadge.style.color = '#34d399';
                     provBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
                 }
+                if (tabsEl) tabsEl.style.display = 'none';
                 activeAddAccountFlow = 'auth_url';
             } else {
                 if (titleEl) titleEl.innerText = 'Add OpenAI Codex / ChatGPT Account';
@@ -5072,7 +5320,9 @@
                     provBadge.style.color = '#c084fc';
                     provBadge.style.borderColor = 'rgba(147, 51, 234, 0.3)';
                 }
+                if (tabsEl) tabsEl.style.display = 'flex';
                 activeAddAccountFlow = 'device_code';
+                updateAddAccountTabStyles('device_code');
             }
 
             if (overlay) overlay.style.display = 'flex';

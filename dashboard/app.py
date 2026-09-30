@@ -1345,11 +1345,17 @@ class PoolManager:
 
     @staticmethod
     def _extract_oauth_code(raw_input: str, expected_state: Optional[str] = None) -> str:
-        s = raw_input.strip()
-        if '://' in s or '?' in s or '&' in s or s.startswith('localhost'):
+        s = raw_input.strip().strip('"\'')
+        if not s:
+            raise ValueError('Empty authorization code or callback URL')
+        if '://' in s or '?' in s or '&' in s or s.startswith('localhost') or 'callback' in s:
             url_str = s if '://' in s else 'http://' + s
             parsed = urllib.parse.urlparse(url_str)
             qs = urllib.parse.parse_qs(parsed.query)
+            if not qs.get('code') and parsed.fragment:
+                qs_frag = urllib.parse.parse_qs(parsed.fragment)
+                if qs_frag.get('code'):
+                    qs = qs_frag
             if qs.get('error'):
                 err_list = qs.get('error', [''])
                 err = err_list[0] if err_list else 'error'
@@ -1363,11 +1369,11 @@ class PoolManager:
             if not code and 'code=' in s:
                 for part in s.split('&'):
                     if 'code=' in part:
-                        code = part.split('code=')[1].split('&')[0].split('?')[0]
+                        code = part.split('code=')[1].split('&')[0].split('?')[0].split('#')[0]
                         break
             if not code:
                 raise ValueError('No authorization code found in pasted URL')
-            return code
+            return code.split('#')[0].split('&')[0].strip()
         return s
 
     def cancel_oauth(self, session_id: str) -> dict:

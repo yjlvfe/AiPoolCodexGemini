@@ -292,6 +292,23 @@ class WebAddAccountsTests(unittest.TestCase):
         self.assertFalse(res['success'])
         self.assertIn('state mismatch', res['message'])
 
+    def test_extract_oauth_code_resilience(self):
+        # 1. Full URL
+        code1 = PoolManager._extract_oauth_code('http://localhost:1455/auth/callback?code=code_abc&state=s1', 's1')
+        self.assertEqual(code1, 'code_abc')
+
+        # 2. Host and path without scheme
+        code2 = PoolManager._extract_oauth_code('localhost:1455/auth/callback?code=code_xyz&state=s2', 's2')
+        self.assertEqual(code2, 'code_xyz')
+
+        # 3. Fragment URL
+        code3 = PoolManager._extract_oauth_code('http://localhost:1455/auth/callback#code=code_frag&state=s3', 's3')
+        self.assertEqual(code3, 'code_frag')
+
+        # 4. Raw authorization code
+        code4 = PoolManager._extract_oauth_code('raw_auth_code_789', 'any_state')
+        self.assertEqual(code4, 'raw_auth_code_789')
+
     def test_cancel_oauth_cleans_up_session(self):
         start_res = self.pm.start_oauth('codex', 'auth_url')
         session_id = start_res['session_id']
