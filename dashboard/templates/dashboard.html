@@ -2577,228 +2577,186 @@
 
         <!-- Add Account Modal -->
         <div id="add-account-modal-overlay" class="modal-overlay" style="display: none;" onclick="closeAddAccountModal(event)">
-            <div class="modal-dialog glass-card" onclick="event.stopPropagation()" style="max-width: 500px; border-color: rgba(59, 130, 246, 0.4);">
-                <div class="modal-header">
+            <div class="modal-dialog glass-card" onclick="event.stopPropagation()" style="max-width: 440px; border-color: rgba(59, 130, 246, 0.35); border-radius: 16px; overflow: hidden;">
+                <div class="modal-header" style="padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.08);">
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <span id="add-modal-icon" style="font-size: 20px;">➕</span>
-                        <span id="add-modal-title" style="font-weight: 700; color: #fff; font-size: 15px;">Add New Account</span>
+                        <span id="add-modal-icon" style="font-size: 18px;">➕</span>
+                        <span id="add-modal-title" style="font-weight: 700; color: #fff; font-size: 14.5px;">Add New Account</span>
                     </div>
                     <button class="modal-close-btn" onclick="closeAddAccountModal()">&times;</button>
                 </div>
 
                 <div class="modal-body" style="padding: 16px 18px;">
-                    <!-- Provider Badge -->
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px;">
-                        <div id="add-modal-provider-badge" style="display: inline-flex; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 20px; font-size: 11.5px; font-weight: 700; background: rgba(59, 130, 246, 0.15); color: #60a5fa; border: 1px solid rgba(59, 130, 246, 0.3);">
-                            <span id="add-modal-prov-icon">🟣</span>
-                            <span id="add-modal-prov-label">OpenAI Codex / ChatGPT</span>
-                        </div>
-                        <span id="add-modal-subtitle" style="font-size: 11.5px; color: var(--text-tertiary);">Slot allocation auto</span>
-                    </div>
-
                     <!-- Flow Switcher Tabs (For Codex: Device Code vs Browser Link) -->
-                    <div id="add-account-tabs" style="display: flex; gap: 8px; background: rgba(0, 0, 0, 0.35); padding: 5px; border-radius: 10px; margin-bottom: 16px; border: 1px solid rgba(255, 255, 255, 0.08);">
-                        <button type="button" id="add-tab-device" onclick="switchAddAccountTab('device_code')" style="flex: 1; padding: 9px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; border: 1px solid rgba(59, 130, 246, 0.35); cursor: pointer; transition: all 0.2s ease; background: rgba(59, 130, 246, 0.22); color: #93c5fd; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                            <span>📱</span> <span>Device Code (كود)</span>
+                    <div id="add-account-tabs" style="display: flex; gap: 6px; background: rgba(0, 0, 0, 0.4); padding: 4px; border-radius: 10px; margin-bottom: 16px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                        <button type="button" id="add-tab-device" onclick="switchAddAccountTab('device_code')" style="flex: 1; padding: 8px 10px; border-radius: 7px; font-size: 12px; font-weight: 700; border: 1px solid rgba(59, 130, 246, 0.35); cursor: pointer; transition: all 0.2s ease; background: rgba(59, 130, 246, 0.22); color: #93c5fd; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            <span>📱 كود (Device Code)</span>
                         </button>
-                        <button type="button" id="add-tab-link" onclick="switchAddAccountTab('auth_url')" style="flex: 1; padding: 9px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; border: 1px solid transparent; cursor: pointer; transition: all 0.2s ease; background: transparent; color: #94a3b8; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                            <span>🔗</span> <span>Browser Link (رابط)</span>
+                        <button type="button" id="add-tab-link" onclick="switchAddAccountTab('auth_url')" style="flex: 1; padding: 8px 10px; border-radius: 7px; font-size: 12px; font-weight: 700; border: 1px solid transparent; cursor: pointer; transition: all 0.2s ease; background: transparent; color: #94a3b8; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            <span>🔗 رابط (Browser Link)</span>
                         </button>
                     </div>
 
                     <!-- Loading State -->
-                    <div id="add-account-loading" style="display: none; padding: 26px 12px; text-align: center;">
-                        <div class="spinner" style="margin: 0 auto 12px; width: 30px; height: 30px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
-                        <div id="add-loading-text" style="font-size: 12.5px; color: #94a3b8;">Initializing authorization...</div>
+                    <div id="add-account-loading" style="display: none; padding: 24px 12px; text-align: center;">
+                        <div class="spinner" style="margin: 0 auto 10px; width: 28px; height: 28px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+                        <div id="add-loading-text" style="font-size: 12px; color: #94a3b8;">Initializing...</div>
                     </div>
 
                     <!-- View 1: Device Code (Codex) -->
                     <div id="add-flow-device-view" style="display: none; text-align: center;">
-                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;">
-                            Enter this one-time code on the OpenAI verification page:
-                        </div>
-                        <div style="background: rgba(15, 23, 42, 0.8); border: 1px solid rgba(56, 189, 248, 0.35); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
-                            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; margin-bottom: 6px;">One-Time Device Code</div>
+                        <div style="background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(56, 189, 248, 0.3); border-radius: 12px; padding: 14px; margin-bottom: 12px;">
+                            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; margin-bottom: 6px;">كود التفعيل / One-Time Code</div>
                             <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
                                 <span id="add-device-code-display" style="font-family: 'JetBrains Mono', monospace; font-size: 24px; font-weight: 800; color: #38bdf8; letter-spacing: 2px;">----</span>
-                                <button type="button" class="btn-copy-sm" onclick="copyAddDeviceCode(this)" style="padding: 5px 10px; border-radius: 8px; font-size: 11.5px; font-weight: 600; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); cursor: pointer;">📋 Copy</button>
+                                <button type="button" class="btn-copy-sm" onclick="copyAddDeviceCode(this)" style="padding: 5px 10px; border-radius: 8px; font-size: 11.5px; font-weight: 600; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); cursor: pointer;">📋 نسخ</button>
                             </div>
                         </div>
 
                         <div style="margin-bottom: 14px;">
-                            <a id="add-device-verify-link" href="https://auth.openai.com/codex/device" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 10px 14px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; font-weight: 700; font-size: 13px; border-radius: 8px; text-decoration: none; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);">
-                                <span>🔗 Open auth.openai.com/codex/device</span>
+                            <a id="add-device-verify-link" href="https://auth.openai.com/codex/device" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; justify-content: center; gap: 8px; width: 100%; padding: 10px 14px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; font-weight: 700; font-size: 13px; border-radius: 8px; text-decoration: none; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);">
+                                <span>🔗 فتح صفحة التفعيل (Open OpenAI)</span>
                             </a>
                         </div>
 
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: #38bdf8; padding: 6px 0;">
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: #38bdf8; padding: 4px 0;">
                             <span class="spinner" style="width: 14px; height: 14px; border: 2px solid rgba(56,189,248,0.2); border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.8s linear infinite;"></span>
-                            <span id="add-device-status-text">Waiting for authorization on OpenAI... (polling every 3s)</span>
+                            <span id="add-device-status-text">بانتظار الموافقة في المتصفح...</span>
                         </div>
                     </div>
 
                     <!-- View 2: Browser Link & Paste Code/URL (Codex or Gemini) -->
                     <div id="add-flow-link-view" style="display: none;">
-                        <div style="font-size: 12.5px; color: #cbd5e1; margin-bottom: 4px; font-weight: 600;">
-                            Step 1: Open Authorization URL
-                        </div>
-                        <div id="add-link-instruction" style="font-size: 11.5px; color: #94a3b8; margin-bottom: 10px; line-height: 1.4;">
-                            Open the link below in your browser and sign in:
-                        </div>
+                        <!-- Hidden input to preserve copy functionality -->
+                        <input type="hidden" id="add-auth-url-input" />
 
-                        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 12px; margin-bottom: 12px;">
-                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                                <input type="text" id="add-auth-url-input" readonly style="flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 7px 10px; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #94a3b8; outline: none;" />
-                                <button type="button" class="btn-copy-sm" onclick="copyAuthUrl(this)" style="padding: 7px 12px; border-radius: 6px; font-size: 11.5px; font-weight: 600; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); cursor: pointer; white-space: nowrap;">📋 Copy Link</button>
-                            </div>
-                            <a id="add-auth-url-open-btn" href="#" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 9px 12px; background: linear-gradient(135deg, #0ea5e9, #0284c7); color: #fff; font-weight: 700; font-size: 12.5px; border-radius: 6px; text-decoration: none;">
-                                <span>🔗 Open Authorization Link</span>
+                        <!-- Step 1: Open Link button + Copy Link button -->
+                        <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+                            <a id="add-auth-url-open-btn" href="#" target="_blank" rel="noopener noreferrer" style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 10px 12px; background: linear-gradient(135deg, #0284c7, #0369a1); color: #fff; font-weight: 700; font-size: 12.5px; border-radius: 8px; text-decoration: none;">
+                                <span>🔗 فتح رابط الدخول</span>
                             </a>
+                            <button type="button" class="btn-copy-sm" onclick="copyAuthUrl(this)" style="padding: 10px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); cursor: pointer; white-space: nowrap;">
+                                📋 نسخ الرابط
+                            </button>
                         </div>
 
-                        <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; padding: 9px 12px; margin-bottom: 12px; font-size: 11.5px; color: #93c5fd; line-height: 1.45;">
-                            💡 <strong>طريقة 9Router:</strong> بعد الدخول على OpenAI سيتحول المتصفح لرابط <code>localhost:1455</code> ولن تفتح الصفحة (هذا طبيعي جداً). انسخ الرابط كاملاً من شريط عنوان المتصفح والصقه في الخطوة 2.
+                        <!-- Step 2: Paste instructions and Input -->
+                        <div style="font-size: 11.5px; color: #94a3b8; margin-bottom: 8px;">
+                            سجّل الدخول، ثم الصق الرابط المحوّل أو الكود هنا:
                         </div>
 
-                        <div style="font-size: 12.5px; color: #cbd5e1; margin-bottom: 4px; font-weight: 600;">
-                            Step 2: Paste Callback URL or Code
-                        </div>
-                        <div style="font-size: 11.5px; color: #94a3b8; margin-bottom: 8px; line-height: 1.4;">
-                            After authorization, copy the full redirected URL (e.g. <code>http://localhost:1455/auth/callback?code=...</code>) or code from your browser address bar and paste it below:
-                        </div>
-
-                        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px;">
-                            <textarea id="add-callback-code-input" rows="2" placeholder="Paste redirected URL (e.g. http://localhost:.../?code=...) or code here" style="width: 100%; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; padding: 10px; font-size: 12px; font-family: 'JetBrains Mono', monospace; color: #f1f5f9; outline: none; resize: vertical; box-sizing: border-box;"></textarea>
-                            <button type="button" id="add-submit-code-btn" onclick="submitCallbackCode()" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 10px 14px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-weight: 700; font-size: 13px; border-radius: 8px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <textarea id="add-callback-code-input" rows="2" placeholder="الصق الرابط (http://localhost:1455/...) أو الكود هنا" style="width: 100%; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; padding: 10px; font-size: 12px; font-family: 'JetBrains Mono', monospace; color: #f1f5f9; outline: none; resize: none; box-sizing: border-box;"></textarea>
+                            <button type="button" id="add-submit-code-btn" onclick="submitCallbackCode()" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 11px 14px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-weight: 700; font-size: 13px; border-radius: 8px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);">
                                 <span id="add-submit-spinner" class="spinner" style="display: none; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite;"></span>
-                                <span id="add-submit-text">✓ Submit & Connect Account</span>
+                                <span id="add-submit-text">✓ ربط وحفظ الحساب</span>
                             </button>
                         </div>
                     </div>
 
                     <!-- Success Box -->
-                    <div id="add-account-success-box" style="display: none; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 10px; padding: 14px; font-size: 12.5px; color: #6ee7b7; text-align: center; margin-top: 10px;">
-                        <div style="font-size: 20px; margin-bottom: 6px;">🎉</div>
-                        <div id="add-success-message" style="font-weight: 700;">Account added successfully!</div>
+                    <div id="add-account-success-box" style="display: none; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 10px; padding: 12px; font-size: 12.5px; color: #6ee7b7; text-align: center; margin-top: 10px;">
+                        <div style="font-size: 18px; margin-bottom: 4px;">🎉</div>
+                        <div id="add-success-message" style="font-weight: 700;">تمت إضافة الحساب بنجاح!</div>
                     </div>
 
                     <!-- Error Box -->
-                    <div id="add-account-error-box" style="display: none; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 10px; padding: 12px; font-size: 12px; color: #fca5a5; margin-top: 10px; word-break: break-word;">
+                    <div id="add-account-error-box" style="display: none; background: rgba(239, 68, 68, 0.12); border: 1px solid rgba(239, 68, 68, 0.3); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #fca5a5; margin-top: 10px; word-break: break-word;">
                     </div>
-                </div>
-
-                <div class="modal-actions" style="display: flex; justify-content: flex-end; padding: 12px 18px; border-top: 1px solid rgba(255,255,255,0.06);">
-                    <button type="button" class="modal-btn-cancel" onclick="closeAddAccountModal()">Cancel</button>
                 </div>
             </div>
         </div>
 
         <!-- Relogin Account Modal -->
         <div id="relogin-modal-overlay" class="modal-overlay" style="display: none;" onclick="closeReloginModal(event)">
-            <div class="modal-dialog glass-card" onclick="event.stopPropagation()" style="max-width: 480px; border-color: rgba(59, 130, 246, 0.4);">
-                <div class="modal-header">
+            <div class="modal-dialog glass-card" onclick="event.stopPropagation()" style="max-width: 440px; border-color: rgba(59, 130, 246, 0.35); border-radius: 16px; overflow: hidden;">
+                <div class="modal-header" style="padding: 14px 18px; border-bottom: 1px solid rgba(255,255,255,0.08);">
                     <div style="display: flex; align-items: center; gap: 8px;">
-                        <span style="font-size: 20px;">🔄</span>
-                        <span style="font-weight: 700; color: #fff; font-size: 15px;">Codex Re-login</span>
+                        <span style="font-size: 18px;">🔄</span>
+                        <span style="font-weight: 700; color: #fff; font-size: 14.5px;">إعادة تسجيل الدخول (Re-login)</span>
                     </div>
                     <button class="modal-close-btn" onclick="closeReloginModal()">&times;</button>
                 </div>
                 <div class="modal-body" style="padding: 16px 18px;">
-                    <div style="font-size: 13px; color: #cbd5e1; margin-bottom: 12px; text-align: center;">
-                        Re-authenticating <strong id="modal-relogin-account-label" style="color: #60a5fa;">Account</strong> with OpenAI
+                    <div style="font-size: 12.5px; color: #cbd5e1; margin-bottom: 12px; text-align: center;">
+                        تحديث تسجيل <strong id="modal-relogin-account-label" style="color: #60a5fa;">Account</strong> في OpenAI
                     </div>
 
                     <!-- Flow Switcher Tabs for Relogin -->
-                    <div id="relogin-account-tabs" style="display: flex; gap: 8px; background: rgba(0, 0, 0, 0.35); padding: 5px; border-radius: 10px; margin-bottom: 16px; border: 1px solid rgba(255, 255, 255, 0.08);">
-                        <button type="button" id="relogin-tab-device" onclick="switchReloginTab('device_code')" style="flex: 1; padding: 9px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; border: 1px solid rgba(59, 130, 246, 0.35); cursor: pointer; transition: all 0.2s ease; background: rgba(59, 130, 246, 0.22); color: #93c5fd; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                            <span>📱</span> <span>Device Code (كود)</span>
+                    <div id="relogin-account-tabs" style="display: flex; gap: 6px; background: rgba(0, 0, 0, 0.4); padding: 4px; border-radius: 10px; margin-bottom: 16px; border: 1px solid rgba(255, 255, 255, 0.08);">
+                        <button type="button" id="relogin-tab-device" onclick="switchReloginTab('device_code')" style="flex: 1; padding: 8px 10px; border-radius: 7px; font-size: 12px; font-weight: 700; border: 1px solid rgba(59, 130, 246, 0.35); cursor: pointer; transition: all 0.2s ease; background: rgba(59, 130, 246, 0.22); color: #93c5fd; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            <span>📱 كود (Device Code)</span>
                         </button>
-                        <button type="button" id="relogin-tab-link" onclick="switchReloginTab('auth_url')" style="flex: 1; padding: 9px 10px; border-radius: 8px; font-size: 12px; font-weight: 700; border: 1px solid transparent; cursor: pointer; transition: all 0.2s ease; background: transparent; color: #94a3b8; display: flex; align-items: center; justify-content: center; gap: 6px;">
-                            <span>🔗</span> <span>Browser Link (رابط)</span>
+                        <button type="button" id="relogin-tab-link" onclick="switchReloginTab('auth_url')" style="flex: 1; padding: 8px 10px; border-radius: 7px; font-size: 12px; font-weight: 700; border: 1px solid transparent; cursor: pointer; transition: all 0.2s ease; background: transparent; color: #94a3b8; display: flex; align-items: center; justify-content: center; gap: 6px;">
+                            <span>🔗 رابط (Browser Link)</span>
                         </button>
                     </div>
 
-                    <!-- Step 1 & Code Box -->
+                    <!-- Loading State -->
                     <div id="relogin-loading-box" style="padding: 24px 12px; text-align: center;">
-                        <div class="spinner" style="margin: 0 auto 12px; width: 28px; height: 28px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
-                        <div id="relogin-loading-text" style="font-size: 12px; color: #94a3b8;">Requesting authorization from OpenAI...</div>
+                        <div class="spinner" style="margin: 0 auto 10px; width: 28px; height: 28px; border: 3px solid rgba(255,255,255,0.1); border-top-color: #3b82f6; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+                        <div id="relogin-loading-text" style="font-size: 12px; color: #94a3b8;">Initializing...</div>
                     </div>
 
                     <!-- View 1: Device Code (Codex) -->
                     <div id="relogin-code-box" style="display: none; text-align: center;">
-                        <div style="font-size: 12px; color: #94a3b8; margin-bottom: 12px;">
-                            Enter this one-time code on the OpenAI verification page:
-                        </div>
-                        <div style="background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(59, 130, 246, 0.35); border-radius: 12px; padding: 14px; margin-bottom: 14px;">
-                            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; margin-bottom: 6px;">One-Time Device Code</div>
+                        <div style="background: rgba(15, 23, 42, 0.75); border: 1px solid rgba(59, 130, 246, 0.3); border-radius: 12px; padding: 14px; margin-bottom: 12px;">
+                            <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: #94a3b8; margin-bottom: 6px;">كود التفعيل / One-Time Code</div>
                             <div style="display: flex; align-items: center; justify-content: center; gap: 10px;">
                                 <span id="relogin-device-code" style="font-family: 'JetBrains Mono', monospace; font-size: 22px; font-weight: 800; color: #38bdf8; letter-spacing: 2px;">----</span>
-                                <button type="button" class="btn-copy-sm" onclick="copyReloginCode(this)" style="padding: 5px 9px; border-radius: 8px; font-size: 11px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); cursor: pointer;">📋 Copy</button>
+                                <button type="button" class="btn-copy-sm" onclick="copyReloginCode(this)" style="padding: 5px 9px; border-radius: 8px; font-size: 11px; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); cursor: pointer;">📋 نسخ</button>
                             </div>
                         </div>
 
-                        <div style="margin-bottom: 16px;">
-                            <a id="relogin-verify-link" href="https://auth.openai.com/codex/device" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 10px 14px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; font-weight: 700; font-size: 13px; border-radius: 8px; text-decoration: none; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.3);">
-                                <span>🔗 Open auth.openai.com/codex/device</span>
+                        <div style="margin-bottom: 14px;">
+                            <a id="relogin-verify-link" href="https://auth.openai.com/codex/device" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 10px 14px; background: linear-gradient(135deg, #2563eb, #1d4ed8); color: #fff; font-weight: 700; font-size: 13px; border-radius: 8px; text-decoration: none; box-shadow: 0 4px 12px rgba(37, 99, 235, 0.25);">
+                                <span>🔗 فتح صفحة التفعيل (Open OpenAI)</span>
                             </a>
                         </div>
 
-                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: #38bdf8; padding: 6px 0;">
+                        <div style="display: flex; align-items: center; justify-content: center; gap: 8px; font-size: 12px; color: #38bdf8; padding: 4px 0;">
                             <span class="spinner" style="width: 14px; height: 14px; border: 2px solid rgba(56,189,248,0.2); border-top-color: #38bdf8; border-radius: 50%; animation: spin 0.8s linear infinite;"></span>
-                            <span id="relogin-status-text">Waiting for authorization on OpenAI... (polling every 3s)</span>
+                            <span id="relogin-status-text">بانتظار الموافقة في المتصفح...</span>
                         </div>
                     </div>
 
                     <!-- View 2: Browser Link & Paste Code/URL (Codex) -->
                     <div id="relogin-link-view" style="display: none;">
-                        <div style="font-size: 12.5px; color: #cbd5e1; margin-bottom: 4px; font-weight: 600;">
-                            Step 1: Open Authorization URL
-                        </div>
-                        <div style="font-size: 11.5px; color: #94a3b8; margin-bottom: 10px; line-height: 1.4;">
-                            Open the link below in your browser and sign in with the same account:
-                        </div>
+                        <!-- Hidden input to preserve copy functionality -->
+                        <input type="hidden" id="relogin-auth-url-input" />
 
-                        <div style="background: rgba(15, 23, 42, 0.7); border: 1px solid rgba(255, 255, 255, 0.1); border-radius: 10px; padding: 12px; margin-bottom: 12px;">
-                            <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 8px;">
-                                <input type="text" id="relogin-auth-url-input" readonly style="flex: 1; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 6px; padding: 7px 10px; font-size: 11px; font-family: 'JetBrains Mono', monospace; color: #94a3b8; outline: none;" />
-                                <button type="button" class="btn-copy-sm" onclick="copyReloginAuthUrl(this)" style="padding: 7px 12px; border-radius: 6px; font-size: 11.5px; font-weight: 600; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); cursor: pointer; white-space: nowrap;">📋 Copy Link</button>
-                            </div>
-                            <a id="relogin-auth-url-open-btn" href="#" target="_blank" rel="noopener noreferrer" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 9px 12px; background: linear-gradient(135deg, #0ea5e9, #0284c7); color: #fff; font-weight: 700; font-size: 12.5px; border-radius: 6px; text-decoration: none;">
-                                <span>🔗 Open Authorization Link</span>
+                        <!-- Step 1: Open Link button + Copy Link button -->
+                        <div style="display: flex; gap: 8px; margin-bottom: 14px;">
+                            <a id="relogin-auth-url-open-btn" href="#" target="_blank" rel="noopener noreferrer" style="flex: 1; display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 10px 12px; background: linear-gradient(135deg, #0284c7, #0369a1); color: #fff; font-weight: 700; font-size: 12.5px; border-radius: 8px; text-decoration: none;">
+                                <span>🔗 فتح رابط الدخول</span>
                             </a>
+                            <button type="button" class="btn-copy-sm" onclick="copyReloginAuthUrl(this)" style="padding: 10px 14px; border-radius: 8px; font-size: 12px; font-weight: 600; background: rgba(56, 189, 248, 0.15); color: #38bdf8; border: 1px solid rgba(56, 189, 248, 0.3); cursor: pointer; white-space: nowrap;">
+                                📋 نسخ الرابط
+                            </button>
                         </div>
 
-                        <div style="background: rgba(59, 130, 246, 0.08); border: 1px solid rgba(59, 130, 246, 0.2); border-radius: 8px; padding: 9px 12px; margin-bottom: 12px; font-size: 11.5px; color: #93c5fd; line-height: 1.45;">
-                            💡 <strong>طريقة 9Router:</strong> بعد الدخول على OpenAI سيتحول المتصفح لرابط <code>localhost:1455</code> ولن تفتح الصفحة (هذا طبيعي جداً). انسخ الرابط كاملاً من شريط عنوان المتصفح والصقه في الخطوة 2.
+                        <!-- Step 2: Paste instructions and Input -->
+                        <div style="font-size: 11.5px; color: #94a3b8; margin-bottom: 8px;">
+                            سجّل الدخول بنفس الحساب، ثم الصق الرابط المحوّل أو الكود:
                         </div>
 
-                        <div style="font-size: 12.5px; color: #cbd5e1; margin-bottom: 4px; font-weight: 600;">
-                            Step 2: Paste Callback URL or Code
-                        </div>
-                        <div style="font-size: 11.5px; color: #94a3b8; margin-bottom: 8px; line-height: 1.4;">
-                            After authorization, copy the full redirected URL (e.g. <code>http://localhost:1455/auth/callback?code=...</code>) or code from your browser address bar and paste it below:
-                        </div>
-
-                        <div style="display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px;">
-                            <textarea id="relogin-callback-code-input" rows="2" placeholder="Paste redirected URL (e.g. http://localhost:.../?code=...) or code here" style="width: 100%; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(255, 255, 255, 0.15); border-radius: 8px; padding: 10px; font-size: 12px; font-family: 'JetBrains Mono', monospace; color: #f1f5f9; outline: none; resize: vertical; box-sizing: border-box;"></textarea>
-                            <button type="button" id="relogin-submit-code-btn" onclick="submitReloginCallbackCode()" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 10px 14px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-weight: 700; font-size: 13px; border-radius: 8px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.3);">
+                        <div style="display: flex; flex-direction: column; gap: 10px;">
+                            <textarea id="relogin-callback-code-input" rows="2" placeholder="الصق الرابط (http://localhost:1455/...) أو الكود هنا" style="width: 100%; background: rgba(15, 23, 42, 0.85); border: 1px solid rgba(255, 255, 255, 0.12); border-radius: 8px; padding: 10px; font-size: 12px; font-family: 'JetBrains Mono', monospace; color: #f1f5f9; outline: none; resize: none; box-sizing: border-box;"></textarea>
+                            <button type="button" id="relogin-submit-code-btn" onclick="submitReloginCallbackCode()" style="display: inline-flex; align-items: center; justify-content: center; gap: 6px; width: 100%; padding: 11px 14px; background: linear-gradient(135deg, #10b981, #059669); color: #fff; font-weight: 700; font-size: 13px; border-radius: 8px; border: none; cursor: pointer; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);">
                                 <span id="relogin-submit-spinner" class="spinner" style="display: none; width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: #fff; border-radius: 50%; animation: spin 0.8s linear infinite;"></span>
-                                <span id="relogin-submit-text">✓ Re-authenticate & Save</span>
+                                <span id="relogin-submit-text">✓ تحديث وحفظ الحساب</span>
                             </button>
                         </div>
                     </div>
 
                     <!-- Success Box -->
-                    <div id="relogin-success-box" style="display: none; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 10px; padding: 14px; font-size: 12.5px; color: #6ee7b7; text-align: center; margin-top: 10px;">
-                        <div style="font-size: 20px; margin-bottom: 6px;">🎉</div>
-                        <div id="relogin-success-message" style="font-weight: 700;">Account re-authenticated successfully!</div>
+                    <div id="relogin-success-box" style="display: none; background: rgba(16, 185, 129, 0.12); border: 1px solid rgba(16, 185, 129, 0.35); border-radius: 10px; padding: 12px; font-size: 12.5px; color: #6ee7b7; text-align: center; margin-top: 10px;">
+                        <div style="font-size: 18px; margin-bottom: 4px;">🎉</div>
+                        <div id="relogin-success-message" style="font-weight: 700;">تم تحديث الحساب بنجاح!</div>
                     </div>
 
-                    <div id="relogin-error-box" style="display: none; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 12px; font-size: 12px; color: #fca5a5; margin-top: 10px; word-break: break-word;">
+                    <div id="relogin-error-box" style="display: none; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: 8px; padding: 10px 12px; font-size: 12px; color: #fca5a5; margin-top: 10px; word-break: break-word;">
                     </div>
-                </div>
-                <div class="modal-actions" style="display: flex; justify-content: flex-end; padding: 12px 18px; border-top: 1px solid rgba(255,255,255,0.06);">
-                    <button type="button" class="modal-btn-cancel" onclick="closeReloginModal()">Cancel</button>
                 </div>
             </div>
         </div>
@@ -5305,25 +5263,15 @@
             }
 
             if (activeAddAccountProvider === 'gemini') {
-                if (titleEl) titleEl.innerText = 'Add Google Gemini Account';
-                if (provIcon) provIcon.innerText = '🟢';
-                if (provLabel) provLabel.innerText = 'Google Gemini / Antigravity';
-                if (provBadge) {
-                    provBadge.style.background = 'rgba(16, 185, 129, 0.15)';
-                    provBadge.style.color = '#34d399';
-                    provBadge.style.borderColor = 'rgba(16, 185, 129, 0.3)';
-                }
+                if (titleEl) titleEl.innerText = 'إضافة حساب Google Gemini';
+                const iconEl = document.getElementById('add-modal-icon');
+                if (iconEl) iconEl.innerText = '🟢';
                 if (tabsEl) tabsEl.style.display = 'none';
                 activeAddAccountFlow = 'auth_url';
             } else {
-                if (titleEl) titleEl.innerText = 'Add OpenAI Codex / ChatGPT Account';
-                if (provIcon) provIcon.innerText = '🟣';
-                if (provLabel) provLabel.innerText = 'OpenAI Codex / ChatGPT';
-                if (provBadge) {
-                    provBadge.style.background = 'rgba(147, 51, 234, 0.15)';
-                    provBadge.style.color = '#c084fc';
-                    provBadge.style.borderColor = 'rgba(147, 51, 234, 0.3)';
-                }
+                if (titleEl) titleEl.innerText = 'إضافة حساب OpenAI Codex';
+                const iconEl = document.getElementById('add-modal-icon');
+                if (iconEl) iconEl.innerText = '🟣';
                 if (tabsEl) tabsEl.style.display = 'flex';
                 activeAddAccountFlow = 'device_code';
                 updateAddAccountTabStyles('device_code');
