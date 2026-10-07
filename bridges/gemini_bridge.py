@@ -274,7 +274,14 @@ def list_available_models(force_refresh=True):
             owned = "openai"
         else:
             owned = "google"
-        out.append({"id": name, "object": "model", "owned_by": owned})
+        out.append({
+            "id": name,
+            "object": "model",
+            "owned_by": owned,
+            "context_length": 1000000,
+            "context_window": 1000000,
+            "max_tokens": 65536,
+        })
     return out
 
 

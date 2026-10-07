@@ -365,11 +365,17 @@ def discover_codex_models(
             if isinstance(slug, str) and slug.strip():
                 visible.add(slug.strip())
     ORDER_PREFERENCE = [
+        "gpt-6.1-sol",
         "gpt-6-astra",
-        "gpt-5.6-terra",
+        "gpt-6-sol",
+        "gpt-6-luna",
         "gpt-5.6-sol",
+        "gpt-5.6-terra",
         "gpt-5.6-luna",
         "gpt-5.5",
+        "gpt-5.4",
+        "gpt-5.4-mini",
+        "gpt-5.3-codex-spark",
     ]
     sorted_visible: list[str] = []
     for pref in ORDER_PREFERENCE:

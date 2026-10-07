@@ -54,13 +54,19 @@ CODEX_MODEL_ALIASES = {}
 
 def list_available_models(force_refresh=True):
     models = _codex_catalog.get(force=force_refresh)
-    # Order models newest to oldest
+    # Order models from strongest/newest to oldest: Astra, Sol 6, etc.
     ORDER_PREFERENCE = [
+        "gpt-6.1-sol",
         "gpt-6-astra",
-        "gpt-5.6-terra",
+        "gpt-6-sol",
+        "gpt-6-luna",
         "gpt-5.6-sol",
+        "gpt-5.6-terra",
         "gpt-5.6-luna",
         "gpt-5.5",
+        "gpt-5.4",
+        "gpt-5.4-mini",
+        "gpt-5.3-codex-spark",
     ]
     sorted_models = []
     for pref in ORDER_PREFERENCE:
@@ -70,7 +76,14 @@ def list_available_models(force_refresh=True):
         if m not in sorted_models:
             sorted_models.append(m)
     return [
-        {'id': model, 'object': 'model', 'owned_by': 'codex'}
+        {
+            'id': model,
+            'object': 'model',
+            'owned_by': 'codex',
+            'context_length': 1000000,
+            'context_window': 1000000,
+            'max_tokens': 128000,
+        }
         for model in sorted_models
     ]
 
@@ -423,7 +436,14 @@ class CodexHandler(http.server.BaseHTTPRequestHandler):
 
                         # Failover on HTTP 401, 403, or 429 (rate limit OR quota) or hard failure marker
                         if exc.code in (401, 403, 429) or hard_account_failure(exc.code, raw_err):
-                            reason = 'quota_exhausted' if exc.code in (409, 429) else ('account_locked' if exc.code == 400 else 'invalid_credentials')
+                            if exc.code in (409, 429):
+                                reason = 'quota_exhausted'
+                            elif 'not supported when using codex' in raw_err.lower():
+                                reason = 'plan_unsupported'
+                            elif exc.code == 400:
+                                reason = 'account_locked'
+                            else:
+                                reason = 'invalid_credentials'
                             print(f"[codex-bridge] failover account {number} exhausted: HTTP {exc.code} (resets_at={resets_at}, seconds={retry_sec})", flush=True)
                             POOL.exhausted(number, model, seconds=retry_sec, resets_at=resets_at, reason=reason)
                             quota_exhausted.add(number)

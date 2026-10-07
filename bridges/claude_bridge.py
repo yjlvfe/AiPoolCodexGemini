@@ -65,11 +65,11 @@ class ClaudeHandler(http.server.BaseHTTPRequestHandler):
         path = urllib.parse.urlsplit(self.path).path
         if path in ('/v1/models', '/models'):
             models = [
-                {"id": "claude-3-7-sonnet-20250219", "object": "model", "owned_by": "anthropic"},
-                {"id": "claude-3-5-sonnet-20241022", "object": "model", "owned_by": "anthropic"},
-                {"id": "claude-3-5-haiku-20241022", "object": "model", "owned_by": "anthropic"},
-                {"id": "claude-opus-4", "object": "model", "owned_by": "anthropic"},
-                {"id": "claude-opus-5", "object": "model", "owned_by": "anthropic"}
+                {"id": "claude-3-7-sonnet-20250219", "object": "model", "owned_by": "anthropic", "context_length": 1000000, "context_window": 1000000},
+                {"id": "claude-3-5-sonnet-20241022", "object": "model", "owned_by": "anthropic", "context_length": 1000000, "context_window": 1000000},
+                {"id": "claude-3-5-haiku-20241022", "object": "model", "owned_by": "anthropic", "context_length": 1000000, "context_window": 1000000},
+                {"id": "claude-opus-4", "object": "model", "owned_by": "anthropic", "context_length": 1000000, "context_window": 1000000},
+                {"id": "claude-opus-5", "object": "model", "owned_by": "anthropic", "context_length": 1000000, "context_window": 1000000}
             ]
             self._send_json({"object": "list", "data": models})
         elif path in ('/', '/health', '/healthz'):
